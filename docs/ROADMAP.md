@@ -1,253 +1,163 @@
-# {{HARDWARE_NAME}} — MiSTer Core Roadmap
+# Vamphalf: MiSTer core roadmap
 
 **This roadmap is a proposal until the user approves it. No phase executes before that approval,
 and a phase whose scope changes goes back for approval.**
 
 ## Context
 
-Goal: a DE10-nano MiSTer core for {{HARDWARE_NAME}}, emulated by MAME's `{{MAME_DRIVER}}` and the
-devices it instantiates — a Quartus 17.0.2 Verilog/SystemVerilog project producing one `.rbf` and a
-`.mra` per supported set, reusing proven open components where they exist.
+Goal: a DE10-nano MiSTer core for the SemiCom/Sun Hyperstone boards of MAME's
+`misc/vamphalf.cpp`, starting with Mission Craft (`misncrft`) and Wivern Wings (`wivernwg`), as one
+Quartus 17.0.2 project producing one `.rbf` and a `.mra` per set.
 
-{{WHAT_SHAPES_THIS_PROJECT}}
-<!-- The one fact that sets the shape: how much already exists in open RTL, whether the CPU is
-     proven in a sibling core, what has no implementation anywhere. Then a numbered list of what
-     is genuinely new work. Everything else is a port with verification. -->
+Shape of the work (details and line references in [`HARDWARE_NOTES.md`](HARDWARE_NOTES.md)):
+the video and I/O are small; the two blocks with no RTL found are the CPU and the sound chip.
 
-Cross-cutting findings from the previous cores are in **[`LESSONS_LEARNED.md`](LESSONS_LEARNED.md)**.
-Working practice built on them is in **[`WORKFLOW.md`](WORKFLOW.md)**. The entries that already
-bind decisions here are collected under "Pitfalls that already bind decisions here".
+1. **Hyperstone E1 CPU** (E1-16 for Mission Craft, E1-32 for Wivern Wings; one core in MAME with a
+   bus width difference). From scratch, from `e132xsop.hxx`.
+2. **QS1000 voice engine** (32-voice PCM/ADPCM mixer) from `qs1000.cpp`, plus the 8052 from
+   `jt8051`, which lacks Timer 2 (not yet known to matter).
+3. **Sprite engine**, one layer, 256 sprites per 16-line band: per-scanline, with jotego's
+   `jtframe_objdraw` family as the starting point rather than a transcription of MAME's loop.
+4. **Protection**: two lookup tables from `vamphalf_prot.cpp`.
+5. Glue: 93C46 EEPROM (`jteeprom`), inputs, flip, palette RAM, work RAM, SDRAM backend.
+
+Cross-cutting findings from the earlier cores: [`LESSONS_LEARNED.md`](LESSONS_LEARNED.md). Working
+practice: [`WORKFLOW.md`](WORKFLOW.md).
 
 ## Progress
 
-{{PROGRESS}}
-<!-- Kept current. Opens with one bold sentence on where the project is. Every number says where
-     it came from: MAME source, a sibling core's measurement, a build report, a bench run. Use
-     "N of N" counts, not adjectives. Strike through closed items while a later reader needs the
-     history; delete them when nobody does. -->
+**Research done; nothing built.** Repo bootstrapped from the template. `docs/HARDWARE_NOTES.md`
+written from the MAME driver. No MAME capture, no RTL.
 
 ## Game scope
 
-{{SET_TABLE}}
-<!-- Generated from each ROM_START: set, board type, machine config, loaded bytes per region,
-     MAME flags. Loaded bytes, not declared region size. -->
+| Set | Board | CPU / bus | Loaded bytes |
+|---|---|---|---|
+| misncrft, misncrfta | Sun 2000 | E1-16 (GMS30C2116), 16 | ~9.6 MB |
+| wivernwg, wyvernwg, wyvernwga | SemiCom 2001 | E1-32T, 32 | ~19.6 MB |
 
 ### Scope decision
 
-- **In scope:** {{IN_SCOPE}} — one memory map, one screen, one chipset, fits the SDRAM module.
-- **Out of the first scope:** {{OUT_OF_SCOPE}} — give two independent reasons where they exist.
-- **First-target set:** {{FIRST_TARGET}} — the smallest set with the least protection involvement.
-  Final choice is a Phase 0 decision, made on which boots furthest, measured.
-- **Second target:** {{SECOND_TARGET}} — the set that exercises the next variant.
+- **In scope:** the five sets above. Both boards fit a 32 MB SDRAM module as stored.
+- **Out of scope for now:** the other ~40 sets of the driver (YM2151 + OKI boards, Final Godori,
+  Boong-Ga Boong-Ga's prize hardware, AOH). They share the video; they add separate sound and I/O.
+  Taking them later is Phase 5.
+- **First target:** Mission Craft: 16-bit bus, half the GFX, one protection table family.
+- **Second target:** Wivern Wings: 32-bit bus, QS1000 with the larger sample ROM, protection at I/O 0x1800.
 
-## Hardware reality (from the driver, not assumption)
+## Hardware reality
 
-Every value below is read out of the MAME driver or a device file and cites file and line. A
-value from a datasheet, a schematic or a PCB measurement says so.
+See [`HARDWARE_NOTES.md`](HARDWARE_NOTES.md): chips, clocks, interrupts, memory map, video,
+sound, protection, per-game configuration.
 
-### Chips
+### Clocks (proposal)
 
-{{CHIP_TABLE}}
+Pixel clock 7 MHz (28 MHz / 4). Board clocks: CPU 50 MHz, QS1000 24 MHz.
+`clk_sys` must be an integer multiple (>= 4x) of 7 MHz and >= 50 MHz: **56 MHz (8x)**. 28 MHz
+is 4x but below the CPU clock; 48 MHz is not a multiple of 7 MHz. 56 MHz is above the ~48 MHz
+default, and it is forced by those two constraints rather than a measured shortfall. SDRAM on
+the same 56 MHz.
 
-### Clocks
+| Enable | Ratio from 56 MHz |
+|---|---|
+| pixel | 1/8, exact |
+| CPU 50 MHz | 25/28 fractional enable |
+| 8052 oscillator 24 MHz | 3/7 fractional enable |
 
-{{CLOCKS}}
-<!-- The plan, before any RTL (the skill's clocks.md). Every board clock with its source line
-     and the pixel clock; the chosen clk_sys, which is also the video clock, with the candidates
-     considered and the arithmetic, starting from ~48 MHz with the SDRAM on the same clock; any
-     higher value carries the measurement that forced it: an integer multiple (>= 4x) of the pixel clock, >= every
-     board clock, and a base for an integer SDRAM multiple. The SDRAM multiple. Every fractional
-     clock enable with its exact ratio. How far the main CPU runs ahead to catch up SDRAM stalls.
-     Any clock that does not divide exactly, in ppm, also goes in HACKS.md. -->
-
-### Interrupts
-
-{{INTERRUPTS}}
-<!-- Levels, sources, HOLD_LINE vs ASSERT_LINE in the driver, the enable/ack registers, and the
-     vectors as read from the program ROM. -->
-
-### Memory map
-
-{{MEMORY_MAP}}
-
-### Video
-
-{{VIDEO}}
-<!-- Layers, sprite format, colour depths, palette format, priority/mixing model, screen flip,
-     what MAME says it does not emulate. -->
-
-### Sound
-
-{{SOUND}}
-
-### Protection
-
-{{PROTECTION}}
-
-### Per-game configuration
-
-{{PER_GAME}}
-<!-- Everything that differs between sets and so becomes .mra mod-byte configuration. -->
+This is a decision to approve (open item 3).
 
 ## Component reuse map
 
-Every row's "source" is a file that was located and whose header was read.
-
 | block | plan | source |
 |---|---|---|
-{{REUSE_MAP}}
-<!-- plan: "Port X" / "Written from the software model" / "From scratch" / "Sibling core's Y".
-     source: repository, path, commit, licence as stated in the files. Built by enumerating the
-     boards that use each chip and looking at those boards' cores, not by searching for the chip
-     number. -->
+| E1-16 / E1-32 CPU | From scratch, from MAME's interpreter | `E:/mame/src/devices/cpu/e132xs/` (BSD-3-Clause) |
+| 8052 in QS1000 | Port jt8051, add Timer 2 / 256 B RAM if the firmware needs them | `E:/jtcores/modules/jt8051` (checked for header: README only; licence to be read before vendoring) |
+| QS1000 voices | From the software model | `E:/mame/src/devices/sound/qs1000.cpp` |
+| Sprite engine | jotego `jtframe_objdraw` / `jtframe_obj_buffer` with board features added | vendored in `Arcade-KonamiGX_MiSTer` |
+| EEPROM 93C46 | jteeprom | `E:/jtcores/modules/jteeprom` |
+| Protection | Lookup tables, written from the software model | `vamphalf_prot.cpp` |
+| OKI / YM2151 | not needed for the first scope | n/a |
 
-## On-chip RAM budget
+jt8051's header licence and the jtframe sprite modules' headers have not been opened yet; the
+table says where to look.
 
-{{RAM_BUDGET}}
-<!-- Every declared memory, its bits, its M10K count at the width it is actually read at, as a
-     fraction of the device, starting from the framework's own baseline. Name the one to watch. -->
+## Memory plan (proposal)
 
-## Memory plan
-
-{{MEMORY_PLAN}}
-<!-- SDRAM region layout (the RTL's localparams are the source of truth; the .mra generator reads
-     them), DDR use if any, the clients of each and the per-scanline fetch budget. DDR3 at load
-     time is standard; any DDR3 client during play (ROM, graphics, frame buffer) states its
-     reason here: ROMs larger than the SDRAM, or fetch arithmetic SDRAM cannot serve. -->
+Not yet laid out; the sizes are known: Mission Craft GFX 8 MB, Wivern Wings GFX 16 MB, sample ROM
+up to 2.5 MB, program 1 MB, 8052 code 128 KB. All in SDRAM (32 MB module). Work RAM 2 MB and
+sprite RAM 256 KB are far over BRAM: 2 MB work RAM is SDRAM; sprite RAM (17 bands x 2 KB) and
+palette (0x8000 x 16 bit = 64 KB) in BRAM. The CPU's SDRAM latency is the first thing Phase 0
+measures. Mapped in `docs/memory_map.md` once Phase 0 gives numbers.
 
 ## Design decisions
 
-<!-- Each a bold sentence, then the evidence. Standing rules first, project decisions after. -->
+The template's standing rules apply: follow MAME and log deviations in `docs/MAME_KLUDGES.md`;
+approximations in `docs/HACKS.md`; per-scanline sprite rendering; no multiplies in the video path;
+one `.rbf` for all sets; two Quartus revisions (`Vamphalf_stp`, `Vamphalf`). Licence per the
+template's `LICENSE`.
 
-**Follow MAME, including where MAME is wrong, and write down every place that is.** There is no
-PCB here. MAME is the accuracy target and its acknowledged guesses are inherited deliberately. Each
-goes in `docs/MAME_KLUDGES.md` when it is implemented, with what MAME does, what the hardware is
-suspected to do, and what would settle it.
+**Per-scanline sprites, not a frame buffer.** The driver shows a banded list per 16-line strip and
+no frame buffer; Phase 1 runs the video-write sweep (in play, 1800 frames or more) to place the
+snapshot.
 
-**Where a vendored module and MAME disagree, record it and keep the module.** A silicon-derived
-disagreement is evidence about the chip; MAME's is evidence about MAME. It goes in
-`docs/MAME_KLUDGES.md`, not into a "fix", until one side is shown to describe the chip.
-
-**Every approximation of this core's own goes in `docs/HACKS.md`** in the commit it lands, with
-what would make it correct. A hack that is not written down is a bug nobody will find.
-
-**Transcribe the reference literally first, then look for the chip.** Build MAME's version, get
-pixel-exact (or trace-exact) agreement with captured references, and only then experiment — with
-the experiment on an OSD switch so it is an A/B, not a rebuild.
-
-**One `.rbf` for all games.** Per-set differences are `.mra` mod-byte configuration.
-
-**Two Quartus revisions, `Vamphalf_stp` and `Vamphalf`,** differing only by a `DEBUG_ISSP` macro.
-See [`WORKFLOW.md`](WORKFLOW.md).
-
-**Licence: {{LICENCE}}.** Every dependency, what it obliges and the release checklist are in
-[`THIRD-PARTY.md`](../THIRD-PARTY.md). `sys/` is never edited.
-
-**Per-scanline rendering from buffered sprite RAM.** The default shape, as the boards worked:
-the list latched once a frame at the point the video-write sweep identifies, a per-scanline
-engine, a double-buffered line buffer. A frame buffer only where the driver shows the board had
-one; cite it here.
-
-**No multiplies, no divides, in 2D pipelines.** Shifts, masks, adds and accumulators; WORKFLOW §14.
-GPU-like chips (3D geometry, rasterisers) use multipliers by design, budgeted in DSP blocks.
-
-{{PROJECT_DECISIONS}}
-<!-- Clocking plan and the measurement it rests on; CPU integration choice; sprite rendering
-     shape (line-based, not frame-buffered, and why); which memory each large array lives in. -->
+**The CPU is checked by bus trace before anything else.** E1 timing in MAME is described by its
+author as probably wrong, so the first measurement is whether bus-trace agreement with MAME is
+enough for the attract loop to reach the same frame, not cycle exactness.
 
 ## Pitfalls that already bind decisions here
 
-Entries from [`LESSONS_LEARNED.md`](LESSONS_LEARNED.md) that are not general advice but already
-constrain something written above. Read the entry, not the summary.
-
-| Entry | What it binds here |
-|---|---|
-{{PITFALLS}}
+To be filled from `LESSONS_LEARNED.md` when Phase 0 starts (routing table not yet read).
 
 ## Phased roadmap
 
-<!-- Phase 0 is the gate: nothing after it starts until its exit criteria are met, and each
-     criterion is answered in place ("— Met: <evidence>" / "— Open: <what is missing>"). -->
+**Phase 0: CPU spike and measurements. The gate.**
 
-**Phase 0 — Vendoring spike and the measurements. The gate.**
+1. E1 core written from `e132xsop.hxx`, stood up in `rtl/synth_check/` with the bus wrapper only.
+2. The CPU runs the `misncrft` program ROM and matches MAME's bus trace access by access, all
+   peripherals stubbed to MAME's values.
+3. Measured CPI on game code against 50 MHz, split between execution and SDRAM stall.
+4. Standalone Fmax and area at 56 MHz, constraint committed with the measurement.
+5. jt8051 runs the QS1000 `u7` firmware to the point where it reads the latch; Timer 2 use
+   confirmed or ruled out from the firmware.
 
-Vendor every reused module into `rtl/` with a `PROVENANCE.md` per directory. Run every upstream
-testbench unchanged before editing anything. Stand the CPU up in its own Quartus project
-(`rtl/synth_check/`) with the bus wrapper and the memory transport and nothing else.
-Exit criteria:
+**Phase 1: Video against a software model.** `mame_capture.py` plus a `render_model.py`
+reproducing `draw_sprites`; write-sweep in play; line engine pixel-identical to MAME on captured
+scenes. Exit: `misncrft` frames identical in simulation, flipped and unflipped.
 
-1. **Every vendored module's own tests pass unchanged, on arrival.**
-2. **The CPU boots the first target's program ROM and matches MAME's bus trace**, diffed access by
-   access, every peripheral stubbed to what MAME's returns.
-3. **Measured CPI on real game code** against the board's clock, split between execution and
-   memory stall.
-4. **Standalone Fmax and area for the CPU at this project's settings**, with the constraint that
-   proves it committed in the same commit as the measurement. This decides the clock plan.
-5. {{PHASE0_PROJECT_SPECIFIC_QUESTION}}
+**Phase 2: Hardware bring-up.** SDRAM backend, ROM download, `.mra`, inputs, DIPs, EEPROM, the
+standard feature set (CRT Adjust, hiscore, DDR load, HDMI scale/rotate, flip from OSD with the
+unflipped-rotated-180 check, Pause input). Exit: Mission Craft boots and plays, silent.
 
-**Phase 1 — Video, against a software model.**
+**Phase 3: Sound.** QS1000 voice engine from MAME's model; MAME register-write traces replayed
+against it. Exit: audio correct by ear and by captured comparison. MAME's missing envelope and
+loop behaviour limit the comparison (HARDWARE_NOTES, Sound).
 
-Build the MAME capture pipeline first (`mame_capture.py` + a `render_model.py` that reproduces the
-driver's video file), get it pixel-exact on captured frames, then check RTL against the model layer
-by layer. Exit criteria: the first target renders frames pixel-identical to MAME's for a captured
-set of scenes, silent, in simulation.
+**Phase 4: Wivern Wings and the clones.** 32-bit bus, protection at 0x1800 and 0x0600, `.mra`
+for every set, `MAME_KLUDGES.md` and `HACKS.md` kept current.
 
-**Phase 2 — Hardware bring-up and the first games.**
+**Phase 5: More of the vamphalf driver.** A decision with evidence, per board.
 
-SDRAM backend with all clients, the ROM download path, `.mra` generation, inputs, DIPs, NVRAM,
-the ISSP probe and the OSD debug page. The standard feature set: CRT Adjust (and v-size if BRAM
-allows), hiscore, fast DDR ROM loading, HDMI scaling and crop, HDMI rotation, audio mix, HDMI-only
-options hidden under direct video, CRT Adjust parameters hidden until enabled, peripheral menus
-only for games that use them (rotary: Ikari Warriors controls; guns: mouse and synthetic
-crosshair), and flip screen from the OSD or the DIP (fake DIP where the
-game has none) through one path, worked out per layer for this board. Exit criteria: {{PHASE2_SETS}} boot and play on a
-DE10-nano, silent.
-
-**Phase 3 — Sound.**
-
-{{SOUND_PLAN}}. Exit criteria: register-write traces captured from MAME reproduce correct audio,
-by ear and by a decoded capture against MAME's output.
-
-**Phase 4 — The rest of the list, and accuracy.**
-
-The remaining sets, every clone's `.mra`, {{PHASE4_ITEMS}}. `docs/MAME_KLUDGES.md` and
-`docs/HACKS.md` are the deliverables that say what is still not right and what would settle it.
-
-**Phase 5 — {{OPTIONAL_SCOPE_EXTENSION}}.** A decision with evidence rather than a default.
-
-**Phase 6 — Savestates, state dumps and cheats.** Optional but desirable. Not before Phase 4, but
-the RTL is written for it from Phase 1 (the skill's `savestates.md`): reachable RAM ports, a
-`docs/STATE.md` inventory, addressable chip state. The state dump and its simulator loader are worth
-building before the savestate itself, because they make hardware bugs reproducible in a bench.
+**Phase 6: Savestates and cheats.** Optional. Design for state capture from the first RTL.
 
 ## Verification strategy
 
-- **MAME is a reference generator, driven from scripts, not a thing to eyeball.** Boot traces, VRAM
-  and register dumps at known frames, palette dumps, register-write logs. WORKFLOW §9 applies.
-- **The software model comes before the RTL.** The model is checked against MAME first; the RTL
-  against the model.
-- **Every vendored module is verified against MAME before it is wired to anything**, and its own
-  testbench is the regression for every later change to it.
-- **Layouts are verified before ROMs are involved**: every `gfx_layout` gets the "every bit of a
-  tile exactly once" check.
-- **`.mra` files are generated, not written**, re-read byte-for-byte against an image built from
-  `ROM_START`, and gated on an XML well-formedness check before deploy.
-- **Worst cases are measured in the RTL**, not modelled: saturating counters with no reset port,
-  each paired with a total.
-
-## Repository setup
-
-Seeded from **MiSTer-devel/Template_MiSTer**, `Template.*` renamed to `Vamphalf.*` and split into
-the `Vamphalf_stp` and `Vamphalf` revisions; the Quartus 13 project dropped. Quartus **17.0.2**.
-Conventions are in [`WORKFLOW.md`](WORKFLOW.md) and `CONVENTIONS.md`.
+MAME drives references from scripts; the software model precedes the RTL; vendored modules'
+own benches run unchanged on arrival; `.mra` files generated and read back against `ROM_START`.
 
 ## Open items
 
-{{OPEN_ITEMS}}
-<!-- One bold sentence each, then what is known, what is assumed, and what closes it. Strike
-     through when closed and say what closed it. -->
+1. **MAME version.** Source tree is a local back-port commit (`a2d0f76268e`); binary is 0.289.
+   `-version` against the tree's tag must be checked before any capture is trusted.
+2. **E1 timing.** MAME's own comment says its Hyperstone timings are probably incorrect; game
+   logic that depends on EEPROM and vblank timing may need correction measured on hardware.
+3. **Clock plan.** 56 MHz `clk_sys` (above the ~48 MHz default).
+4. **QS1000 accuracy.** MAME implements no envelope, filter or loop; no PCB recording is available.
+5. **Protection beyond MAME's tables.** Unseen seeds return 0 in MAME; behaviour of the board
+   after ~15 minutes to 2 hours is unverified.
+6. **DDR3 / SDRAM size.** Assumed 32 MB SDRAM is enough; the user's memory notes say size for
+   128 MB, so more is available.
 
 ## Next steps
 
-1. {{NEXT_STEP}}
-<!-- Numbered, in order, struck through as done with a pointer to the evidence. -->
+1. User approval of this roadmap, and answers on open items 1, 3 and the first-target choice.
+2. Phase 0 step 1: E1 core.
