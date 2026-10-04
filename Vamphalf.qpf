@@ -1,0 +1,4 @@
+QUARTUS_VERSION = "17.0"
+# Vamphalf_stp is the instrumented revision (ISSP probes, OSD debug page); Vamphalf the release.
+PROJECT_REVISION = "Vamphalf_stp"
+PROJECT_REVISION = "Vamphalf"

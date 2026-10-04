@@ -1,0 +1,57 @@
+{
+  "_comment": "Core-specific. The main CPU's view of the machine, from the MAME driver's address map. Read by mame_capture.py and write_timing.py. Addresses are hex strings, inclusive.",
+  "cpu": ":maincpu",
+  "space": "program",
+  "bus_bytes": 2,
+  "big_endian": true,
+  "read": {
+    "workram": [
+      "0x000000",
+      "0x00ffff"
+    ]
+  },
+  "wtap": {
+    "vregs": [
+      "0x000000",
+      "0x00001f"
+    ]
+  },
+  "sweep": [
+    "workram",
+    "vregs"
+  ],
+  "trace": {
+    "addr_hi": "0xffffff",
+    "io": [
+      "0x000000",
+      "0x000000"
+    ],
+    "vectors": [
+      "0x000000",
+      "0x000000"
+    ],
+    "ipl": {
+      "reg": "SR",
+      "shift": 8,
+      "mask": 7
+    },
+    "rom": [
+      [
+        "0x000000",
+        "0x0fffff"
+      ]
+    ],
+    "ram": [
+      [
+        "0x100000",
+        "0x10ffff"
+      ]
+    ]
+  },
+  "inputs": {
+    "coin": "Coin 1",
+    "start": "1 Player Start",
+    "hold": "P1 Right",
+    "pulse": "P1 Button 1"
+  }
+}

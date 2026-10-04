@@ -1,3 +1,4 @@
+# Quartus build products (Template_MiSTer set, kept in step with it)
 db
 greybox_tmp
 incremental_db
@@ -10,9 +11,6 @@ vip
 *_sim
 .qsys_edit
 PLLJ_PLLSPE_INFO.txt
-*.bak
-*.orig
-*.rej
 *.qdf
 *.rpt
 *.smsg
@@ -24,17 +22,79 @@ PLLJ_PLLSPE_INFO.txt
 *.qws
 *.ppf
 *.ddb
-build_id.v
-c5_pin_model_dump.txt
 *.sopcinfo
 *.csv
 *.f
+# sim/<tb>/files.f is a testbench source list, not Quartus scratch
+!sim/**/files.f
 *.cmp
 *.sip
 *.spd
 *.bsf
-*~
 *.xml
 *_netlist
 *.cdf
+build_id.v
+c5_pin_model_dump.txt
+
+# Staged-build worktree (scripts/build_staged.py) and its logs
+build/
+quartus_*.log
+q_*.log
+sta*.log
+worst_*.rpt
+compile.log
+
+# ModelSim / Verilator
+work/
+transcript
+vsim.wlf
+modelsim.ini
+*.vstf
+sim/**/*.log
+sim/**/*.bin
+sim/**/*.lst
+sim/**/*.hex
+sim/**/*.raw
+sim/**/*.trace
+sim/**/*.dec
+sim/**/*.lxt
+sim/**/*.vcd
+sim/**/*dump*.txt
+sim/**/fixture.txt
+/*.raw
+obj_verilator/
+simout/
+
+# MAME ROM dumps: never committed
+roms/
+
+# Hardware-debug scratch. /debug/ is anchored: a bare debug/ also matches rtl/debug/.
+/debug/
+/*.png
+/*.txt
+scratch_*.png
+scratch_*.txt
+cfg.bin
+outfile.bin
+
+# MAME state written into the launch directory
+cfg/
+nvram/
+snap/
+sta/
+
+# Local MiSTer connection settings
+mister.env
+
+# Only a verified build belongs in releases/: git add -f releases/<name>.rbf
+releases/*.rbf
+
+# Editor / OS / Python
+*.bak
+*.orig
+*.rej
+*~
 **/.DS_Store
+__pycache__/
+*.pyc
