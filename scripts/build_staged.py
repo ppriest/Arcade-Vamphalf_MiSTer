@@ -63,6 +63,8 @@ QUARTUS_BIN = None
 # commit that adds the module it names, so the gate grows with the design.
 REQUIRED_INSTANCES = (
     "hps_io",        # the framework's HPS interface; present from the template on
+    "jt8052_ctrl",   # the sound CPU: gone if its microcode ($readmemb, a project-relative path) is not found
+    "vh_qs1000_voice",
     # "fx68k", "sdram", "arcade_video", "Hq2x", "screen_rotate_two", ...
 )
 

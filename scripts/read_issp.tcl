@@ -18,8 +18,35 @@
 # concatenates it. Add an entry to the `switch` further down for each table.
 # By convention source bit 0 pulsed is the counter clear.
 set fields_F {
-    {frames           0  15 dec}
+    {instructions     0  31 dec}
+    {last_pc         32  63 hex}
+    {dmiss           64  79 dec}
+    {imiss           80  95 dec}
+    {palette_writes  96 111 dec}
+    {frames         112 119 dec}
+    {rom_loaded     120 120 bit}
+    {core_reset     121 121 bit}
+    {board          122 122 bit}
+    {ioctl_download 123 123 bit}
+    {dl_seen        124 124 bit}
     {pll_locked     127 127 bit}
+}
+set fields_T {
+    {entry            0  31 hex}
+    {logged          32  40 dec}
+}
+set fields_S {
+    {frame_clocks     0  19 dec}
+    {frame_busy      20  39 dec}
+    {busiest         40  59 dec}
+    {lost_frames     60  75 dec}
+    {frames          76  91 dec}
+}
+set fields_D {
+    {fill_bytes_hi   32  63 hex}
+    {fill_bytes_lo    0  31 hex}
+    {fill_word_addr  64  89 hex}
+    {dl_bytes        96 127 dec}
 }
 # ---------------------------------------------------------------------------
 
@@ -86,6 +113,9 @@ if {$want ne ""} {
 # than guesses.
 switch -- $inst_id {
     F       { set fields $fields_F }
+    D       { set fields $fields_D }
+    T       { set fields $fields_T }
+    S       { set fields $fields_S }
     default {
         puts "instance id '$inst_id' has no field table -- add one before reading it"
         exit 1

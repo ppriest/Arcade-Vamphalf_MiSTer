@@ -1,0 +1,23 @@
+set_global_assignment -name FAMILY "Cyclone V"
+set_global_assignment -name DEVICE 5CSEBA6U23I7
+set_global_assignment -name TOP_LEVEL_ENTITY vh_qs1000
+set_global_assignment -name SEARCH_PATH ..
+set_global_assignment -name SEARCH_PATH ../qs1000/jt8052
+set_global_assignment -name SYSTEMVERILOG_FILE ../memory/vh_dpram.sv
+set_global_assignment -name VERILOG_FILE ../qs1000/jt8052/jt8052.v
+set_global_assignment -name VERILOG_FILE ../qs1000/jt8052/jt8052_ctrl.v
+set_global_assignment -name VERILOG_FILE ../qs1000/jt8052/jt8052_regs.v
+set_global_assignment -name VERILOG_FILE ../qs1000/jt8052/jt8052_alu.v
+set_global_assignment -name VERILOG_FILE ../qs1000/jt8052/jt8052_periph.v
+set_global_assignment -name VERILOG_FILE ../qs1000/jt8052/jt8052_serial.v
+set_global_assignment -name SYSTEMVERILOG_FILE ../qs1000/vh_qs1000_voice.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../qs1000/vh_qs1000.sv
+set_global_assignment -name SDC_FILE qs_synth.sdc
+set_global_assignment -name OPTIMIZATION_MODE "HIGH PERFORMANCE EFFORT"
+set_global_assignment -name NUM_PARALLEL_PROCESSORS 4
+set_instance_assignment -name VIRTUAL_PIN ON -to rst
+set_instance_assignment -name VIRTUAL_PIN ON -to dl_*
+set_instance_assignment -name VIRTUAL_PIN ON -to latch_*
+set_instance_assignment -name VIRTUAL_PIN ON -to sd_*
+set_instance_assignment -name VIRTUAL_PIN ON -to out_*
+set_instance_assignment -name VIRTUAL_PIN ON -to dbg_*

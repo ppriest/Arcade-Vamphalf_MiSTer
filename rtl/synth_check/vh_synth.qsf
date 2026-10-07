@@ -1,0 +1,23 @@
+set_global_assignment -name FAMILY "Cyclone V"
+set_global_assignment -name DEVICE 5CSEBA6U23I7
+set_global_assignment -name TOP_LEVEL_ENTITY vh_synth_top
+set_global_assignment -name SYSTEMVERILOG_FILE ../video/vh_video.sv
+set_global_assignment -name SYSTEMVERILOG_FILE vh_synth_top.sv
+set_global_assignment -name SDC_FILE vh_synth.sdc
+set_global_assignment -name OPTIMIZATION_MODE "HIGH PERFORMANCE EFFORT"
+set_global_assignment -name NUM_PARALLEL_PROCESSORS 4
+set_instance_assignment -name VIRTUAL_PIN ON -to rst
+set_instance_assignment -name VIRTUAL_PIN ON -to spr_*
+set_instance_assignment -name VIRTUAL_PIN ON -to pal_*
+set_instance_assignment -name VIRTUAL_PIN ON -to flip
+set_instance_assignment -name VIRTUAL_PIN ON -to gfx_*
+set_instance_assignment -name VIRTUAL_PIN ON -to vid_*
+set_instance_assignment -name VIRTUAL_PIN ON -to hpos*
+set_instance_assignment -name VIRTUAL_PIN ON -to vpos*
+set_instance_assignment -name VIRTUAL_PIN ON -to dbg_*
+set_instance_assignment -name VIRTUAL_PIN ON -to hblank
+set_instance_assignment -name VIRTUAL_PIN ON -to vblank
+set_instance_assignment -name VIRTUAL_PIN ON -to hsync
+set_instance_assignment -name VIRTUAL_PIN ON -to vsync
+set_instance_assignment -name VIRTUAL_PIN ON -to ce_pix
+set_instance_assignment -name VIRTUAL_PIN ON -to frame_start

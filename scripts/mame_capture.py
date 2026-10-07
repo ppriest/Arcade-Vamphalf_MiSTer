@@ -59,8 +59,11 @@ def mame_paths():
     return mame_dir, exe
 
 
-def regions():
-    return json.loads((LUA_DIR / "regions.json").read_text(encoding="utf-8"))
+def regions(game=None):
+    """regions.json; the keys of "sets"[game], if any, replace the top-level ones."""
+    r = json.loads((LUA_DIR / "regions.json").read_text(encoding="utf-8"))
+    r.update(r.pop("sets", {}).get(game, {}))
+    return r
 
 
 def spec(table, names=None):
@@ -199,7 +202,7 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     seconds = a.seconds if a.seconds is not None else max(10, a.frame // 60 + 10)
 
-    extra = ["-seconds_to_run", str(seconds)]
+    extra = ["-nodrc", "-seconds_to_run", str(seconds)]   # E1: interpreter, as in the traces
     if a.dip:
         extra += ["-cfg_directory", seed_dips(exe, mame_dir, a.set, a.dip, out).as_posix()]
     cmd = mame_cmd(exe, a.set, "capture.lua", mame_dir, extra)

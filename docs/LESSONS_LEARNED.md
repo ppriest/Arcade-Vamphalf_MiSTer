@@ -694,6 +694,21 @@ pair before the RTL around it.
 
 ## Testbench discipline
 
+- **[Vamphalf] Replay the CPU's boot trace against the whole board, not only the CPU bench.** The
+  CPU bench serves every access from the trace, so it cannot see a decode, a cache or a RAM size.
+  The same 1,000,000-instruction MAME trace compared against the retired PCs of the full board
+  (real SDRAM controller, caches, decode) diverged at instruction 1,919, in a sprite-RAM test that
+  walks 256 KB where the core backed 64 KB. Compare the PC after each instruction (`retire_npc`
+  against the next record's PC); an exception entry that the CPU core reports differently from the
+  trace makes a compare of "this instruction's PC" fail where nothing is wrong.
+- **[Vamphalf] Check a sound engine inside the board by replaying the board's own register writes
+  through the model.** The whole-board bench's audio cannot be compared with MAME sample for
+  sample: its sound CPU reaches each write at a different time (up to 142 ticks off MAME's spacing after
+  100 writes). Logging the bench's writes in the model's input format and replaying them through the
+  model gives an exact reference for the RTL engine in place, with the real SDRAM controller's
+  latency and the other ports' traffic: 6.9M ticks, 0 differences (`scripts/qs1000_mix_compare.py`).
+  The write log against MAME's capture separately checks the sound CPU's program flow (1,563 of
+  1,563 writes identical in register, value and order).
 - **[BallySente] A vendored module's compile WARNING can be a latent fatal.** T80 has carried a
   vcom-1275 "arguments of overloaded `and` are not the same length" warning through several
   sibling cores, noted and ignored. It is a real bug: `T80.vhd:685` masks a 9-bit vector with a
@@ -924,6 +939,17 @@ and spending one more cycle in the access state machine closed it (+0.011 ns); t
 six clocks, so the cycle is free. A peripheral hanging combinationally off the CPU bus is
 structural; a multicycle over it is a promise the design does not make.
 
+### [Vamphalf] jt8051 at 56 MHz: two clocks between its own registers, and register what leaves it
+
+jt8051's `DIV AB` is a combinational 8-bit divider: 24 ns at the slow corner against 17.9 ns
+(-7.0 ns, TNS -3116). Every register in the core is `else if (cen)`, and its enable (3 in 7 clocks)
+is never adjacent, so a two-clock multicycle between its registers is true; with it and the same on
+its internal RAM (an explicit `altsyncram` clocked on the same enable, so the claim does not depend
+on how an inferred RAM was built), only one path remained: ALU -> `sfr_we` -> the P3 write strobe ->
+a register outside the core. The strobe was registered on the enable inside the core rather than the
+constraint widened (the Seta entry above): +0.939 ns standalone. The microcode (32K x 48, 1,499
+entries used, asynchronous read) synthesises to about 1,200 LUTs, not block RAM.
+
 ## CPU cores (TG68K.C, T80, vendored CPUs)
 
 ### Budget for the 68k core to be the Fmax-limiting block
@@ -1011,6 +1037,14 @@ target is the reset entry. Not proven that the extra IRQ caused the restart -- a
 instruction lowering the mask to 0. Dump the vector table before deciding a board's interrupts; an
 ack address that is also an input port must acknowledge on writes only.
 
+### [Vamphalf] `irqN_line_hold` names MAME's input line N, not the CPU's interrupt N
+
+`set_vblank_int(..., irq1_line_hold)` asserts input line 1. For the Hyperstone E1 that is
+`INPUT_INT2` (`e132xs.h`: `INPUT_INT1 = 0`). The core wired vblank to INT1 from the name; the
+boot set FCR to 0xdd7fffff (INT1 inhibited, INT2 enabled) and the game sat in its idle loop at
+the PC MAME's speed-up handler names, waiting for a flag the vblank handler sets. Read the CPU's
+`INPUT_*` constants, and the mask register the game writes, before naming an interrupt.
+
 ## Quartus synthesis gotchas (not visible in ModelSim)
 
 - **Non-blocking assignments to block-local (`automatic`) variables are rejected**, even with
@@ -1058,6 +1092,23 @@ ack address that is also an input port must acknowledge on writes only.
 - **[GX] Quartus 17 rejects `for (genvar i = ...)`** (`Error (10170)`); declare `genvar i;` before
   the `generate`.
 - **`quartus_map` alone is a fast pre-check** for whether a change elaborates.
+- **[Vamphalf] Do not write an array at a variable index and then change the index in the same
+  block, twice in one clock.** The E1's register-write queue was pushed by a task doing
+  `wq_v[wq_cnt] = v; wq_cnt = wq_cnt + 1;`, called twice in one clock by a CALL (return address,
+  SR) and by the reset state (L0, L1). Verilator ordered it right; on the board the first push
+  never arrived and the second did, so the first RET jumped to 0 and the screen stayed black.
+  Quartus had also made `wq_v` a one-write-port `altsyncram`; `ramstyle "logic"` removed the RAM
+  and not the fault. Writing each entry under a constant index (a `case` on the count) did. Every
+  simulation was right throughout, including a top-level bench with the real download and random
+  power-up state. What found it in one build: an architectural trace on the board (each retirement,
+  register write and bus transfer, `rtl/debug/vh_trace.sv`) compared per category with the same
+  RTL's trace in the bench (`scripts/trace_compare.py`). Before that, eleven builds each probed one
+  guess. Build the trace first when a core runs in simulation and not on the board; and read the
+  map report's "Parameter Settings for Inferred Entity Instance" list for small arrays that should
+  not be RAM.
+- **[Vamphalf] Synchronise an ISSP source before it drives a reset.** The probe's hold bit comes
+  from the JTAG side; released asynchronously into a 56 MHz core, it restarted the CPU and its memory
+  unit in different clocks and the first records after it were an exception frame, not the reset.
 
 ## Debug instrumentation: how not to fool yourself
 
@@ -1192,6 +1243,51 @@ ack address that is also an input port must acknowledge on writes only.
 - **[GX] MAME's `nvram/<set>/eeprom` for a 16-bit serial EEPROM is little-endian words.** MAME's
   memory dumped as it is on x86. A bench loading it big-endian ran identically to MAME for 700
   frames until the game's first settings read.
+- **[Vamphalf] The debugger's `trace` action and `tracelog` from a tap write to the VISIBLE CPU's
+  trace file, not to the CPU the tap belongs to.** Tracing a CPU that is not the first (the QS1000's
+  8052, `:qs1000:cpu`) with `trace file,<cpu>,noloop,{tracelog ...}` produced only the disassembly
+  lines: the action ran, its output went to the main CPU, which has no trace. `focus <cpu>` does not
+  change the visible CPU while the machine runs; the Lua property `manager.machine.debugger.visible_cpu
+  = cpu` does. Check that the first record has the register fields before a long run.
+- **[Vamphalf] Print `tracelog` arguments with `0x`.** They are debugger expressions, and a value
+  that is also a symbol is read as the symbol: on the 8052 an offset or byte of 0x0a printed as 0
+  (`a` = ACC), 0x0b as B's value. `%x` of 10 is `a`; `%#x` is `0xa`. It lost no row, it corrupted the
+  address (MOVX writes at 0x000a and 0x000b logged at 0), which showed up as the first
+  mismatch of the RTL bench at the 472nd instruction.
+- **[Vamphalf] A driver that does not set `VIDEO_UPDATE_AFTER_VBLANK` is drawn in `vblank_begin`, and the
+  Lua frame notifier runs in the same call, before the vblank IRQ.** The RAM dumped in the notifier is
+  therefore the RAM the frame was drawn from (`emu/screen.cpp:1149`); 342 of 342 frames per set matched to
+  the pixel with no frame shift. The MS32 entry above is the opposite case. Read the driver's video
+  attributes before deciding where to dump.
+- **[Vamphalf] A driver that changes the visible area inside `screen_update` draws each frame with the area
+  of the previous one, and leaves rows outside the clip as they were.** Flip toggled in a capture: 4 lines
+  (1280 px) of the first frame after each toggle were wrong against a model that fills the whole visible
+  area; the stale rows were exactly what the first flipped update had drawn into rows 16..19. Zero after
+  the model kept the bitmap between frames and used the previous update's area as the clip. Record
+  the flip state of the previous frame in the capture manifest; a capture taken in the notifier that
+  applies a change shows the picture from before it.
+- **[Vamphalf] A single coin pulse of 1, 3, 20 or 60 frames left CREDIT 0 in both sets, although the
+  game read the coin bit low on 0x90 for the whole pulse; coin pulses repeated every 97 frames from
+  frame 400 gave credit 9 by frame 1000.** Cause not looked into. A play stimulus must be checked by
+  looking at the credit counter on a snapshot, not by the input having been read.
+- **[Vamphalf] `memory.regions[":gfx"]` has `read_u8/u16/u32/u64` and no `read_range`; `read_u64` returns
+  "integer value will be misrepresented in lua" and aborts the callback.** Dump a region with `read_u32` and
+  `string.pack("<I4")` and check a few addresses against `read_u8`. The program-space dumps use
+  `read_u32` per word and compare their first 64 bytes against `read_u8`.
+- **[Vamphalf] A ROT270 set's `-snapview native` snapshot is turned 180 degrees from the bitmap; a ROT90
+  set's is not.** `misncrft` matched unturned, `wivernwg` after `rot180`; found by trying the four
+  mirrors on the first frame, then pinned (`render_model.py compare`). Same finding as the MS32 entry
+  above, with a different rotation.
+- **[Vamphalf] A 32-bit-bus set needs full-width I/O writes from Lua: `ios:write_u16(0x800, 1)` left the flip
+  handler seeing data 0.** The CPU's own write is 32 bits wide (tap mask ffffffff) and the handler is
+  `umask32(0x0000ffff)`; the cause was not isolated (a 16-bit write most likely lands in the other half of the 32-bit lane). Copy the width and mask of the
+  game's own write from a tap before poking.
+- **[Vamphalf] Keep a reference to every tap: an unreferenced `install_*_tap` handler is garbage-collected
+  and the tap stops without a message.** A tap held in a `local` of the script's main chunk logged I/O for
+  about 100 frames and then nothing, inputs included, which the game reads every frame. The capture's
+  conclusion ("no sound commands during play") was an artefact. A tap the frame callback refers to (to
+  remove it at the end) survived. Hold taps in globals, and check that a capture has accesses up to its
+  last frame.
 
 ## Hardware bring-up (MiSTer / DE10-nano)
 

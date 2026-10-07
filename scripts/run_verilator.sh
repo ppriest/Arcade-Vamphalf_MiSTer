@@ -44,6 +44,7 @@ GEN=(); RUN=(); THREADS=1
 for a in "$@"; do
 	case "$a" in
 		-G*)         GEN+=("$a") ;;
+		--x-*=*)     GEN+=("${a%%=*}" "${a#*=}") ;;   # --x-initial=unique, --x-assign=unique: to the build
 		--threads=*) THREADS="${a#--threads=}" ;;
 		*)           RUN+=("$a") ;;
 	esac

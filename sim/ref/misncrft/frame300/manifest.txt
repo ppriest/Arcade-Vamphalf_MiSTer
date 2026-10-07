@@ -1,0 +1,4 @@
+set misncrft
+mame 0.289
+frame 300
+screen 320x236

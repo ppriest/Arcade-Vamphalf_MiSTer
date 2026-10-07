@@ -1,0 +1,2003 @@
+# E1 instruction trace, MAME interpreter (-nodrc), state BEFORE each instruction.
+# format: docs/E1_TRACE_FORMAT.md
+# idx pc ops sr changes | disasm
+0 fffffff8 6503,fbac 00548000 g2=00000000 g3=00000000 g4=00000000 g5=00000000 g6=00000000 g7=00000000 g8=00000000 g9=00000000 g10=00000000 g11=00000000 g12=00000000 g13=00000000 g14=00000000 g15=00000000 g16=00000000 g17=00000000 g18=00000000 g19=00000000 g20=ffffffff g21=0c000000 g22=00000000 g23=00000000 g24=00000000 g25=00000000 g26=ffffffff g27=ffffffff g28=00000000 g29=00000000 g30=00000000 g31=00000000 l0=fffffff9 l1=004c8000 l2=00000000 l3=00000000 l4=00000000 l5=00000000 l6=00000000 l7=00000000 l8=00000000 l9=00000000 l10=00000000 l11=00000000 l12=00000000 l13=00000000 l14=00000000 l15=00000000 l16=00000000 l17=00000000 l18=00000000 l19=00000000 l20=00000000 l21=00000000 l22=00000000 l23=00000000 l24=00000000 l25=00000000 l26=00000000 l27=00000000 l28=00000000 l29=00000000 l30=00000000 l31=00000000 l32=00000000 l33=00000000 l34=00000000 l35=00000000 l36=00000000 l37=00000000 l38=00000000 l39=00000000 l40=00000000 l41=00000000 l42=00000000 l43=00000000 l44=00000000 l45=00000000 l46=00000000 l47=00000000 l48=00000000 l49=00000000 l50=00000000 l51=00000000 l52=00000000 l53=00000000 l54=00000000 l55=00000000 l56=00000000 l57=00000000 l58=00000000 l59=00000000 l60=00000000 l61=00000000 l62=00000000 l63=00000000 | FFFFFFF8: MOVI    PC, $fffffbac
+1 fffffbac 1621,81e0,0000 00568004  | FFFFFBAC: MASK    L2, SR, $1e00000
+2 fffffbb2 6321,00c0,0000 005e8004 l2=00400000 | FFFFFBB2: CMPI    L2, $c00000
+3 fffffbb8 f280 005e8005  | FFFFFBB8: BE      $fffffcca
+4 fffffbbc 7914 00568005  | FFFFFBBC: ORI     SR, $20
+5 fffffbbe 6420 004e8025  | FFFFFBBE: MOVI    SP, $0
+6 fffffbc0 1830,8000,0008 004e8003  | FFFFFBC0: SUM     G03, PC, $8 ; $fffffbce
+7 fffffbc6 7831 005e8004 g3=fffffbce | FFFFFBC6: ORI     G03, $1
+8 fffffbc8 6542,8000 004e8004 g3=fffffbcf | FFFFFBC8: MOVI    G04, $8000
+9 fffffbcc 0403 00568000 g4=00008000 | FFFFFBCC: RET     PC, G03
+10 fffffbce ed80 00048000  | FFFFFBCE: FRAME   L8, L0
+11 fffffbd0 9107,b000,0354 010e8000  | FFFFFBD0: LDW.D   PC, L7, $354 ; $ffffff28
+12 fffffbd6 7914 011e8000 l7=00300000 | FFFFFBD6: ORI     SR, $20
+13 fffffbd8 2557 010e8020  | FFFFFBD8: MOV     TPR, L7
+14 fffffbda 9107,b000,0350 010e8000 g21=00300000 | FFFFFBDA: LDW.D   PC, L7, $350 ; $ffffff30
+15 fffffbe0 7914 011e8000 l7=fdd881ea | FFFFFBE0: ORI     SR, $20
+16 fffffbe2 25b7 010e8020  | FFFFFBE2: MOV     MCR, L7
+17 fffffbe4 25e7 010e8004 g27=fdd881ea | FFFFFBE4: MOV     G14, L7
+18 fffffbe6 9107,b000,0340 010e8004 g14=fdd881ea | FFFFFBE6: LDW.D   PC, L7, $340 ; $ffffff2c
+19 fffffbec 7914 011e8004 l7=f71515d4 | FFFFFBEC: ORI     SR, $20
+20 fffffbee 2547 010e8024  | FFFFFBEE: MOV     BCR, L7
+21 fffffbf0 25c7 010e8004 g20=f71515d4 | FFFFFBF0: MOV     G12, L7
+22 fffffbf2 6670 010e8004 g12=f71515d4 | FFFFFBF2: MOVI    L7, $0
+23 fffffbf4 ee80,8000,0396 010e8002 l7=00000000 | FFFFFBF4: CALL    L8, PC, $396 ; $ffffff90
+24 ffffff90 ed91 10de8002 l8=fffffbfb l9=011e8002 | FFFFFF90: FRAME   L9, L1
+25 ffffff92 1b30,0008 0f2e8002  | FFFFFF92: SUM     L3, L0, $8
+26 ffffff96 6741,5555,5555 0f368000 l10=00000008 | FFFFFF96: MOVI    L4, $55555555
+27 ffffff9c 6751,aaaa,aaaa 0f3e8000 l11=55555555 | FFFFFF9C: MOVI    L5, $aaaaaaaa
+28 ffffffa2 9b34,3000 0f3e8004 l12=aaaaaaaa | FFFFFFA2: STW.D   L3, L4, $0
+29 ffffffa6 9b35,3008 0f368004  | FFFFFFA6: STW.D   L3, L5, $8
+30 ffffffaa 9336,3000 0f368004  | FFFFFFAA: LDW.D   L3, L6, $0
+31 ffffffae 2346 0f368004 l13=55555555 | FFFFFFAE: CMP     L4, L6
+32 ffffffb0 f338 0f2e8002  | FFFFFFB0: BNE     $ffffffea
+33 ffffffb2 9336,3008 0f2e8002  | FFFFFFB2: LDW.D   L3, L6, $8
+34 ffffffb6 2356 0f368002 l13=aaaaaaaa | FFFFFFB6: CMP     L5, L6
+35 ffffffb8 f330 0f2e8002  | FFFFFFB8: BNE     $ffffffea
+36 ffffffba 6688 0f2e8002  | FFFFFFBA: MOVI    L8, $8
+37 ffffffbc 2743 0f2e8000 l15=00000008 | FFFFFFBC: MOV     L4, L3
+38 ffffffbe 9b45,7ff8 0f2e8000 l11=00000008 | FFFFFFBE: STW.D   L4, L5, $fffffff8
+39 ffffffc2 d933 0f368000  | FFFFFFC2: STW.R   L3, L3
+40 ffffffc4 d944 0f2e8000  | FFFFFFC4: STW.R   L4, L4
+41 ffffffc6 d137 0f2e8000  | FFFFFFC6: LDW.R   L3, L7
+42 ffffffc8 2337 0f2e8000 l14=00000008 | FFFFFFC8: CMP     L3, L7
+43 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+44 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+45 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+46 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+47 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+48 ffffffd6 6382,4000 0f2e8000 l10=00000010 | FFFFFFD6: CMPI    L8, $4000
+49 ffffffda f504 0f368005  | FFFFFFDA: BNC     $ffffffe0
+50 ffffffdc 1388,5000 0f2e8005  | FFFFFFDC: XX2     L8, L8, 0
+51 ffffffe0 ec63 0f368005 l15=00000010 | FFFFFFE0: DBR     $ffffffc4
+52 ffffffe2 d933 0f2e8005  | FFFFFFE2: STW.R   L3, L3
+53 ffffffc4 d944 0f2e8005  | FFFFFFC4: STW.R   L4, L4
+54 ffffffc6 d137 0f2e8005  | FFFFFFC6: LDW.R   L3, L7
+55 ffffffc8 2337 0f2e8005 l14=00000010 | FFFFFFC8: CMP     L3, L7
+56 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+57 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+58 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+59 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+60 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+61 ffffffd6 6382,4000 0f2e8000 l10=00000020 | FFFFFFD6: CMPI    L8, $4000
+62 ffffffda f504 0f368005  | FFFFFFDA: BNC     $ffffffe0
+63 ffffffdc 1388,5000 0f2e8005  | FFFFFFDC: XX2     L8, L8, 0
+64 ffffffe0 ec63 0f368005 l15=00000020 | FFFFFFE0: DBR     $ffffffc4
+65 ffffffe2 d933 0f2e8005  | FFFFFFE2: STW.R   L3, L3
+66 ffffffc4 d944 0f2e8005  | FFFFFFC4: STW.R   L4, L4
+67 ffffffc6 d137 0f2e8005  | FFFFFFC6: LDW.R   L3, L7
+68 ffffffc8 2337 0f2e8005 l14=00000020 | FFFFFFC8: CMP     L3, L7
+69 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+70 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+71 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+72 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+73 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+74 ffffffd6 6382,4000 0f2e8000 l10=00000040 | FFFFFFD6: CMPI    L8, $4000
+75 ffffffda f504 0f368005  | FFFFFFDA: BNC     $ffffffe0
+76 ffffffdc 1388,5000 0f2e8005  | FFFFFFDC: XX2     L8, L8, 0
+77 ffffffe0 ec63 0f368005 l15=00000040 | FFFFFFE0: DBR     $ffffffc4
+78 ffffffe2 d933 0f2e8005  | FFFFFFE2: STW.R   L3, L3
+79 ffffffc4 d944 0f2e8005  | FFFFFFC4: STW.R   L4, L4
+80 ffffffc6 d137 0f2e8005  | FFFFFFC6: LDW.R   L3, L7
+81 ffffffc8 2337 0f2e8005 l14=00000040 | FFFFFFC8: CMP     L3, L7
+82 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+83 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+84 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+85 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+86 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+87 ffffffd6 6382,4000 0f2e8000 l10=00000080 | FFFFFFD6: CMPI    L8, $4000
+88 ffffffda f504 0f368005  | FFFFFFDA: BNC     $ffffffe0
+89 ffffffdc 1388,5000 0f2e8005  | FFFFFFDC: XX2     L8, L8, 0
+90 ffffffe0 ec63 0f368005 l15=00000080 | FFFFFFE0: DBR     $ffffffc4
+91 ffffffe2 d933 0f2e8005  | FFFFFFE2: STW.R   L3, L3
+92 ffffffc4 d944 0f2e8005  | FFFFFFC4: STW.R   L4, L4
+93 ffffffc6 d137 0f2e8005  | FFFFFFC6: LDW.R   L3, L7
+94 ffffffc8 2337 0f2e8005 l14=00000080 | FFFFFFC8: CMP     L3, L7
+95 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+96 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+97 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+98 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+99 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+100 ffffffd6 6382,4000 0f2e8000 l10=00000100 | FFFFFFD6: CMPI    L8, $4000
+101 ffffffda f504 0f368005  | FFFFFFDA: BNC     $ffffffe0
+102 ffffffdc 1388,5000 0f2e8005  | FFFFFFDC: XX2     L8, L8, 0
+103 ffffffe0 ec63 0f368005 l15=00000100 | FFFFFFE0: DBR     $ffffffc4
+104 ffffffe2 d933 0f2e8005  | FFFFFFE2: STW.R   L3, L3
+105 ffffffc4 d944 0f2e8005  | FFFFFFC4: STW.R   L4, L4
+106 ffffffc6 d137 0f2e8005  | FFFFFFC6: LDW.R   L3, L7
+107 ffffffc8 2337 0f2e8005 l14=00000100 | FFFFFFC8: CMP     L3, L7
+108 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+109 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+110 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+111 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+112 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+113 ffffffd6 6382,4000 0f2e8000 l10=00000200 | FFFFFFD6: CMPI    L8, $4000
+114 ffffffda f504 0f368005  | FFFFFFDA: BNC     $ffffffe0
+115 ffffffdc 1388,5000 0f2e8005  | FFFFFFDC: XX2     L8, L8, 0
+116 ffffffe0 ec63 0f368005 l15=00000200 | FFFFFFE0: DBR     $ffffffc4
+117 ffffffe2 d933 0f2e8005  | FFFFFFE2: STW.R   L3, L3
+118 ffffffc4 d944 0f2e8005  | FFFFFFC4: STW.R   L4, L4
+119 ffffffc6 d137 0f2e8005  | FFFFFFC6: LDW.R   L3, L7
+120 ffffffc8 2337 0f2e8005 l14=00000200 | FFFFFFC8: CMP     L3, L7
+121 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+122 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+123 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+124 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+125 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+126 ffffffd6 6382,4000 0f2e8000 l10=00000400 | FFFFFFD6: CMPI    L8, $4000
+127 ffffffda f504 0f368005  | FFFFFFDA: BNC     $ffffffe0
+128 ffffffdc 1388,5000 0f2e8005  | FFFFFFDC: XX2     L8, L8, 0
+129 ffffffe0 ec63 0f368005 l15=00000400 | FFFFFFE0: DBR     $ffffffc4
+130 ffffffe2 d933 0f2e8005  | FFFFFFE2: STW.R   L3, L3
+131 ffffffc4 d944 0f2e8005  | FFFFFFC4: STW.R   L4, L4
+132 ffffffc6 d137 0f2e8005  | FFFFFFC6: LDW.R   L3, L7
+133 ffffffc8 2337 0f2e8005 l14=00000400 | FFFFFFC8: CMP     L3, L7
+134 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+135 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+136 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+137 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+138 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+139 ffffffd6 6382,4000 0f2e8000 l10=00000800 | FFFFFFD6: CMPI    L8, $4000
+140 ffffffda f504 0f368005  | FFFFFFDA: BNC     $ffffffe0
+141 ffffffdc 1388,5000 0f2e8005  | FFFFFFDC: XX2     L8, L8, 0
+142 ffffffe0 ec63 0f368005 l15=00000800 | FFFFFFE0: DBR     $ffffffc4
+143 ffffffe2 d933 0f2e8005  | FFFFFFE2: STW.R   L3, L3
+144 ffffffc4 d944 0f2e8005  | FFFFFFC4: STW.R   L4, L4
+145 ffffffc6 d137 0f2e8005  | FFFFFFC6: LDW.R   L3, L7
+146 ffffffc8 2337 0f2e8005 l14=00000800 | FFFFFFC8: CMP     L3, L7
+147 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+148 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+149 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+150 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+151 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+152 ffffffd6 6382,4000 0f2e8000 l10=00001000 | FFFFFFD6: CMPI    L8, $4000
+153 ffffffda f504 0f368005  | FFFFFFDA: BNC     $ffffffe0
+154 ffffffdc 1388,5000 0f2e8005  | FFFFFFDC: XX2     L8, L8, 0
+155 ffffffe0 ec63 0f368005 l15=00001000 | FFFFFFE0: DBR     $ffffffc4
+156 ffffffe2 d933 0f2e8005  | FFFFFFE2: STW.R   L3, L3
+157 ffffffc4 d944 0f2e8005  | FFFFFFC4: STW.R   L4, L4
+158 ffffffc6 d137 0f2e8005  | FFFFFFC6: LDW.R   L3, L7
+159 ffffffc8 2337 0f2e8005 l14=00001000 | FFFFFFC8: CMP     L3, L7
+160 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+161 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+162 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+163 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+164 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+165 ffffffd6 6382,4000 0f2e8000 l10=00002000 | FFFFFFD6: CMPI    L8, $4000
+166 ffffffda f504 0f368005  | FFFFFFDA: BNC     $ffffffe0
+167 ffffffdc 1388,5000 0f2e8005  | FFFFFFDC: XX2     L8, L8, 0
+168 ffffffe0 ec63 0f368005 l15=00002000 | FFFFFFE0: DBR     $ffffffc4
+169 ffffffe2 d933 0f2e8005  | FFFFFFE2: STW.R   L3, L3
+170 ffffffc4 d944 0f2e8005  | FFFFFFC4: STW.R   L4, L4
+171 ffffffc6 d137 0f2e8005  | FFFFFFC6: LDW.R   L3, L7
+172 ffffffc8 2337 0f2e8005 l14=00002000 | FFFFFFC8: CMP     L3, L7
+173 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+174 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+175 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+176 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+177 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+178 ffffffd6 6382,4000 0f2e8000 l10=00004000 | FFFFFFD6: CMPI    L8, $4000
+179 ffffffda f504 0f368005  | FFFFFFDA: BNC     $ffffffe0
+180 ffffffdc 1388,5000 0f2e8005  | FFFFFFDC: XX2     L8, L8, 0
+181 ffffffe0 ec63 0f368005 l15=00004000 | FFFFFFE0: DBR     $ffffffc4
+182 ffffffe2 d933 0f2e8005  | FFFFFFE2: STW.R   L3, L3
+183 ffffffc4 d944 0f2e8005  | FFFFFFC4: STW.R   L4, L4
+184 ffffffc6 d137 0f2e8005  | FFFFFFC6: LDW.R   L3, L7
+185 ffffffc8 2337 0f2e8005 l14=00004000 | FFFFFFC8: CMP     L3, L7
+186 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+187 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+188 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+189 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+190 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+191 ffffffd6 6382,4000 0f2e8000 l10=00008000 | FFFFFFD6: CMPI    L8, $4000
+192 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+193 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+194 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+195 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+196 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+197 ffffffc8 2337 0f2e8002 l14=00008000 | FFFFFFC8: CMP     L3, L7
+198 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+199 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+200 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+201 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+202 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+203 ffffffd6 6382,4000 0f2e8000 l10=0000c000 | FFFFFFD6: CMPI    L8, $4000
+204 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+205 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+206 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+207 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+208 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+209 ffffffc8 2337 0f2e8002 l14=0000c000 | FFFFFFC8: CMP     L3, L7
+210 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+211 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+212 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+213 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+214 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+215 ffffffd6 6382,4000 0f2e8000 l10=00010000 | FFFFFFD6: CMPI    L8, $4000
+216 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+217 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+218 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+219 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+220 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+221 ffffffc8 2337 0f2e8002 l14=00010000 | FFFFFFC8: CMP     L3, L7
+222 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+223 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+224 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+225 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+226 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+227 ffffffd6 6382,4000 0f2e8000 l10=00014000 | FFFFFFD6: CMPI    L8, $4000
+228 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+229 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+230 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+231 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+232 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+233 ffffffc8 2337 0f2e8002 l14=00014000 | FFFFFFC8: CMP     L3, L7
+234 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+235 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+236 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+237 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+238 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+239 ffffffd6 6382,4000 0f2e8000 l10=00018000 | FFFFFFD6: CMPI    L8, $4000
+240 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+241 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+242 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+243 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+244 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+245 ffffffc8 2337 0f2e8002 l14=00018000 | FFFFFFC8: CMP     L3, L7
+246 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+247 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+248 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+249 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+250 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+251 ffffffd6 6382,4000 0f2e8000 l10=0001c000 | FFFFFFD6: CMPI    L8, $4000
+252 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+253 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+254 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+255 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+256 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+257 ffffffc8 2337 0f2e8002 l14=0001c000 | FFFFFFC8: CMP     L3, L7
+258 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+259 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+260 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+261 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+262 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+263 ffffffd6 6382,4000 0f2e8000 l10=00020000 | FFFFFFD6: CMPI    L8, $4000
+264 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+265 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+266 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+267 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+268 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+269 ffffffc8 2337 0f2e8002 l14=00020000 | FFFFFFC8: CMP     L3, L7
+270 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+271 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+272 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+273 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+274 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+275 ffffffd6 6382,4000 0f2e8000 l10=00024000 | FFFFFFD6: CMPI    L8, $4000
+276 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+277 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+278 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+279 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+280 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+281 ffffffc8 2337 0f2e8002 l14=00024000 | FFFFFFC8: CMP     L3, L7
+282 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+283 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+284 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+285 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+286 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+287 ffffffd6 6382,4000 0f2e8000 l10=00028000 | FFFFFFD6: CMPI    L8, $4000
+288 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+289 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+290 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+291 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+292 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+293 ffffffc8 2337 0f2e8002 l14=00028000 | FFFFFFC8: CMP     L3, L7
+294 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+295 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+296 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+297 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+298 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+299 ffffffd6 6382,4000 0f2e8000 l10=0002c000 | FFFFFFD6: CMPI    L8, $4000
+300 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+301 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+302 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+303 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+304 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+305 ffffffc8 2337 0f2e8002 l14=0002c000 | FFFFFFC8: CMP     L3, L7
+306 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+307 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+308 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+309 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+310 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+311 ffffffd6 6382,4000 0f2e8000 l10=00030000 | FFFFFFD6: CMPI    L8, $4000
+312 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+313 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+314 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+315 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+316 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+317 ffffffc8 2337 0f2e8002 l14=00030000 | FFFFFFC8: CMP     L3, L7
+318 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+319 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+320 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+321 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+322 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+323 ffffffd6 6382,4000 0f2e8000 l10=00034000 | FFFFFFD6: CMPI    L8, $4000
+324 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+325 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+326 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+327 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+328 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+329 ffffffc8 2337 0f2e8002 l14=00034000 | FFFFFFC8: CMP     L3, L7
+330 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+331 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+332 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+333 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+334 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+335 ffffffd6 6382,4000 0f2e8000 l10=00038000 | FFFFFFD6: CMPI    L8, $4000
+336 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+337 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+338 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+339 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+340 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+341 ffffffc8 2337 0f2e8002 l14=00038000 | FFFFFFC8: CMP     L3, L7
+342 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+343 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+344 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+345 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+346 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+347 ffffffd6 6382,4000 0f2e8000 l10=0003c000 | FFFFFFD6: CMPI    L8, $4000
+348 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+349 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+350 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+351 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+352 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+353 ffffffc8 2337 0f2e8002 l14=0003c000 | FFFFFFC8: CMP     L3, L7
+354 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+355 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+356 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+357 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+358 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+359 ffffffd6 6382,4000 0f2e8000 l10=00040000 | FFFFFFD6: CMPI    L8, $4000
+360 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+361 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+362 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+363 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+364 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+365 ffffffc8 2337 0f2e8002 l14=00040000 | FFFFFFC8: CMP     L3, L7
+366 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+367 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+368 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+369 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+370 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+371 ffffffd6 6382,4000 0f2e8000 l10=00044000 | FFFFFFD6: CMPI    L8, $4000
+372 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+373 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+374 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+375 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+376 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+377 ffffffc8 2337 0f2e8002 l14=00044000 | FFFFFFC8: CMP     L3, L7
+378 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+379 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+380 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+381 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+382 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+383 ffffffd6 6382,4000 0f2e8000 l10=00048000 | FFFFFFD6: CMPI    L8, $4000
+384 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+385 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+386 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+387 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+388 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+389 ffffffc8 2337 0f2e8002 l14=00048000 | FFFFFFC8: CMP     L3, L7
+390 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+391 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+392 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+393 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+394 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+395 ffffffd6 6382,4000 0f2e8000 l10=0004c000 | FFFFFFD6: CMPI    L8, $4000
+396 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+397 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+398 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+399 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+400 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+401 ffffffc8 2337 0f2e8002 l14=0004c000 | FFFFFFC8: CMP     L3, L7
+402 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+403 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+404 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+405 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+406 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+407 ffffffd6 6382,4000 0f2e8000 l10=00050000 | FFFFFFD6: CMPI    L8, $4000
+408 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+409 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+410 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+411 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+412 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+413 ffffffc8 2337 0f2e8002 l14=00050000 | FFFFFFC8: CMP     L3, L7
+414 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+415 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+416 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+417 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+418 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+419 ffffffd6 6382,4000 0f2e8000 l10=00054000 | FFFFFFD6: CMPI    L8, $4000
+420 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+421 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+422 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+423 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+424 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+425 ffffffc8 2337 0f2e8002 l14=00054000 | FFFFFFC8: CMP     L3, L7
+426 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+427 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+428 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+429 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+430 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+431 ffffffd6 6382,4000 0f2e8000 l10=00058000 | FFFFFFD6: CMPI    L8, $4000
+432 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+433 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+434 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+435 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+436 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+437 ffffffc8 2337 0f2e8002 l14=00058000 | FFFFFFC8: CMP     L3, L7
+438 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+439 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+440 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+441 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+442 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+443 ffffffd6 6382,4000 0f2e8000 l10=0005c000 | FFFFFFD6: CMPI    L8, $4000
+444 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+445 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+446 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+447 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+448 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+449 ffffffc8 2337 0f2e8002 l14=0005c000 | FFFFFFC8: CMP     L3, L7
+450 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+451 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+452 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+453 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+454 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+455 ffffffd6 6382,4000 0f2e8000 l10=00060000 | FFFFFFD6: CMPI    L8, $4000
+456 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+457 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+458 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+459 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+460 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+461 ffffffc8 2337 0f2e8002 l14=00060000 | FFFFFFC8: CMP     L3, L7
+462 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+463 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+464 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+465 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+466 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+467 ffffffd6 6382,4000 0f2e8000 l10=00064000 | FFFFFFD6: CMPI    L8, $4000
+468 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+469 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+470 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+471 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+472 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+473 ffffffc8 2337 0f2e8002 l14=00064000 | FFFFFFC8: CMP     L3, L7
+474 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+475 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+476 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+477 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+478 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+479 ffffffd6 6382,4000 0f2e8000 l10=00068000 | FFFFFFD6: CMPI    L8, $4000
+480 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+481 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+482 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+483 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+484 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+485 ffffffc8 2337 0f2e8002 l14=00068000 | FFFFFFC8: CMP     L3, L7
+486 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+487 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+488 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+489 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+490 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+491 ffffffd6 6382,4000 0f2e8000 l10=0006c000 | FFFFFFD6: CMPI    L8, $4000
+492 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+493 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+494 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+495 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+496 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+497 ffffffc8 2337 0f2e8002 l14=0006c000 | FFFFFFC8: CMP     L3, L7
+498 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+499 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+500 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+501 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+502 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+503 ffffffd6 6382,4000 0f2e8000 l10=00070000 | FFFFFFD6: CMPI    L8, $4000
+504 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+505 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+506 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+507 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+508 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+509 ffffffc8 2337 0f2e8002 l14=00070000 | FFFFFFC8: CMP     L3, L7
+510 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+511 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+512 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+513 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+514 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+515 ffffffd6 6382,4000 0f2e8000 l10=00074000 | FFFFFFD6: CMPI    L8, $4000
+516 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+517 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+518 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+519 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+520 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+521 ffffffc8 2337 0f2e8002 l14=00074000 | FFFFFFC8: CMP     L3, L7
+522 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+523 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+524 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+525 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+526 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+527 ffffffd6 6382,4000 0f2e8000 l10=00078000 | FFFFFFD6: CMPI    L8, $4000
+528 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+529 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+530 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+531 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+532 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+533 ffffffc8 2337 0f2e8002 l14=00078000 | FFFFFFC8: CMP     L3, L7
+534 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+535 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+536 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+537 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+538 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+539 ffffffd6 6382,4000 0f2e8000 l10=0007c000 | FFFFFFD6: CMPI    L8, $4000
+540 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+541 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+542 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+543 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+544 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+545 ffffffc8 2337 0f2e8002 l14=0007c000 | FFFFFFC8: CMP     L3, L7
+546 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+547 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+548 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+549 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+550 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+551 ffffffd6 6382,4000 0f2e8000 l10=00080000 | FFFFFFD6: CMPI    L8, $4000
+552 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+553 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+554 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+555 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+556 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+557 ffffffc8 2337 0f2e8002 l14=00080000 | FFFFFFC8: CMP     L3, L7
+558 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+559 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+560 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+561 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+562 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+563 ffffffd6 6382,4000 0f2e8000 l10=00084000 | FFFFFFD6: CMPI    L8, $4000
+564 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+565 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+566 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+567 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+568 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+569 ffffffc8 2337 0f2e8002 l14=00084000 | FFFFFFC8: CMP     L3, L7
+570 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+571 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+572 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+573 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+574 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+575 ffffffd6 6382,4000 0f2e8000 l10=00088000 | FFFFFFD6: CMPI    L8, $4000
+576 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+577 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+578 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+579 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+580 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+581 ffffffc8 2337 0f2e8002 l14=00088000 | FFFFFFC8: CMP     L3, L7
+582 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+583 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+584 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+585 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+586 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+587 ffffffd6 6382,4000 0f2e8000 l10=0008c000 | FFFFFFD6: CMPI    L8, $4000
+588 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+589 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+590 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+591 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+592 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+593 ffffffc8 2337 0f2e8002 l14=0008c000 | FFFFFFC8: CMP     L3, L7
+594 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+595 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+596 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+597 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+598 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+599 ffffffd6 6382,4000 0f2e8000 l10=00090000 | FFFFFFD6: CMPI    L8, $4000
+600 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+601 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+602 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+603 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+604 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+605 ffffffc8 2337 0f2e8002 l14=00090000 | FFFFFFC8: CMP     L3, L7
+606 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+607 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+608 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+609 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+610 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+611 ffffffd6 6382,4000 0f2e8000 l10=00094000 | FFFFFFD6: CMPI    L8, $4000
+612 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+613 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+614 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+615 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+616 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+617 ffffffc8 2337 0f2e8002 l14=00094000 | FFFFFFC8: CMP     L3, L7
+618 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+619 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+620 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+621 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+622 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+623 ffffffd6 6382,4000 0f2e8000 l10=00098000 | FFFFFFD6: CMPI    L8, $4000
+624 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+625 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+626 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+627 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+628 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+629 ffffffc8 2337 0f2e8002 l14=00098000 | FFFFFFC8: CMP     L3, L7
+630 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+631 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+632 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+633 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+634 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+635 ffffffd6 6382,4000 0f2e8000 l10=0009c000 | FFFFFFD6: CMPI    L8, $4000
+636 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+637 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+638 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+639 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+640 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+641 ffffffc8 2337 0f2e8002 l14=0009c000 | FFFFFFC8: CMP     L3, L7
+642 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+643 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+644 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+645 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+646 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+647 ffffffd6 6382,4000 0f2e8000 l10=000a0000 | FFFFFFD6: CMPI    L8, $4000
+648 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+649 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+650 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+651 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+652 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+653 ffffffc8 2337 0f2e8002 l14=000a0000 | FFFFFFC8: CMP     L3, L7
+654 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+655 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+656 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+657 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+658 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+659 ffffffd6 6382,4000 0f2e8000 l10=000a4000 | FFFFFFD6: CMPI    L8, $4000
+660 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+661 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+662 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+663 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+664 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+665 ffffffc8 2337 0f2e8002 l14=000a4000 | FFFFFFC8: CMP     L3, L7
+666 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+667 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+668 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+669 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+670 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+671 ffffffd6 6382,4000 0f2e8000 l10=000a8000 | FFFFFFD6: CMPI    L8, $4000
+672 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+673 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+674 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+675 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+676 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+677 ffffffc8 2337 0f2e8002 l14=000a8000 | FFFFFFC8: CMP     L3, L7
+678 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+679 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+680 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+681 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+682 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+683 ffffffd6 6382,4000 0f2e8000 l10=000ac000 | FFFFFFD6: CMPI    L8, $4000
+684 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+685 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+686 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+687 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+688 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+689 ffffffc8 2337 0f2e8002 l14=000ac000 | FFFFFFC8: CMP     L3, L7
+690 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+691 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+692 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+693 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+694 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+695 ffffffd6 6382,4000 0f2e8000 l10=000b0000 | FFFFFFD6: CMPI    L8, $4000
+696 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+697 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+698 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+699 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+700 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+701 ffffffc8 2337 0f2e8002 l14=000b0000 | FFFFFFC8: CMP     L3, L7
+702 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+703 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+704 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+705 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+706 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+707 ffffffd6 6382,4000 0f2e8000 l10=000b4000 | FFFFFFD6: CMPI    L8, $4000
+708 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+709 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+710 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+711 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+712 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+713 ffffffc8 2337 0f2e8002 l14=000b4000 | FFFFFFC8: CMP     L3, L7
+714 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+715 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+716 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+717 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+718 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+719 ffffffd6 6382,4000 0f2e8000 l10=000b8000 | FFFFFFD6: CMPI    L8, $4000
+720 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+721 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+722 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+723 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+724 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+725 ffffffc8 2337 0f2e8002 l14=000b8000 | FFFFFFC8: CMP     L3, L7
+726 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+727 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+728 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+729 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+730 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+731 ffffffd6 6382,4000 0f2e8000 l10=000bc000 | FFFFFFD6: CMPI    L8, $4000
+732 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+733 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+734 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+735 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+736 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+737 ffffffc8 2337 0f2e8002 l14=000bc000 | FFFFFFC8: CMP     L3, L7
+738 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+739 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+740 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+741 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+742 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+743 ffffffd6 6382,4000 0f2e8000 l10=000c0000 | FFFFFFD6: CMPI    L8, $4000
+744 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+745 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+746 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+747 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+748 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+749 ffffffc8 2337 0f2e8002 l14=000c0000 | FFFFFFC8: CMP     L3, L7
+750 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+751 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+752 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+753 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+754 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+755 ffffffd6 6382,4000 0f2e8000 l10=000c4000 | FFFFFFD6: CMPI    L8, $4000
+756 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+757 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+758 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+759 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+760 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+761 ffffffc8 2337 0f2e8002 l14=000c4000 | FFFFFFC8: CMP     L3, L7
+762 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+763 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+764 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+765 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+766 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+767 ffffffd6 6382,4000 0f2e8000 l10=000c8000 | FFFFFFD6: CMPI    L8, $4000
+768 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+769 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+770 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+771 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+772 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+773 ffffffc8 2337 0f2e8002 l14=000c8000 | FFFFFFC8: CMP     L3, L7
+774 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+775 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+776 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+777 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+778 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+779 ffffffd6 6382,4000 0f2e8000 l10=000cc000 | FFFFFFD6: CMPI    L8, $4000
+780 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+781 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+782 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+783 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+784 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+785 ffffffc8 2337 0f2e8002 l14=000cc000 | FFFFFFC8: CMP     L3, L7
+786 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+787 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+788 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+789 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+790 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+791 ffffffd6 6382,4000 0f2e8000 l10=000d0000 | FFFFFFD6: CMPI    L8, $4000
+792 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+793 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+794 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+795 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+796 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+797 ffffffc8 2337 0f2e8002 l14=000d0000 | FFFFFFC8: CMP     L3, L7
+798 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+799 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+800 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+801 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+802 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+803 ffffffd6 6382,4000 0f2e8000 l10=000d4000 | FFFFFFD6: CMPI    L8, $4000
+804 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+805 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+806 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+807 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+808 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+809 ffffffc8 2337 0f2e8002 l14=000d4000 | FFFFFFC8: CMP     L3, L7
+810 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+811 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+812 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+813 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+814 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+815 ffffffd6 6382,4000 0f2e8000 l10=000d8000 | FFFFFFD6: CMPI    L8, $4000
+816 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+817 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+818 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+819 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+820 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+821 ffffffc8 2337 0f2e8002 l14=000d8000 | FFFFFFC8: CMP     L3, L7
+822 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+823 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+824 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+825 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+826 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+827 ffffffd6 6382,4000 0f2e8000 l10=000dc000 | FFFFFFD6: CMPI    L8, $4000
+828 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+829 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+830 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+831 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+832 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+833 ffffffc8 2337 0f2e8002 l14=000dc000 | FFFFFFC8: CMP     L3, L7
+834 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+835 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+836 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+837 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+838 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+839 ffffffd6 6382,4000 0f2e8000 l10=000e0000 | FFFFFFD6: CMPI    L8, $4000
+840 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+841 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+842 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+843 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+844 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+845 ffffffc8 2337 0f2e8002 l14=000e0000 | FFFFFFC8: CMP     L3, L7
+846 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+847 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+848 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+849 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+850 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+851 ffffffd6 6382,4000 0f2e8000 l10=000e4000 | FFFFFFD6: CMPI    L8, $4000
+852 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+853 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+854 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+855 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+856 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+857 ffffffc8 2337 0f2e8002 l14=000e4000 | FFFFFFC8: CMP     L3, L7
+858 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+859 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+860 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+861 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+862 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+863 ffffffd6 6382,4000 0f2e8000 l10=000e8000 | FFFFFFD6: CMPI    L8, $4000
+864 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+865 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+866 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+867 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+868 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+869 ffffffc8 2337 0f2e8002 l14=000e8000 | FFFFFFC8: CMP     L3, L7
+870 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+871 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+872 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+873 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+874 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+875 ffffffd6 6382,4000 0f2e8000 l10=000ec000 | FFFFFFD6: CMPI    L8, $4000
+876 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+877 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+878 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+879 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+880 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+881 ffffffc8 2337 0f2e8002 l14=000ec000 | FFFFFFC8: CMP     L3, L7
+882 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+883 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+884 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+885 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+886 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+887 ffffffd6 6382,4000 0f2e8000 l10=000f0000 | FFFFFFD6: CMPI    L8, $4000
+888 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+889 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+890 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+891 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+892 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+893 ffffffc8 2337 0f2e8002 l14=000f0000 | FFFFFFC8: CMP     L3, L7
+894 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+895 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+896 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+897 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+898 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+899 ffffffd6 6382,4000 0f2e8000 l10=000f4000 | FFFFFFD6: CMPI    L8, $4000
+900 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+901 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+902 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+903 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+904 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+905 ffffffc8 2337 0f2e8002 l14=000f4000 | FFFFFFC8: CMP     L3, L7
+906 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+907 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+908 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+909 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+910 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+911 ffffffd6 6382,4000 0f2e8000 l10=000f8000 | FFFFFFD6: CMPI    L8, $4000
+912 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+913 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+914 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+915 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+916 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+917 ffffffc8 2337 0f2e8002 l14=000f8000 | FFFFFFC8: CMP     L3, L7
+918 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+919 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+920 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+921 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+922 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+923 ffffffd6 6382,4000 0f2e8000 l10=000fc000 | FFFFFFD6: CMPI    L8, $4000
+924 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+925 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+926 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+927 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+928 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+929 ffffffc8 2337 0f2e8002 l14=000fc000 | FFFFFFC8: CMP     L3, L7
+930 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+931 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+932 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+933 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+934 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+935 ffffffd6 6382,4000 0f2e8000 l10=00100000 | FFFFFFD6: CMPI    L8, $4000
+936 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+937 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+938 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+939 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+940 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+941 ffffffc8 2337 0f2e8002 l14=00100000 | FFFFFFC8: CMP     L3, L7
+942 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+943 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+944 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+945 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+946 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+947 ffffffd6 6382,4000 0f2e8000 l10=00104000 | FFFFFFD6: CMPI    L8, $4000
+948 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+949 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+950 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+951 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+952 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+953 ffffffc8 2337 0f2e8002 l14=00104000 | FFFFFFC8: CMP     L3, L7
+954 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+955 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+956 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+957 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+958 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+959 ffffffd6 6382,4000 0f2e8000 l10=00108000 | FFFFFFD6: CMPI    L8, $4000
+960 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+961 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+962 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+963 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+964 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+965 ffffffc8 2337 0f2e8002 l14=00108000 | FFFFFFC8: CMP     L3, L7
+966 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+967 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+968 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+969 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+970 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+971 ffffffd6 6382,4000 0f2e8000 l10=0010c000 | FFFFFFD6: CMPI    L8, $4000
+972 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+973 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+974 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+975 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+976 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+977 ffffffc8 2337 0f2e8002 l14=0010c000 | FFFFFFC8: CMP     L3, L7
+978 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+979 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+980 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+981 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+982 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+983 ffffffd6 6382,4000 0f2e8000 l10=00110000 | FFFFFFD6: CMPI    L8, $4000
+984 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+985 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+986 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+987 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+988 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+989 ffffffc8 2337 0f2e8002 l14=00110000 | FFFFFFC8: CMP     L3, L7
+990 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+991 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+992 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+993 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+994 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+995 ffffffd6 6382,4000 0f2e8000 l10=00114000 | FFFFFFD6: CMPI    L8, $4000
+996 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+997 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+998 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+999 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1000 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1001 ffffffc8 2337 0f2e8002 l14=00114000 | FFFFFFC8: CMP     L3, L7
+1002 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1003 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1004 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1005 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1006 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1007 ffffffd6 6382,4000 0f2e8000 l10=00118000 | FFFFFFD6: CMPI    L8, $4000
+1008 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1009 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1010 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1011 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1012 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1013 ffffffc8 2337 0f2e8002 l14=00118000 | FFFFFFC8: CMP     L3, L7
+1014 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1015 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1016 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1017 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1018 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1019 ffffffd6 6382,4000 0f2e8000 l10=0011c000 | FFFFFFD6: CMPI    L8, $4000
+1020 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1021 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1022 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1023 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1024 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1025 ffffffc8 2337 0f2e8002 l14=0011c000 | FFFFFFC8: CMP     L3, L7
+1026 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1027 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1028 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1029 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1030 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1031 ffffffd6 6382,4000 0f2e8000 l10=00120000 | FFFFFFD6: CMPI    L8, $4000
+1032 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1033 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1034 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1035 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1036 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1037 ffffffc8 2337 0f2e8002 l14=00120000 | FFFFFFC8: CMP     L3, L7
+1038 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1039 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1040 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1041 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1042 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1043 ffffffd6 6382,4000 0f2e8000 l10=00124000 | FFFFFFD6: CMPI    L8, $4000
+1044 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1045 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1046 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1047 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1048 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1049 ffffffc8 2337 0f2e8002 l14=00124000 | FFFFFFC8: CMP     L3, L7
+1050 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1051 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1052 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1053 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1054 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1055 ffffffd6 6382,4000 0f2e8000 l10=00128000 | FFFFFFD6: CMPI    L8, $4000
+1056 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1057 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1058 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1059 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1060 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1061 ffffffc8 2337 0f2e8002 l14=00128000 | FFFFFFC8: CMP     L3, L7
+1062 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1063 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1064 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1065 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1066 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1067 ffffffd6 6382,4000 0f2e8000 l10=0012c000 | FFFFFFD6: CMPI    L8, $4000
+1068 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1069 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1070 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1071 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1072 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1073 ffffffc8 2337 0f2e8002 l14=0012c000 | FFFFFFC8: CMP     L3, L7
+1074 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1075 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1076 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1077 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1078 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1079 ffffffd6 6382,4000 0f2e8000 l10=00130000 | FFFFFFD6: CMPI    L8, $4000
+1080 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1081 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1082 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1083 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1084 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1085 ffffffc8 2337 0f2e8002 l14=00130000 | FFFFFFC8: CMP     L3, L7
+1086 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1087 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1088 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1089 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1090 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1091 ffffffd6 6382,4000 0f2e8000 l10=00134000 | FFFFFFD6: CMPI    L8, $4000
+1092 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1093 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1094 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1095 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1096 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1097 ffffffc8 2337 0f2e8002 l14=00134000 | FFFFFFC8: CMP     L3, L7
+1098 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1099 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1100 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1101 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1102 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1103 ffffffd6 6382,4000 0f2e8000 l10=00138000 | FFFFFFD6: CMPI    L8, $4000
+1104 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1105 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1106 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1107 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1108 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1109 ffffffc8 2337 0f2e8002 l14=00138000 | FFFFFFC8: CMP     L3, L7
+1110 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1111 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1112 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1113 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1114 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1115 ffffffd6 6382,4000 0f2e8000 l10=0013c000 | FFFFFFD6: CMPI    L8, $4000
+1116 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1117 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1118 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1119 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1120 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1121 ffffffc8 2337 0f2e8002 l14=0013c000 | FFFFFFC8: CMP     L3, L7
+1122 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1123 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1124 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1125 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1126 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1127 ffffffd6 6382,4000 0f2e8000 l10=00140000 | FFFFFFD6: CMPI    L8, $4000
+1128 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1129 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1130 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1131 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1132 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1133 ffffffc8 2337 0f2e8002 l14=00140000 | FFFFFFC8: CMP     L3, L7
+1134 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1135 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1136 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1137 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1138 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1139 ffffffd6 6382,4000 0f2e8000 l10=00144000 | FFFFFFD6: CMPI    L8, $4000
+1140 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1141 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1142 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1143 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1144 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1145 ffffffc8 2337 0f2e8002 l14=00144000 | FFFFFFC8: CMP     L3, L7
+1146 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1147 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1148 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1149 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1150 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1151 ffffffd6 6382,4000 0f2e8000 l10=00148000 | FFFFFFD6: CMPI    L8, $4000
+1152 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1153 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1154 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1155 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1156 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1157 ffffffc8 2337 0f2e8002 l14=00148000 | FFFFFFC8: CMP     L3, L7
+1158 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1159 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1160 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1161 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1162 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1163 ffffffd6 6382,4000 0f2e8000 l10=0014c000 | FFFFFFD6: CMPI    L8, $4000
+1164 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1165 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1166 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1167 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1168 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1169 ffffffc8 2337 0f2e8002 l14=0014c000 | FFFFFFC8: CMP     L3, L7
+1170 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1171 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1172 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1173 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1174 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1175 ffffffd6 6382,4000 0f2e8000 l10=00150000 | FFFFFFD6: CMPI    L8, $4000
+1176 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1177 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1178 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1179 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1180 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1181 ffffffc8 2337 0f2e8002 l14=00150000 | FFFFFFC8: CMP     L3, L7
+1182 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1183 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1184 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1185 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1186 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1187 ffffffd6 6382,4000 0f2e8000 l10=00154000 | FFFFFFD6: CMPI    L8, $4000
+1188 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1189 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1190 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1191 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1192 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1193 ffffffc8 2337 0f2e8002 l14=00154000 | FFFFFFC8: CMP     L3, L7
+1194 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1195 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1196 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1197 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1198 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1199 ffffffd6 6382,4000 0f2e8000 l10=00158000 | FFFFFFD6: CMPI    L8, $4000
+1200 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1201 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1202 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1203 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1204 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1205 ffffffc8 2337 0f2e8002 l14=00158000 | FFFFFFC8: CMP     L3, L7
+1206 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1207 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1208 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1209 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1210 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1211 ffffffd6 6382,4000 0f2e8000 l10=0015c000 | FFFFFFD6: CMPI    L8, $4000
+1212 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1213 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1214 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1215 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1216 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1217 ffffffc8 2337 0f2e8002 l14=0015c000 | FFFFFFC8: CMP     L3, L7
+1218 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1219 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1220 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1221 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1222 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1223 ffffffd6 6382,4000 0f2e8000 l10=00160000 | FFFFFFD6: CMPI    L8, $4000
+1224 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1225 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1226 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1227 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1228 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1229 ffffffc8 2337 0f2e8002 l14=00160000 | FFFFFFC8: CMP     L3, L7
+1230 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1231 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1232 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1233 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1234 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1235 ffffffd6 6382,4000 0f2e8000 l10=00164000 | FFFFFFD6: CMPI    L8, $4000
+1236 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1237 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1238 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1239 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1240 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1241 ffffffc8 2337 0f2e8002 l14=00164000 | FFFFFFC8: CMP     L3, L7
+1242 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1243 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1244 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1245 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1246 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1247 ffffffd6 6382,4000 0f2e8000 l10=00168000 | FFFFFFD6: CMPI    L8, $4000
+1248 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1249 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1250 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1251 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1252 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1253 ffffffc8 2337 0f2e8002 l14=00168000 | FFFFFFC8: CMP     L3, L7
+1254 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1255 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1256 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1257 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1258 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1259 ffffffd6 6382,4000 0f2e8000 l10=0016c000 | FFFFFFD6: CMPI    L8, $4000
+1260 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1261 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1262 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1263 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1264 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1265 ffffffc8 2337 0f2e8002 l14=0016c000 | FFFFFFC8: CMP     L3, L7
+1266 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1267 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1268 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1269 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1270 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1271 ffffffd6 6382,4000 0f2e8000 l10=00170000 | FFFFFFD6: CMPI    L8, $4000
+1272 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1273 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1274 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1275 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1276 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1277 ffffffc8 2337 0f2e8002 l14=00170000 | FFFFFFC8: CMP     L3, L7
+1278 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1279 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1280 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1281 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1282 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1283 ffffffd6 6382,4000 0f2e8000 l10=00174000 | FFFFFFD6: CMPI    L8, $4000
+1284 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1285 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1286 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1287 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1288 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1289 ffffffc8 2337 0f2e8002 l14=00174000 | FFFFFFC8: CMP     L3, L7
+1290 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1291 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1292 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1293 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1294 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1295 ffffffd6 6382,4000 0f2e8000 l10=00178000 | FFFFFFD6: CMPI    L8, $4000
+1296 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1297 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1298 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1299 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1300 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1301 ffffffc8 2337 0f2e8002 l14=00178000 | FFFFFFC8: CMP     L3, L7
+1302 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1303 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1304 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1305 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1306 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1307 ffffffd6 6382,4000 0f2e8000 l10=0017c000 | FFFFFFD6: CMPI    L8, $4000
+1308 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1309 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1310 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1311 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1312 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1313 ffffffc8 2337 0f2e8002 l14=0017c000 | FFFFFFC8: CMP     L3, L7
+1314 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1315 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1316 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1317 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1318 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1319 ffffffd6 6382,4000 0f2e8000 l10=00180000 | FFFFFFD6: CMPI    L8, $4000
+1320 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1321 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1322 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1323 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1324 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1325 ffffffc8 2337 0f2e8002 l14=00180000 | FFFFFFC8: CMP     L3, L7
+1326 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1327 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1328 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1329 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1330 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1331 ffffffd6 6382,4000 0f2e8000 l10=00184000 | FFFFFFD6: CMPI    L8, $4000
+1332 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1333 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1334 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1335 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1336 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1337 ffffffc8 2337 0f2e8002 l14=00184000 | FFFFFFC8: CMP     L3, L7
+1338 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1339 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1340 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1341 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1342 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1343 ffffffd6 6382,4000 0f2e8000 l10=00188000 | FFFFFFD6: CMPI    L8, $4000
+1344 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1345 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1346 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1347 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1348 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1349 ffffffc8 2337 0f2e8002 l14=00188000 | FFFFFFC8: CMP     L3, L7
+1350 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1351 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1352 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1353 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1354 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1355 ffffffd6 6382,4000 0f2e8000 l10=0018c000 | FFFFFFD6: CMPI    L8, $4000
+1356 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1357 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1358 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1359 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1360 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1361 ffffffc8 2337 0f2e8002 l14=0018c000 | FFFFFFC8: CMP     L3, L7
+1362 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1363 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1364 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1365 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1366 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1367 ffffffd6 6382,4000 0f2e8000 l10=00190000 | FFFFFFD6: CMPI    L8, $4000
+1368 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1369 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1370 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1371 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1372 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1373 ffffffc8 2337 0f2e8002 l14=00190000 | FFFFFFC8: CMP     L3, L7
+1374 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1375 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1376 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1377 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1378 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1379 ffffffd6 6382,4000 0f2e8000 l10=00194000 | FFFFFFD6: CMPI    L8, $4000
+1380 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1381 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1382 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1383 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1384 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1385 ffffffc8 2337 0f2e8002 l14=00194000 | FFFFFFC8: CMP     L3, L7
+1386 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1387 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1388 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1389 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1390 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1391 ffffffd6 6382,4000 0f2e8000 l10=00198000 | FFFFFFD6: CMPI    L8, $4000
+1392 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1393 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1394 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1395 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1396 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1397 ffffffc8 2337 0f2e8002 l14=00198000 | FFFFFFC8: CMP     L3, L7
+1398 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1399 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1400 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1401 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1402 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1403 ffffffd6 6382,4000 0f2e8000 l10=0019c000 | FFFFFFD6: CMPI    L8, $4000
+1404 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1405 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1406 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1407 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1408 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1409 ffffffc8 2337 0f2e8002 l14=0019c000 | FFFFFFC8: CMP     L3, L7
+1410 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1411 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1412 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1413 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1414 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1415 ffffffd6 6382,4000 0f2e8000 l10=001a0000 | FFFFFFD6: CMPI    L8, $4000
+1416 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1417 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1418 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1419 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1420 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1421 ffffffc8 2337 0f2e8002 l14=001a0000 | FFFFFFC8: CMP     L3, L7
+1422 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1423 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1424 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1425 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1426 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1427 ffffffd6 6382,4000 0f2e8000 l10=001a4000 | FFFFFFD6: CMPI    L8, $4000
+1428 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1429 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1430 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1431 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1432 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1433 ffffffc8 2337 0f2e8002 l14=001a4000 | FFFFFFC8: CMP     L3, L7
+1434 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1435 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1436 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1437 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1438 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1439 ffffffd6 6382,4000 0f2e8000 l10=001a8000 | FFFFFFD6: CMPI    L8, $4000
+1440 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1441 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1442 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1443 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1444 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1445 ffffffc8 2337 0f2e8002 l14=001a8000 | FFFFFFC8: CMP     L3, L7
+1446 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1447 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1448 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1449 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1450 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1451 ffffffd6 6382,4000 0f2e8000 l10=001ac000 | FFFFFFD6: CMPI    L8, $4000
+1452 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1453 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1454 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1455 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1456 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1457 ffffffc8 2337 0f2e8002 l14=001ac000 | FFFFFFC8: CMP     L3, L7
+1458 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1459 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1460 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1461 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1462 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1463 ffffffd6 6382,4000 0f2e8000 l10=001b0000 | FFFFFFD6: CMPI    L8, $4000
+1464 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1465 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1466 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1467 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1468 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1469 ffffffc8 2337 0f2e8002 l14=001b0000 | FFFFFFC8: CMP     L3, L7
+1470 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1471 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1472 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1473 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1474 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1475 ffffffd6 6382,4000 0f2e8000 l10=001b4000 | FFFFFFD6: CMPI    L8, $4000
+1476 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1477 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1478 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1479 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1480 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1481 ffffffc8 2337 0f2e8002 l14=001b4000 | FFFFFFC8: CMP     L3, L7
+1482 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1483 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1484 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1485 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1486 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1487 ffffffd6 6382,4000 0f2e8000 l10=001b8000 | FFFFFFD6: CMPI    L8, $4000
+1488 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1489 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1490 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1491 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1492 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1493 ffffffc8 2337 0f2e8002 l14=001b8000 | FFFFFFC8: CMP     L3, L7
+1494 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1495 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1496 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1497 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1498 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1499 ffffffd6 6382,4000 0f2e8000 l10=001bc000 | FFFFFFD6: CMPI    L8, $4000
+1500 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1501 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1502 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1503 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1504 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1505 ffffffc8 2337 0f2e8002 l14=001bc000 | FFFFFFC8: CMP     L3, L7
+1506 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1507 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1508 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1509 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1510 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1511 ffffffd6 6382,4000 0f2e8000 l10=001c0000 | FFFFFFD6: CMPI    L8, $4000
+1512 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1513 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1514 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1515 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1516 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1517 ffffffc8 2337 0f2e8002 l14=001c0000 | FFFFFFC8: CMP     L3, L7
+1518 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1519 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1520 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1521 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1522 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1523 ffffffd6 6382,4000 0f2e8000 l10=001c4000 | FFFFFFD6: CMPI    L8, $4000
+1524 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1525 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1526 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1527 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1528 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1529 ffffffc8 2337 0f2e8002 l14=001c4000 | FFFFFFC8: CMP     L3, L7
+1530 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1531 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1532 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1533 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1534 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1535 ffffffd6 6382,4000 0f2e8000 l10=001c8000 | FFFFFFD6: CMPI    L8, $4000
+1536 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1537 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1538 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1539 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1540 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1541 ffffffc8 2337 0f2e8002 l14=001c8000 | FFFFFFC8: CMP     L3, L7
+1542 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1543 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1544 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1545 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1546 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1547 ffffffd6 6382,4000 0f2e8000 l10=001cc000 | FFFFFFD6: CMPI    L8, $4000
+1548 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1549 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1550 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1551 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1552 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1553 ffffffc8 2337 0f2e8002 l14=001cc000 | FFFFFFC8: CMP     L3, L7
+1554 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1555 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1556 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1557 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1558 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1559 ffffffd6 6382,4000 0f2e8000 l10=001d0000 | FFFFFFD6: CMPI    L8, $4000
+1560 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1561 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1562 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1563 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1564 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1565 ffffffc8 2337 0f2e8002 l14=001d0000 | FFFFFFC8: CMP     L3, L7
+1566 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1567 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1568 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1569 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1570 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1571 ffffffd6 6382,4000 0f2e8000 l10=001d4000 | FFFFFFD6: CMPI    L8, $4000
+1572 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1573 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1574 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1575 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1576 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1577 ffffffc8 2337 0f2e8002 l14=001d4000 | FFFFFFC8: CMP     L3, L7
+1578 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1579 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1580 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1581 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1582 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1583 ffffffd6 6382,4000 0f2e8000 l10=001d8000 | FFFFFFD6: CMPI    L8, $4000
+1584 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1585 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1586 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1587 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1588 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1589 ffffffc8 2337 0f2e8002 l14=001d8000 | FFFFFFC8: CMP     L3, L7
+1590 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1591 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1592 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1593 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1594 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1595 ffffffd6 6382,4000 0f2e8000 l10=001dc000 | FFFFFFD6: CMPI    L8, $4000
+1596 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1597 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1598 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1599 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1600 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1601 ffffffc8 2337 0f2e8002 l14=001dc000 | FFFFFFC8: CMP     L3, L7
+1602 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1603 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1604 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1605 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1606 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1607 ffffffd6 6382,4000 0f2e8000 l10=001e0000 | FFFFFFD6: CMPI    L8, $4000
+1608 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1609 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1610 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1611 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1612 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1613 ffffffc8 2337 0f2e8002 l14=001e0000 | FFFFFFC8: CMP     L3, L7
+1614 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1615 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1616 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1617 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1618 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1619 ffffffd6 6382,4000 0f2e8000 l10=001e4000 | FFFFFFD6: CMPI    L8, $4000
+1620 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1621 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1622 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1623 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1624 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1625 ffffffc8 2337 0f2e8002 l14=001e4000 | FFFFFFC8: CMP     L3, L7
+1626 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1627 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1628 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1629 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1630 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1631 ffffffd6 6382,4000 0f2e8000 l10=001e8000 | FFFFFFD6: CMPI    L8, $4000
+1632 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1633 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1634 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1635 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1636 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1637 ffffffc8 2337 0f2e8002 l14=001e8000 | FFFFFFC8: CMP     L3, L7
+1638 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1639 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1640 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1641 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1642 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1643 ffffffd6 6382,4000 0f2e8000 l10=001ec000 | FFFFFFD6: CMPI    L8, $4000
+1644 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1645 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1646 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1647 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1648 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1649 ffffffc8 2337 0f2e8002 l14=001ec000 | FFFFFFC8: CMP     L3, L7
+1650 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1651 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1652 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1653 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1654 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1655 ffffffd6 6382,4000 0f2e8000 l10=001f0000 | FFFFFFD6: CMPI    L8, $4000
+1656 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1657 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1658 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1659 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1660 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1661 ffffffc8 2337 0f2e8002 l14=001f0000 | FFFFFFC8: CMP     L3, L7
+1662 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1663 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1664 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1665 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1666 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1667 ffffffd6 6382,4000 0f2e8000 l10=001f4000 | FFFFFFD6: CMPI    L8, $4000
+1668 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1669 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1670 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1671 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1672 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1673 ffffffc8 2337 0f2e8002 l14=001f4000 | FFFFFFC8: CMP     L3, L7
+1674 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1675 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1676 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1677 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1678 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1679 ffffffd6 6382,4000 0f2e8000 l10=001f8000 | FFFFFFD6: CMPI    L8, $4000
+1680 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1681 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1682 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1683 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1684 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1685 ffffffc8 2337 0f2e8002 l14=001f8000 | FFFFFFC8: CMP     L3, L7
+1686 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1687 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1688 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1689 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1690 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1691 ffffffd6 6382,4000 0f2e8000 l10=001fc000 | FFFFFFD6: CMPI    L8, $4000
+1692 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1693 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1694 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1695 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1696 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1697 ffffffc8 2337 0f2e8002 l14=001fc000 | FFFFFFC8: CMP     L3, L7
+1698 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1699 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1700 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1701 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1702 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1703 ffffffd6 6382,4000 0f2e8000 l10=00200000 | FFFFFFD6: CMPI    L8, $4000
+1704 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1705 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1706 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1707 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1708 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1709 ffffffc8 2337 0f2e8002 l14=00000000 | FFFFFFC8: CMP     L3, L7
+1710 ffffffca f318 0f2e8000  | FFFFFFCA: BNE     $ffffffe4
+1711 ffffffe4 4b30 0f2e8000  | FFFFFFE4: SUB     L3, L0
+1712 ffffffe6 2703 0f2e8000  | FFFFFFE6: MOV     L0, L3
+1713 ffffffe8 0501 0f2e8000 l7=00200000 | FFFFFFE8: RET     PC, L1
+1714 fffffbfa 25a7 01068002  | FFFFFBFA: MOV     G10, L7
+1715 fffffbfc 6771,4000,0000 010e8000 g10=00200000 | FFFFFBFC: MOVI    L7, $40000000
+1716 fffffc02 ee80,8000,0388 011e8000 l7=40000000 | FFFFFC02: CALL    L8, PC, $388 ; $ffffff90
+1717 ffffff90 ed91 10de8000 l8=fffffc09 l9=011e8000 | FFFFFF90: FRAME   L9, L1
+1718 ffffff92 1b30,0008 0f2e8000  | FFFFFF92: SUM     L3, L0, $8
+1719 ffffff96 6741,5555,5555 0f368000 l10=40000008 | FFFFFF96: MOVI    L4, $55555555
+1720 ffffff9c 6751,aaaa,aaaa 0f3e8000 l11=55555555 | FFFFFF9C: MOVI    L5, $aaaaaaaa
+1721 ffffffa2 9b34,3000 0f3e8004  | FFFFFFA2: STW.D   L3, L4, $0
+1722 ffffffa6 9b35,3008 0f368004  | FFFFFFA6: STW.D   L3, L5, $8
+1723 ffffffaa 9336,3000 0f368004  | FFFFFFAA: LDW.D   L3, L6, $0
+1724 ffffffae 2346 0f368004 l13=55555555 | FFFFFFAE: CMP     L4, L6
+1725 ffffffb0 f338 0f2e8002  | FFFFFFB0: BNE     $ffffffea
+1726 ffffffb2 9336,3008 0f2e8002  | FFFFFFB2: LDW.D   L3, L6, $8
+1727 ffffffb6 2356 0f368002 l13=aaaaaaaa | FFFFFFB6: CMP     L5, L6
+1728 ffffffb8 f330 0f2e8002  | FFFFFFB8: BNE     $ffffffea
+1729 ffffffba 6688 0f2e8002  | FFFFFFBA: MOVI    L8, $8
+1730 ffffffbc 2743 0f2e8000 l15=00000008 | FFFFFFBC: MOV     L4, L3
+1731 ffffffbe 9b45,7ff8 0f2e8000 l11=40000008 | FFFFFFBE: STW.D   L4, L5, $fffffff8
+1732 ffffffc2 d933 0f368000  | FFFFFFC2: STW.R   L3, L3
+1733 ffffffc4 d944 0f2e8000  | FFFFFFC4: STW.R   L4, L4
+1734 ffffffc6 d137 0f2e8000  | FFFFFFC6: LDW.R   L3, L7
+1735 ffffffc8 2337 0f2e8000 l14=40000008 | FFFFFFC8: CMP     L3, L7
+1736 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1737 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1738 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1739 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1740 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1741 ffffffd6 6382,4000 0f2e8000 l10=40000010 | FFFFFFD6: CMPI    L8, $4000
+1742 ffffffda f504 0f368005  | FFFFFFDA: BNC     $ffffffe0
+1743 ffffffdc 1388,5000 0f2e8005  | FFFFFFDC: XX2     L8, L8, 0
+1744 ffffffe0 ec63 0f368005 l15=00000010 | FFFFFFE0: DBR     $ffffffc4
+1745 ffffffe2 d933 0f2e8005  | FFFFFFE2: STW.R   L3, L3
+1746 ffffffc4 d944 0f2e8005  | FFFFFFC4: STW.R   L4, L4
+1747 ffffffc6 d137 0f2e8005  | FFFFFFC6: LDW.R   L3, L7
+1748 ffffffc8 2337 0f2e8005 l14=40000010 | FFFFFFC8: CMP     L3, L7
+1749 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1750 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1751 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1752 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1753 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1754 ffffffd6 6382,4000 0f2e8000 l10=40000020 | FFFFFFD6: CMPI    L8, $4000
+1755 ffffffda f504 0f368005  | FFFFFFDA: BNC     $ffffffe0
+1756 ffffffdc 1388,5000 0f2e8005  | FFFFFFDC: XX2     L8, L8, 0
+1757 ffffffe0 ec63 0f368005 l15=00000020 | FFFFFFE0: DBR     $ffffffc4
+1758 ffffffe2 d933 0f2e8005  | FFFFFFE2: STW.R   L3, L3
+1759 ffffffc4 d944 0f2e8005  | FFFFFFC4: STW.R   L4, L4
+1760 ffffffc6 d137 0f2e8005  | FFFFFFC6: LDW.R   L3, L7
+1761 ffffffc8 2337 0f2e8005 l14=40000020 | FFFFFFC8: CMP     L3, L7
+1762 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1763 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1764 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1765 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1766 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1767 ffffffd6 6382,4000 0f2e8000 l10=40000040 | FFFFFFD6: CMPI    L8, $4000
+1768 ffffffda f504 0f368005  | FFFFFFDA: BNC     $ffffffe0
+1769 ffffffdc 1388,5000 0f2e8005  | FFFFFFDC: XX2     L8, L8, 0
+1770 ffffffe0 ec63 0f368005 l15=00000040 | FFFFFFE0: DBR     $ffffffc4
+1771 ffffffe2 d933 0f2e8005  | FFFFFFE2: STW.R   L3, L3
+1772 ffffffc4 d944 0f2e8005  | FFFFFFC4: STW.R   L4, L4
+1773 ffffffc6 d137 0f2e8005  | FFFFFFC6: LDW.R   L3, L7
+1774 ffffffc8 2337 0f2e8005 l14=40000040 | FFFFFFC8: CMP     L3, L7
+1775 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1776 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1777 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1778 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1779 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1780 ffffffd6 6382,4000 0f2e8000 l10=40000080 | FFFFFFD6: CMPI    L8, $4000
+1781 ffffffda f504 0f368005  | FFFFFFDA: BNC     $ffffffe0
+1782 ffffffdc 1388,5000 0f2e8005  | FFFFFFDC: XX2     L8, L8, 0
+1783 ffffffe0 ec63 0f368005 l15=00000080 | FFFFFFE0: DBR     $ffffffc4
+1784 ffffffe2 d933 0f2e8005  | FFFFFFE2: STW.R   L3, L3
+1785 ffffffc4 d944 0f2e8005  | FFFFFFC4: STW.R   L4, L4
+1786 ffffffc6 d137 0f2e8005  | FFFFFFC6: LDW.R   L3, L7
+1787 ffffffc8 2337 0f2e8005 l14=40000080 | FFFFFFC8: CMP     L3, L7
+1788 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1789 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1790 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1791 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1792 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1793 ffffffd6 6382,4000 0f2e8000 l10=40000100 | FFFFFFD6: CMPI    L8, $4000
+1794 ffffffda f504 0f368005  | FFFFFFDA: BNC     $ffffffe0
+1795 ffffffdc 1388,5000 0f2e8005  | FFFFFFDC: XX2     L8, L8, 0
+1796 ffffffe0 ec63 0f368005 l15=00000100 | FFFFFFE0: DBR     $ffffffc4
+1797 ffffffe2 d933 0f2e8005  | FFFFFFE2: STW.R   L3, L3
+1798 ffffffc4 d944 0f2e8005  | FFFFFFC4: STW.R   L4, L4
+1799 ffffffc6 d137 0f2e8005  | FFFFFFC6: LDW.R   L3, L7
+1800 ffffffc8 2337 0f2e8005 l14=40000100 | FFFFFFC8: CMP     L3, L7
+1801 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1802 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1803 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1804 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1805 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1806 ffffffd6 6382,4000 0f2e8000 l10=40000200 | FFFFFFD6: CMPI    L8, $4000
+1807 ffffffda f504 0f368005  | FFFFFFDA: BNC     $ffffffe0
+1808 ffffffdc 1388,5000 0f2e8005  | FFFFFFDC: XX2     L8, L8, 0
+1809 ffffffe0 ec63 0f368005 l15=00000200 | FFFFFFE0: DBR     $ffffffc4
+1810 ffffffe2 d933 0f2e8005  | FFFFFFE2: STW.R   L3, L3
+1811 ffffffc4 d944 0f2e8005  | FFFFFFC4: STW.R   L4, L4
+1812 ffffffc6 d137 0f2e8005  | FFFFFFC6: LDW.R   L3, L7
+1813 ffffffc8 2337 0f2e8005 l14=40000200 | FFFFFFC8: CMP     L3, L7
+1814 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1815 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1816 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1817 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1818 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1819 ffffffd6 6382,4000 0f2e8000 l10=40000400 | FFFFFFD6: CMPI    L8, $4000
+1820 ffffffda f504 0f368005  | FFFFFFDA: BNC     $ffffffe0
+1821 ffffffdc 1388,5000 0f2e8005  | FFFFFFDC: XX2     L8, L8, 0
+1822 ffffffe0 ec63 0f368005 l15=00000400 | FFFFFFE0: DBR     $ffffffc4
+1823 ffffffe2 d933 0f2e8005  | FFFFFFE2: STW.R   L3, L3
+1824 ffffffc4 d944 0f2e8005  | FFFFFFC4: STW.R   L4, L4
+1825 ffffffc6 d137 0f2e8005  | FFFFFFC6: LDW.R   L3, L7
+1826 ffffffc8 2337 0f2e8005 l14=40000400 | FFFFFFC8: CMP     L3, L7
+1827 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1828 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1829 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1830 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1831 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1832 ffffffd6 6382,4000 0f2e8000 l10=40000800 | FFFFFFD6: CMPI    L8, $4000
+1833 ffffffda f504 0f368005  | FFFFFFDA: BNC     $ffffffe0
+1834 ffffffdc 1388,5000 0f2e8005  | FFFFFFDC: XX2     L8, L8, 0
+1835 ffffffe0 ec63 0f368005 l15=00000800 | FFFFFFE0: DBR     $ffffffc4
+1836 ffffffe2 d933 0f2e8005  | FFFFFFE2: STW.R   L3, L3
+1837 ffffffc4 d944 0f2e8005  | FFFFFFC4: STW.R   L4, L4
+1838 ffffffc6 d137 0f2e8005  | FFFFFFC6: LDW.R   L3, L7
+1839 ffffffc8 2337 0f2e8005 l14=40000800 | FFFFFFC8: CMP     L3, L7
+1840 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1841 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1842 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1843 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1844 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1845 ffffffd6 6382,4000 0f2e8000 l10=40001000 | FFFFFFD6: CMPI    L8, $4000
+1846 ffffffda f504 0f368005  | FFFFFFDA: BNC     $ffffffe0
+1847 ffffffdc 1388,5000 0f2e8005  | FFFFFFDC: XX2     L8, L8, 0
+1848 ffffffe0 ec63 0f368005 l15=00001000 | FFFFFFE0: DBR     $ffffffc4
+1849 ffffffe2 d933 0f2e8005  | FFFFFFE2: STW.R   L3, L3
+1850 ffffffc4 d944 0f2e8005  | FFFFFFC4: STW.R   L4, L4
+1851 ffffffc6 d137 0f2e8005  | FFFFFFC6: LDW.R   L3, L7
+1852 ffffffc8 2337 0f2e8005 l14=40001000 | FFFFFFC8: CMP     L3, L7
+1853 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1854 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1855 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1856 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1857 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1858 ffffffd6 6382,4000 0f2e8000 l10=40002000 | FFFFFFD6: CMPI    L8, $4000
+1859 ffffffda f504 0f368005  | FFFFFFDA: BNC     $ffffffe0
+1860 ffffffdc 1388,5000 0f2e8005  | FFFFFFDC: XX2     L8, L8, 0
+1861 ffffffe0 ec63 0f368005 l15=00002000 | FFFFFFE0: DBR     $ffffffc4
+1862 ffffffe2 d933 0f2e8005  | FFFFFFE2: STW.R   L3, L3
+1863 ffffffc4 d944 0f2e8005  | FFFFFFC4: STW.R   L4, L4
+1864 ffffffc6 d137 0f2e8005  | FFFFFFC6: LDW.R   L3, L7
+1865 ffffffc8 2337 0f2e8005 l14=40002000 | FFFFFFC8: CMP     L3, L7
+1866 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1867 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1868 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1869 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1870 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1871 ffffffd6 6382,4000 0f2e8000 l10=40004000 | FFFFFFD6: CMPI    L8, $4000
+1872 ffffffda f504 0f368005  | FFFFFFDA: BNC     $ffffffe0
+1873 ffffffdc 1388,5000 0f2e8005  | FFFFFFDC: XX2     L8, L8, 0
+1874 ffffffe0 ec63 0f368005 l15=00004000 | FFFFFFE0: DBR     $ffffffc4
+1875 ffffffe2 d933 0f2e8005  | FFFFFFE2: STW.R   L3, L3
+1876 ffffffc4 d944 0f2e8005  | FFFFFFC4: STW.R   L4, L4
+1877 ffffffc6 d137 0f2e8005  | FFFFFFC6: LDW.R   L3, L7
+1878 ffffffc8 2337 0f2e8005 l14=40004000 | FFFFFFC8: CMP     L3, L7
+1879 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1880 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1881 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1882 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1883 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1884 ffffffd6 6382,4000 0f2e8000 l10=40008000 | FFFFFFD6: CMPI    L8, $4000
+1885 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1886 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1887 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1888 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1889 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1890 ffffffc8 2337 0f2e8002 l14=40008000 | FFFFFFC8: CMP     L3, L7
+1891 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1892 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1893 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1894 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1895 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1896 ffffffd6 6382,4000 0f2e8000 l10=4000c000 | FFFFFFD6: CMPI    L8, $4000
+1897 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1898 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1899 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1900 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1901 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1902 ffffffc8 2337 0f2e8002 l14=4000c000 | FFFFFFC8: CMP     L3, L7
+1903 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1904 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1905 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1906 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1907 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1908 ffffffd6 6382,4000 0f2e8000 l10=40010000 | FFFFFFD6: CMPI    L8, $4000
+1909 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1910 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1911 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1912 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1913 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1914 ffffffc8 2337 0f2e8002 l14=40010000 | FFFFFFC8: CMP     L3, L7
+1915 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1916 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1917 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1918 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1919 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1920 ffffffd6 6382,4000 0f2e8000 l10=40014000 | FFFFFFD6: CMPI    L8, $4000
+1921 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1922 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1923 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1924 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1925 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1926 ffffffc8 2337 0f2e8002 l14=40014000 | FFFFFFC8: CMP     L3, L7
+1927 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1928 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1929 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1930 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1931 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1932 ffffffd6 6382,4000 0f2e8000 l10=40018000 | FFFFFFD6: CMPI    L8, $4000
+1933 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1934 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1935 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1936 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1937 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1938 ffffffc8 2337 0f2e8002 l14=40018000 | FFFFFFC8: CMP     L3, L7
+1939 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1940 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1941 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1942 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1943 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1944 ffffffd6 6382,4000 0f2e8000 l10=4001c000 | FFFFFFD6: CMPI    L8, $4000
+1945 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1946 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1947 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1948 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1949 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1950 ffffffc8 2337 0f2e8002 l14=4001c000 | FFFFFFC8: CMP     L3, L7
+1951 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1952 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1953 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1954 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1955 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1956 ffffffd6 6382,4000 0f2e8000 l10=40020000 | FFFFFFD6: CMPI    L8, $4000
+1957 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1958 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1959 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1960 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1961 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1962 ffffffc8 2337 0f2e8002 l14=40020000 | FFFFFFC8: CMP     L3, L7
+1963 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1964 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1965 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1966 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1967 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1968 ffffffd6 6382,4000 0f2e8000 l10=40024000 | FFFFFFD6: CMPI    L8, $4000
+1969 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1970 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1971 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1972 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1973 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1974 ffffffc8 2337 0f2e8002 l14=40024000 | FFFFFFC8: CMP     L3, L7
+1975 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1976 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1977 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1978 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1979 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1980 ffffffd6 6382,4000 0f2e8000 l10=40028000 | FFFFFFD6: CMPI    L8, $4000
+1981 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1982 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1983 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1984 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1985 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1986 ffffffc8 2337 0f2e8002 l14=40028000 | FFFFFFC8: CMP     L3, L7
+1987 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4
+1988 ffffffcc 9346,7ff8 0f2e8002  | FFFFFFCC: LDW.D   L4, L6, $fffffff8
+1989 ffffffd0 2365 0f368002  | FFFFFFD0: CMP     L6, L5
+1990 ffffffd2 f310 0f2e8002  | FFFFFFD2: BNE     $ffffffe4
+1991 ffffffd4 2b38 0f2e8002  | FFFFFFD4: ADD     L3, L8
+1992 ffffffd6 6382,4000 0f2e8000 l10=4002c000 | FFFFFFD6: CMPI    L8, $4000
+1993 ffffffda f504 0f368002  | FFFFFFDA: BNC     $ffffffe0
+1994 ffffffe0 ec63 0f2e8002  | FFFFFFE0: DBR     $ffffffc4
+1995 ffffffe2 d933 0f2e8002  | FFFFFFE2: STW.R   L3, L3
+1996 ffffffc4 d944 0f2e8002  | FFFFFFC4: STW.R   L4, L4
+1997 ffffffc6 d137 0f2e8002  | FFFFFFC6: LDW.R   L3, L7
+1998 ffffffc8 2337 0f2e8002 l14=4002c000 | FFFFFFC8: CMP     L3, L7
+1999 ffffffca f318 0f2e8002  | FFFFFFCA: BNE     $ffffffe4

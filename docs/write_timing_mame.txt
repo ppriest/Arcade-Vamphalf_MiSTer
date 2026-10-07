@@ -1,0 +1,114 @@
+Write timing in MAME 0.289 (scripts/write_timing.py, scripts/mame/wtiming.lua), Phase 1a.
+
+Runs (each set; counting starts at --skip, 1800 frames; MAME declared timing: 448 x 264, vblank start
+line 252, active lines 16..251, so lines 252..263 and 0..15 are blanked = 28 lines):
+  attract: python scripts/write_timing.py misncrft wivernwg --skip 600 --frames 1800
+  play:    python scripts/write_timing.py misncrft wivernwg --coin 400 --skip 1500 --frames 1800 --tag _play
+           (coin pulses every 97 frames from frame 400, Start every 211 frames from 490, then P1 Right held and
+            Button 1 pulsed; a single coin pulse is not credited by either set. Closing snapshots in
+            debug/wtiming/snap_play/ show the game in play.)
+Regions (scripts/mame/regions.json "sweep_regions"): spr_bands = 0x40000000-0x400087ff (the 17 bands),
+spr_used = 0x40000800-0x40007fff (bands 1..15, the only bytes draw_sprites reads), spr_rest =
+0x40008800-0x4003ffff, palette = 0x80000000-0x8000ffff, io_flip = I/O 0x40 (misncrft) / 0x800 (wivernwg).
+Counts are CPU bus writes: 16-bit on misncrft, 32-bit on wivernwg (one write = two words). The line is
+time_until_pos rounded to the nearest line, so a write is placed to +-0.5 line. The "vblank" column
+counts only lines 252..263 (12 lines); lines 0..15 are also blanked.
+
+--- attract ---
+misncrft: 264 lines, vblank start 252 (12 lines of vblank), 1800 frames
+  region      /frame  +0..1 vblank +0..23  from vblank start, 8 lines a column
+  palette      236.4   0.0% 100.0% 100.0%  |81                               |
+  spr_bands  16384.0  21.2% 100.0% 100.0%  |#                                |
+  spr_used   15360.0  15.9% 100.0% 100.0%  |#                                |
+
+wivernwg: 264 lines, vblank start 252 (12 lines of vblank), 1800 frames
+  region      /frame  +0..1 vblank +0..23  from vblank start, 8 lines a column
+  palette       48.0   0.0%  94.5% 100.0%  |72                               |
+  spr_bands   8004.8  20.8% 100.0% 100.0%  |#                                |
+  spr_used    7500.8  15.6% 100.0% 100.0%  |#                                |
+
+--- play ---
+misncrft_play (coin at frame 400): 264 lines, vblank start 252 (12 lines of vblank), 1800 frames
+  region      /frame  +0..1 vblank +0..23  from vblank start, 8 lines a column
+  palette      331.0   0.0% 100.0% 100.0%  |#0                               |
+  spr_bands  16384.0  21.2% 100.0% 100.0%  |#                                |
+  spr_used   15360.0  15.9% 100.0% 100.0%  |#                                |
+
+wivernwg_play (coin at frame 400): 264 lines, vblank start 252 (12 lines of vblank), 1800 frames
+  region      /frame  +0..1 vblank +0..23  from vblank start, 8 lines a column
+  palette       33.0   0.0% 100.0% 100.0%  |#                                |
+  spr_bands   8196.0  20.8% 100.0% 100.0%  |#                                |
+  spr_used    7680.0  15.6% 100.0% 100.0%  |#                                |
+
+--- write order, spr_bands (python scripts/write_timing.py <set> --coin 400 --skip 1500 --frames 300 --order spr_bands --tag _order) ---
+misncrft (play, 300 frames from 1500, region spr_bands):
+  spr_bands first_last_addr 40000000-40007ffe=300
+  spr_bands first_line 252=300
+  spr_bands last_line 259=300
+  spr_bands writes_per_frame 16384=300
+  spr_bands nonascending 0
+wivernwg (play, 300 frames from 1500, region spr_bands):
+  spr_bands first_last_addr 40000000-4000800c=300
+  spr_bands first_line 252=300
+  spr_bands last_line 259=300
+  spr_bands writes_per_frame 8196=300
+  spr_bands nonascending 0
+
+--- palette writes per frame by line ---
+misncrft attract: 259:195.5, 260:37.4, 261:1.2, 262:1.2, 263:1.1  (writes/frame by line, total 236.4)
+misncrft play:    259:300.4, 260:30.5  (writes/frame by line, total 331.0)
+wivernwg attract: 0:1.1, 1:1.2, 2:0.3, 259:36.1, 260:5.7, 261:1.2, 262:1.2, 263:1.2  (writes/frame by line, total 48.0)
+wivernwg play:    259:33.0  (writes/frame by line, total 33.0)
+
+--- reading ---
+Sprite RAM
+- Written once per frame, in one ascending pass from 0x40000000 to 0x40007ffe (misncrft, 16384 16-bit writes
+  = bands 0..15) or to 0x4000800c (wivernwg, 8196 32-bit writes = bands 0..15 plus the first 16 bytes of
+  band 16). 0 writes out of order in 300 frames. The pass starts on line 252 and ends on line 259 in all 300
+  frames of the order run and in 1800 of 1800 frames of three of the four 1800-frame runs ("last" rows:
+  line 259). The exception is wivernwg attract: 1758 of 1800 frames have the pass (8004.8 writes per frame,
+  not 8196); the other 42 frames have no sprite RAM write at all (cause not looked into). No write to
+  0x40008800 and up (spr_rest empty).
+- Band 0 is written but draw_sprites never reads it (unflipped: strips y/16 = 1..15, bands 15..1; flipped:
+  bands 1..15). spr_used (the bytes that are read): 15360 words per frame, same line range.
+- No write in active display (lines 16..251): 0 of 29,491,200 (misncrft) and 14,408,568 (wivernwg) writes.
+- Attract and play do not differ: same counts per frame, same lines. (Contents differ; timing does not.)
+Palette
+- 236.4 (attract) / 331.0 (play) 16-bit writes per frame on misncrft, 48.0 / 33.0 32-bit writes on wivernwg.
+  Lines 259..263 and, on wivernwg attract, 0..2 (5.5% of writes). 0 writes in lines 16..251. Right after
+  the sprite pass: the palette is written in some frames only (misncrft attract 1004 of 1800 frames,
+  wivernwg attract 384), and the last palette write of such a frame is on line 259 or 260 in all but 3
+  (misncrft attract: one on 263; wivernwg attract: two on line 2).
+Flip
+- io_flip: 0 writes in 3600 counted frames per set. The game writes the flip port once at boot, value 0
+  (vcap manifests: "flip_writes 1 first 3:0" misncrft, "1:0" wivernwg, through frame 5600). Flip is a
+  constant for these games.
+When MAME reads sprite RAM
+- vamphalf.cpp sets no VIDEO_UPDATE_AFTER_VBLANK, so screen_device::vblank_begin (emu/screen.cpp:1149) calls
+  screen_update at vblank start, before the vblank callbacks that raise the E1's IRQ1. The picture of a
+  frame is therefore the sprite RAM and palette as they stand at the start of line 252: the list written
+  by the pass of the previous vblank, complete (that pass ended on line 259 of the field before).
+- The Lua frame notifier runs in the same vblank_begin; RAM dumped there is the RAM the picture was drawn
+  from (342 of 342 frames per set pixel-identical, moving sprites included: docs/MAME_KLUDGES.md, Video).
+  Contrast with a driver that sets VIDEO_UPDATE_AFTER_VBLANK, where the notifier is a frame later.
+- Evidence of what the real board does: none beyond one driver comment (vamphalf.cpp:44-49): the Semicom
+  boards never output 4 lines, confirmed on hardware. Nothing about when sprite RAM is read or written. The
+  burst length is MAME's: 16384 16-bit writes in about 8 lines is about 1.6 CPU clocks per write at 50 MHz,
+  from MAME's instruction timing, which the driver calls "probably incorrect" (vamphalf.cpp:1143). Unverified
+  for the board and unverified for the RTL CPU (CPI 2.71 at zero wait).
+What it means for the sprite-list latch (references/video_write_sweep.md section 5, step 7 and 8)
+- Row "list written entirely inside vblank, before line X": snapshot at line X or later, before active
+  video. In MAME's timing X = 260; the first line that is read is 16, so 252..263 plus 0..15 leaves a
+  window of lines 260..15 (20 lines, 8960 pixel clocks, 71,680 clk_sys cycles at 56 MHz) between the end of
+  the pass and the first sprite line.
+- Because the pass is a single ascending run that ends with the write to 0x40007ffe (misncrft) /
+  0x4000800c (wivernwg), "done" can be taken from that write instead of a fixed line; a fixed line chosen
+  from MAME's timing is the fallback and holds only if the RTL pass is not longer than the window.
+- MAME's equivalent latch point is line 252, before the pass starts. A latch at line 252 would have to copy
+  or hold the list while the CPU starts rewriting it (race, LESSONS_LEARNED "A snapshot is a race with
+  whoever writes the thing being copied"). A latch after the pass has the same content (no writes in lines
+  260..251) and no race.
+- Reading live during active display gives MAME's picture for these two sets (no active-display writes).
+  It is not safe if the RTL CPU's pass runs into line 16.
+- The RTL's pass duration is the number to measure before choosing: it decides between fixed line, done
+  write, and a double-buffered list.

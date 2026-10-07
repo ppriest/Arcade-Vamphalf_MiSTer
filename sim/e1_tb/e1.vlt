@@ -1,0 +1,18 @@
+`verilator_config
+// state the bench forces after a mismatch (+cont=1) so one failure does not hide the next
+public_flat_rw -module "e1_cpu" -var "pc"
+public_flat_rw -module "e1_cpu" -var "sr"
+public_flat_rw -module "e1_cpu" -var "G"
+public_flat_rw -module "e1_cpu" -var "l_we_r"
+public_flat_rw -module "e1_regram" -var "m0"
+public_flat_rw -module "e1_regram" -var "m1"
+public_flat_rw -module "e1_regram" -var "m2"
+public_flat_rw -module "e1_regram" -var "m3"
+public_flat_rw -module "e1_regram" -var "m4"
+public_flat_rw -module "e1_cpu" -var "delay_slot"
+public_flat_rw -module "e1_cpu" -var "delay_slot_taken"
+public_flat_rw -module "e1_cpu" -var "delay_pc"
+public_flat_rw -module "e1_cpu" -var "intblock"
+public_flat_rw -module "e1_cpu" -var "state"
+public_flat_rw -module "e1_cpu" -var "tr_val"
+public_flat_rw -module "e1_cpu" -var "timer_pend"

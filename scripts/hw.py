@@ -7,6 +7,7 @@
     python scripts/hw.py run   "Game Title (set 1)"      # launch, then shot
     python scripts/hw.py playing                         # what is running
     python scripts/hw.py osd                             # toggle the OSD (forces an nvram save)
+    python scripts/hw.py key 5 1                         # tap keys (MAME's: 5 coin, 1 start; see KEYS)
 
 Needs MiSTer Remote (wizzomafizzo/mrext) listening on port 8182, and the same
 ./mister.env that scripts/deploy.py uses. The .mra folder is derived from the
@@ -52,6 +53,11 @@ REMOTE_SHOTS = "/media/fat/screenshots"
 # The folder the .mra files live in on the device; keep in step with deploy.py.
 REMOTE_ARCADE_DIR = f"{REMOTE_ARCADE}/_{CORE_NAME}"
 # ---------------------------------------------------------------------------
+
+
+# Linux input keycodes for MAME's default arcade keys
+KEYS = {"1": 2, "2": 3, "5": 6, "6": 7, "9": 10, "0": 11, "p": 25, "f2": 60, "ctrl": 29, "alt": 56,
+        "space": 57, "shift": 42, "up": 103, "down": 108, "left": 105, "right": 106}
 
 
 class Mister:
@@ -184,8 +190,9 @@ def resolve_mra(m, name):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("command", choices=("launch", "shot", "run", "playing", "osd"))
-    ap.add_argument("mra", nargs="?", help=".mra name or absolute remote path")
+    ap.add_argument("command", choices=("launch", "shot", "run", "playing", "osd", "key"))
+    ap.add_argument("mra", nargs="?", help=".mra name or absolute remote path (key: the first key)")
+    ap.add_argument("more", nargs="*", help="key: further keys")
     ap.add_argument("--out", default=str(REPO / "debug" / "hw" / "shot.png"))
     ap.add_argument("--settle", type=float, default=4)
     ap.add_argument("--native", action="store_true",
@@ -199,6 +206,15 @@ def main():
 
     if a.command == "playing":
         print(m.get("/games/playing"))
+        return 0
+
+    if a.command == "key":
+        # Each name is tapped (press and release by the Remote API) through the raw Linux keycode route,
+        # 0.5 s apart; the core sees them as PS/2 keys (rtl/mame_keys.sv).
+        for k in [a.mra] + a.more:
+            m.post(f"/controls/keyboard-raw/{KEYS[k.lower()]}")
+            print(f"  tapped {k}")
+            time.sleep(0.5)
         return 0
 
     if a.command == "osd":

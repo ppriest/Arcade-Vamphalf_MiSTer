@@ -1,0 +1,12 @@
+`verilator_config
+// main.cpp writes the download image straight into the chip model
+public_flat_rw -module "sdram_chip_model_wide" -var "mem"
+// the per-frame state line
+public_flat_rw -module "e1_cpu" -var "G"
+public_flat_rw -module "e1_cpu" -var "sr"
+public_flat_rw -module "vh_main" -var "int2"
+public_flat_rw -module "vh_cpumem" -var "st"
+public_flat_rw -module "vh_cpumem" -var "bus_req"
+public_flat_rw -module "vh_cpumem" -var "bus_wr"
+public_flat_rw -module "vh_cpumem" -var "bus_ifetch"
+public_flat_rw -module "vh_cpumem" -var "wb_valid"

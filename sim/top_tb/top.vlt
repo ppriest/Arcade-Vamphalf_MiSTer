@@ -1,0 +1,11 @@
+`verilator_config
+public_flat_rw -module "sdram_chip_model_wide" -var "mem"
+public_flat_rw -module "hps_io" -var "dl"
+public_flat_rw -module "hps_io" -var "wr"
+public_flat_rw -module "hps_io" -var "idx"
+public_flat_rw -module "hps_io" -var "addr"
+public_flat_rw -module "hps_io" -var "dout"
+public_flat_rw -module "hps_io" -var "st"
+public_flat_rw -module "emu" -var "ioctl_wait"
+public_flat_rw -module "emu" -var "dbg_retire"
+public_flat_rw -module "emu" -var "dbg_npc"

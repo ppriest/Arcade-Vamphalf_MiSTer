@@ -1,0 +1,16 @@
+set_global_assignment -name FAMILY "Cyclone V"
+set_global_assignment -name DEVICE 5CSEBA6U23I7
+set_global_assignment -name TOP_LEVEL_ENTITY e1_synth_top
+set_global_assignment -name SYSTEMVERILOG_FILE ../e1/e1_cpu.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../e1/e1_regram.sv
+set_global_assignment -name SYSTEMVERILOG_FILE e1_synth_top.sv
+set_global_assignment -name SDC_FILE e1_synth.sdc
+set_global_assignment -name OPTIMIZATION_MODE "HIGH PERFORMANCE EFFORT"
+set_global_assignment -name NUM_PARALLEL_PROCESSORS 4
+set_instance_assignment -name VIRTUAL_PIN ON -to reset
+set_instance_assignment -name VIRTUAL_PIN ON -to pause
+set_instance_assignment -name VIRTUAL_PIN ON -to tick
+set_instance_assignment -name VIRTUAL_PIN ON -to irq_in[*]
+set_instance_assignment -name VIRTUAL_PIN ON -to irq_ack[*]
+set_instance_assignment -name VIRTUAL_PIN ON -to bus_*
+set_instance_assignment -name VIRTUAL_PIN ON -to retire*

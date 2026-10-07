@@ -7,8 +7,18 @@ module  pll_0002(
 	// interface 'reset'
 	input wire rst,
 
-	// interface 'outclk0'
+	// interface 'outclk0' -- clk_sys, 56 MHz: 8 x the 7 MHz pixel clock and above the E1's 50 MHz
+	// (docs/ROADMAP.md, Clocks)
 	output wire outclk_0,
+
+	// interface 'outclk1' -- SDRAM_CLK, the same 56 MHz lagging by 14955 ps (67 steps of 223.2 ps, about T - 2.9 ns; the MiSTer
+	// convention is T - 3 ns, and 14857 ps is not a legal step). sdram.sv samples read data 3 clocks after the READ command (CAS 2 plus its input
+	// register), and the chip holds a word from about phase + T + tAC to phase + 2T + tOH, so 3T falls
+	// inside only while T <= phase + tOH + board delay. 180 degrees satisfies that near 96 MHz (the
+	// KonamiGX/Psikyo clock) and not at 56 MHz, where it read the following word: the first bitstream,
+	// with 8929 ps, showed a black screen on the board while sim/sys_tb booted. Estimated window for
+	// the lag at 56 MHz: 13.2..18.5 ns (datasheet-class tAC/tOH and ~2 ns of board delay, not measured).
+	output wire outclk_1,
 
 	// interface 'locked'
 	output wire locked
@@ -18,12 +28,12 @@ module  pll_0002(
 		.fractional_vco_multiplier("false"),
 		.reference_clock_frequency("50.0 MHz"),
 		.operation_mode("direct"),
-		.number_of_clocks(1),
-		.output_clock_frequency0("20.000000 MHz"),
+		.number_of_clocks(2),
+		.output_clock_frequency0("56.000000 MHz"),
 		.phase_shift0("0 ps"),
 		.duty_cycle0(50),
-		.output_clock_frequency1("0 MHz"),
-		.phase_shift1("0 ps"),
+		.output_clock_frequency1("56.000000 MHz"),
+		.phase_shift1("14955 ps"),
 		.duty_cycle1(50),
 		.output_clock_frequency2("0 MHz"),
 		.phase_shift2("0 ps"),
@@ -77,7 +87,7 @@ module  pll_0002(
 		.pll_subtype("General")
 	) altera_pll_i (
 		.rst	(rst),
-		.outclk	({outclk_0}),
+		.outclk	({outclk_1, outclk_0}),
 		.locked	(locked),
 		.fboutclk	( ),
 		.fbclk	(1'b0),

@@ -1,0 +1,102 @@
+# MAME 0.289, set misncrft, -snapview native. Captures by scripts/vamphalf_capture.py:
+#   misncrft_attract: --gfx --coin 0 --poke 3500:1,3900:0 --frames 300,600,...,3300,3499,3500,3501,3502,3700,3899,3900,3901,3902
+#   misncrft_play: --coin 400 --poke 4700:1,5400:0 --frames 700,1000,...,4600,4699,4700,4701,4702,4900,5300,5399,5400,5401,5402,5600
+#   (the flip port 0x40 is poked through the I/O space: the set has no flip DIP; the game itself wrote it once, value 0)
+#   also pixel-identical: misncrft_census_attract (100 frames, every 60 from 300) and misncrft_census_play (200 frames, every 40 from 600), not stored here
+# capture misncrft_attract
+set misncrft
+mame 0.289
+# frame flip clipflip width height flip_writes_so_far
+300 0 0 320 236 1
+600 0 0 320 236 1
+900 0 0 320 236 1
+1200 0 0 320 236 1
+1500 0 0 320 236 1
+1800 0 0 320 236 1
+2100 0 0 320 236 1
+2400 0 0 320 236 1
+2700 0 0 320 236 1
+3000 0 0 320 236 1
+3300 0 0 320 236 1
+3499 0 0 320 236 1
+3500 0 0 320 236 2
+3501 1 0 320 236 2
+3502 1 1 320 236 2
+3700 1 1 320 236 2
+3899 1 1 320 236 2
+3900 1 1 320 236 3
+3901 0 1 320 236 3
+3902 0 0 320 236 3
+flip_writes 3 first 3:0 3500:1 3900:0
+# capture misncrft_play
+set misncrft
+mame 0.289
+# frame flip clipflip width height flip_writes_so_far
+700 0 0 320 236 1
+1000 0 0 320 236 1
+1400 0 0 320 236 1
+1800 0 0 320 236 1
+2200 0 0 320 236 1
+2600 0 0 320 236 1
+3000 0 0 320 236 1
+3400 0 0 320 236 1
+3800 0 0 320 236 1
+4200 0 0 320 236 1
+4600 0 0 320 236 1
+4699 0 0 320 236 1
+4700 0 0 320 236 2
+4701 1 0 320 236 2
+4702 1 1 320 236 2
+4900 1 1 320 236 2
+5300 1 1 320 236 2
+5399 1 1 320 236 2
+5400 1 1 320 236 3
+5401 0 1 320 236 3
+5402 0 0 320 236 3
+5600 0 0 320 236 3
+flip_writes 3 first 3:0 4700:1 5400:0
+# snapshot orientation relative to the model bitmap: none
+# render_model.py compare: dir frame flip mismatch_px(clip)
+misncrft_attract 300 0 0 same
+misncrft_attract 600 0 0 same
+misncrft_attract 900 0 0 same
+misncrft_attract 1200 0 0 same
+misncrft_attract 1500 0 0 same
+misncrft_attract 1800 0 0 same
+misncrft_attract 2100 0 0 same
+misncrft_attract 2400 0 0 same
+misncrft_attract 2700 0 0 same
+misncrft_attract 3000 0 0 same
+misncrft_attract 3300 0 0 same
+misncrft_attract 3499 0 0 same
+misncrft_attract 3500 0 0 same
+misncrft_attract 3501 1 0 lag
+misncrft_attract 3502 1 0 same
+misncrft_attract 3700 1 0 same
+misncrft_attract 3899 1 0 same
+misncrft_attract 3900 1 0 same
+misncrft_attract 3901 0 0 lag
+misncrft_attract 3902 0 0 same
+misncrft_play 700 0 0 same
+misncrft_play 1000 0 0 same
+misncrft_play 1400 0 0 same
+misncrft_play 1800 0 0 same
+misncrft_play 2200 0 0 same
+misncrft_play 2600 0 0 same
+misncrft_play 3000 0 0 same
+misncrft_play 3400 0 0 same
+misncrft_play 3800 0 0 same
+misncrft_play 4200 0 0 same
+misncrft_play 4600 0 0 same
+misncrft_play 4699 0 0 same
+misncrft_play 4700 0 0 same
+misncrft_play 4701 1 0 lag
+misncrft_play 4702 1 0 same
+misncrft_play 4900 1 0 same
+misncrft_play 5300 1 0 same
+misncrft_play 5399 1 0 same
+misncrft_play 5400 1 0 same
+misncrft_play 5401 0 0 lag
+misncrft_play 5402 0 0 same
+misncrft_play 5600 0 0 same
+# 42/42 frames pixel-identical

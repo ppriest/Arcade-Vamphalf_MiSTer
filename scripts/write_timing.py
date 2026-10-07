@@ -7,7 +7,8 @@
     python scripts/write_timing.py <set> --extra tbank:400000:400007
 
 Runs each set headless (scripts/mame/wtiming.lua) and counts writes to the
-regions named in regions.json "sweep" (plus --extra), by scanline, over --frames
+regions named in regions.json "sweep" (ranges from "read", "wtap" and "sweep_regions"; names
+starting io_ tap the I/O space) plus --extra, by scanline, over --frames
 frames after --skip. Raw results: debug/wtiming/<set><tag>.txt. Report per region:
 writes per frame; the share in the first 2 lines after vblank start, in vblank,
 and in the first 24 lines; and a strip of 8-line buckets from vblank start
@@ -24,29 +25,32 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "scripts"))
-from mame_capture import (NO_WINDOW, lua_env, lua_runner_env, mame_cmd,  # noqa: E402
+from mame_capture import (NO_WINDOW, check_lua_error, lua_env, lua_runner_env, mame_cmd,  # noqa: E402
                           mame_paths, regions, spec)
 
 
-def run(game, skip, frames, coin=0, tag="", extra=""):
+def run(game, skip, frames, coin=0, tag="", extra="", order=""):
     mame_dir, exe = mame_paths()
-    r = regions()
+    r = regions(game)
     out = REPO / "debug" / "wtiming" / f"{game}{tag}.txt"
     out.parent.mkdir(parents=True, exist_ok=True)
-    table = {**r.get("read", {}), **r.get("wtap", {})}
+    table = {**r.get("read", {}), **r.get("wtap", {}), **r.get("sweep_regions", {})}
     taps = spec(table, r.get("sweep"))
     if extra:
         taps = f"{taps},{extra}" if taps else extra
     inp = r.get("inputs", {})
     env = dict(os.environ, **lua_env(r), **lua_runner_env("wtiming.lua"),
                WT_OUT=out.as_posix(), WT_TAPS=taps,
-               WT_SKIP=str(skip), WT_FRAMES=str(frames), WT_COIN=str(coin), WT_SNAP="1",
+               CORE_OUT=out.parent.as_posix(), WT_ORDER=order, WT_SKIP=str(skip), WT_FRAMES=str(frames), WT_COIN=str(coin), WT_SNAP="1",
                WT_IN_COIN=inp.get("coin", "Coin 1"), WT_IN_START=inp.get("start", "1 Player Start"),
-               WT_IN_HOLD=inp.get("hold", "P1 Right"), WT_IN_PULSE=inp.get("pulse", "P1 Button 1"))
+               WT_IN_HOLD=inp.get("hold", "P1 Right"), WT_IN_PULSE=inp.get("pulse", "P1 Button 1"),
+               WT_COIN_PERIOD=str(inp.get("coin_period", 0)), WT_START_PERIOD=str(inp.get("start_period", 0)),
+               WT_PRESS=str(inp.get("press_len", 6)))
     cmd = mame_cmd(exe, game, "wtiming.lua", mame_dir,
                    ["-snapshot_directory", (out.parent / f"snap{tag}").as_posix(),
                     "-snapview", "native"])
     subprocess.run(cmd, cwd=str(mame_dir), env=env, capture_output=True, timeout=3600, **NO_WINDOW)
+    check_lua_error(out.parent)
     return out
 
 
@@ -54,7 +58,9 @@ def parse(path):
     d = {"hist": {}, "last": {}}
     for line in path.read_text().splitlines():
         k, _, v = line.partition(" ")
-        if k in ("vtotal", "vbstart", "frames"):
+        if k == "order":
+            d.setdefault("order", []).append(v)
+        elif k in ("vtotal", "vbstart", "frames"):
             d[k] = int(v)
         else:
             name, _, vals = v.partition(" ")
@@ -80,6 +86,8 @@ def report(game, d):
         pct = lambda n: 100.0 * sum(rel[:n]) / total  # noqa: E731
         print(f"  {name:10s} {total / nf:7.1f} {pct(2):5.1f}% {pct(blank):5.1f}% {pct(24):5.1f}%  "
               f"|{strip}|")
+    for row in d.get("order", []):
+        print("  order " + row)
     print()
 
 
@@ -91,13 +99,14 @@ def main():
     ap.add_argument("--coin", type=int, default=0,
                     help="insert a coin at this frame and play; counting still starts at --skip")
     ap.add_argument("--extra", default="", help="more taps, name:hexlo:hexhi[,...]")
+    ap.add_argument("--order", default="", help="region whose write order is recorded (prints 'order' rows)")
     ap.add_argument("--tag", default="", help="suffix for the result file")
     ap.add_argument("--reuse", action="store_true", help="report existing results only")
     a = ap.parse_args()
     for g in a.sets:
         path = REPO / "debug" / "wtiming" / f"{g}{a.tag}.txt"
         if not a.reuse or not path.exists():
-            run(g, a.skip, a.frames, a.coin, a.tag, a.extra)
+            run(g, a.skip, a.frames, a.coin, a.tag, a.extra, a.order)
         if not path.exists():
             print(f"{g}: no result (MAME failed?)\n")
             continue

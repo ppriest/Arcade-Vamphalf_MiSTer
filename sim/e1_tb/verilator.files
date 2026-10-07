@@ -1,0 +1,4 @@
+rtl/e1/e1_regram.sv
+rtl/e1/e1_cpu.sv
+sim/e1_tb/tb_e1.sv
+sim/e1_tb/e1.vlt

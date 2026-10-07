@@ -2,11 +2,26 @@
 
 Source: `E:/mame/src/mame/misc/vamphalf.cpp`, `vamphalf_prot.cpp/.h`, `devices/sound/qs1000.cpp`,
 `devices/cpu/e132xs/`. Tree HEAD is `a2d0f76268e`, a local MiSTer back-port commit, not a MAME
-tag; the installed binary reports `0.289`. Whether they agree is unchecked (roadmap, Open items).
+tag; the installed binary reports `0.289`. They agree in behaviour: see "MAME version".
 Line numbers are from that tree. Everything is MAME's model unless marked.
 
 Scope: Mission Craft (Sun, 2000) and Wivern Wings (SemiCom, 2001). The driver covers ~40 other
 SemiCom/Dongsung boards on the same video hardware; out of scope for now.
+
+## MAME version
+
+Binary `C:/Emulation/Emulators/MAME/mame.exe` reports `0.289 (mame0289)`. Source tree
+`mame0289-661-ga2d0f76268e`. `git log mame0289..HEAD` over `src/devices/cpu/e132xs`,
+`src/mame/misc/vamphalf.cpp`, `vamphalf_prot.cpp` and `src/devices/sound/qs1000.cpp` lists three commits:
+
+| Commit | Change | Behaviour |
+|---|---|---|
+| `63c2ec0ccfe` | `e132xsop.hxx`: `rotl_32` replaced by `std::rotl` in ROL | none (same rotate; `n` is 0..31) |
+| `774a180df2b` | `vamphalf.cpp`: screen device split, 2 lines | none (type rename) |
+| `4873b416e7e` | `vamphalf.cpp`: `frame_period()` instead of `refresh_attoseconds()` in `handle_flipped_visible_area` | none (API change, same period) |
+
+No commit touches `vamphalf_prot.cpp` or `qs1000.cpp`. Judged from the diffs; the binary and the
+tree were not rebuilt to compare.
 
 ## Sets
 
@@ -60,8 +75,9 @@ Unflipped visible area is 31..350 x 16..251, flipped 31..350 x 20..255 (`handle_
 
 ## Interrupts
 
-One source: vblank, `irq1_line_hold` (`:1141, 1219, 1312`). Vector and mask behaviour come from
-the E1 core's interrupt logic; confirmed from the ROM in Phase 0.
+One source: vblank, `irq1_line_hold` (`:1141, 1219, 1312`). That asserts MAME input line 1, which
+the E1 numbers `INPUT_INT2` (`e132xs.h:108`): ISR bit 1, inhibited by FCR bit 29 (`e132xs.cpp:1411`).
+Mission Craft's boot sets FCR to 0xdd7fffff, INT2 enabled and INT1 inhibited (`sim/sys_tb`).
 
 ## Memory map
 

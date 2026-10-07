@@ -1,57 +1,53 @@
 {
-  "_comment": "Core-specific. The main CPU's view of the machine, from the MAME driver's address map. Read by mame_capture.py and write_timing.py. Addresses are hex strings, inclusive.",
+  "_comment": "Core-specific. The main CPU's view of the machine, from the MAME driver's address map (vamphalf.cpp common_map, misncrft). Read by mame_capture.py, write_timing.py and the e1 trace tools. Addresses are hex strings, inclusive. Wivern Wings differs: bus_bytes 4, common_32bit_map, I/O map wyvernwg_io.",
   "cpu": ":maincpu",
   "space": "program",
   "bus_bytes": 2,
   "big_endian": true,
   "read": {
-    "workram": [
-      "0x000000",
-      "0x00ffff"
-    ]
+    "workram": ["0x00000000", "0x001fffff"],
+    "spriteram": ["0x40000000", "0x4003ffff"],
+    "palette": ["0x80000000", "0x8000ffff"]
   },
-  "wtap": {
-    "vregs": [
-      "0x000000",
-      "0x00001f"
-    ]
+  "wtap": {},
+  "sweep": ["spr_bands", "spr_used", "spr_rest", "palette", "io_flip"],
+  "_sweep_regions_comment": "Extra named ranges for write_timing.py. Sprite RAM split: spr_bands = the 17 bands of 0x800 bytes (0x8800); spr_used = bands 1..15, the only bytes draw_sprites reads; spr_rest = past the 17 bands. io_flip taps the I/O space (name prefix io_).",
+  "sweep_regions": {
+    "spr_bands": ["0x40000000", "0x400087ff"],
+    "spr_used": ["0x40000800", "0x40007fff"],
+    "spr_rest": ["0x40008800", "0x4003ffff"],
+    "io_flip": ["0x40", "0x40"]
   },
-  "sweep": [
-    "workram",
-    "vregs"
-  ],
   "trace": {
-    "addr_hi": "0xffffff",
-    "io": [
-      "0x000000",
-      "0x000000"
-    ],
-    "vectors": [
-      "0x000000",
-      "0x000000"
-    ],
-    "ipl": {
-      "reg": "SR",
-      "shift": 8,
-      "mask": 7
-    },
-    "rom": [
-      [
-        "0x000000",
-        "0x0fffff"
-      ]
-    ],
-    "ram": [
-      [
-        "0x100000",
-        "0x10ffff"
-      ]
-    ]
+    "addr_hi": "0xffffffff",
+    "io": [],
+    "vectors": ["0xffffff00", "0xffffffff"],
+    "rom": [["0xfff00000", "0xffffffff"]],
+    "ram": [["0x00000000", "0x001fffff"], ["0x40000000", "0x4003ffff"], ["0x80000000", "0x8000ffff"]]
+  },
+  "io_space": {
+    "_comment": "AS_IO of the E1-16: 16-bit data, 13 address bits, address unit is a 16-bit word (e1 config shift -1). I/O reads are not in the program-space sys trace; scripts/mame/e1trace.lua taps this space.",
+    "name": "io",
+    "hi": "0x1fff"
+  },
+  "video": {
+    "_comment": "I/O address of the flip write (flipscreen_w: flip = data & 1). vamphalf.cpp misncrft_io 0x040, wyvernwg_io 0x0800.",
+    "flip_port": "0x40"
+  },
+  "sets": {
+    "wivernwg": {"bus_bytes": 4, "video": {"flip_port": "0x800"},
+                 "_sweep_regions_comment": "Extra named ranges for write_timing.py. Sprite RAM split: spr_bands = the 17 bands of 0x800 bytes (0x8800); spr_used = bands 1..15, the only bytes draw_sprites reads; spr_rest = past the 17 bands. io_flip taps the I/O space (name prefix io_).",
+  "sweep_regions": {"spr_bands": ["0x40000000", "0x400087ff"], "spr_used": ["0x40000800", "0x40007fff"],
+                                   "spr_rest": ["0x40008800", "0x4003ffff"], "io_flip": ["0x800", "0x800"]}}
   },
   "inputs": {
     "coin": "Coin 1",
     "start": "1 Player Start",
     "hold": "P1 Right",
-    "pulse": "P1 Button 1"
+    "pulse": "P1 Button 1",
+    "_comment2": "A single coin pulse is not credited by either set (see scripts/mame/vcap.lua); the coin is repeated every coin_period frames from the first coin frame, Start every start_period frames from 90 frames later, each held press_len frames.",
+    "coin_period": 97,
+    "start_period": 211,
+    "press_len": 5
   }
 }
