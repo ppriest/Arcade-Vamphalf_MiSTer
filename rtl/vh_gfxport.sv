@@ -35,7 +35,7 @@ assign gfx_rdy = q_cnt != 3'd4;
 
 reg         busy = 1'b0;
 reg  [127:0] row;
-reg  [2:0]  beats = 3'd0;      // beats still to emit
+reg  [2:0]  beats = 3'd0;
 
 always @(posedge clk) begin
 	gfx_dv <= 1'b0;

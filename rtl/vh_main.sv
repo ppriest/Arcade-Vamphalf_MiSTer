@@ -1,4 +1,4 @@
-// The main board: E1 CPU, its memory system (vh_cpumem), and the I/O of the two in-scope boards.
+// The main board: E1 CPU, its memory system (vh_cpumem), and the I/O maps of every family.
 //
 // I/O space (the port is the CPU's I/O address >> 13, e132xs.cpp m_read_io / m_write_io; MAME's I/O maps
 // count in that unit: 16-bit words on the E1-16 (address shift -1), so 0x180 and 0x181 are two ports):
@@ -201,8 +201,8 @@ wire m_prt16 = f_mc && pw == 9'h0d0;
 wire m_eew   = f_mc && pw == 9'h0f0 || f_vh && pw == 9'h182 || f_cm && pw == 9'h0c2 || f_jb && pw == 9'h0a0 ||
                f_md && pw == 9'h0f0 || f_su && pw == 9'h008 || f_so && pw == 9'h1a0 || f_wa && pw == 9'h060;
 wire m_latch = f_mc && pw == 9'h100;
-wire m_eer   = f_mc && pw[8:1] == 8'hb0 || f_vh && pw == 9'h070 || f_cm && pw == 9'h1f0 || f_jb && pw == 9'h0b0 ||
-               f_md && pw == 9'h060 || f_su && pw == 9'h040 || f_so && pw == 9'h000 ||   // misncrft: 0x160-0x161
+wire m_eer   = f_mc && pw[8:1] == 8'hb0 || f_vh && pw == 9'h070 || f_cm && pw == 9'h1f0 || f_jb && pw == 9'h0b0 ||   // misncrft: 0x160-0x161
+               f_md && pw == 9'h060 || f_su && pw == 9'h040 || f_so && pw == 9'h000 ||
                f_wa && pw == 9'h1e0;
 wire m_prt8  = f_mc && pw == 9'h1a0;
 wire m_oki   = f_vh && pw == 9'h030 || f_cm && pw == 9'h130 || f_jb && pw == 9'h110 || f_md && pw == 9'h020 ||

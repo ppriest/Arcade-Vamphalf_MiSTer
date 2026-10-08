@@ -6,8 +6,7 @@
 //
 // Both chips' clocks are fractional enables of clk (56 MHz) from one 32-bit phase accumulator each: the
 // enable rate over clk, times 2^32, chosen by xtal14. The M6295's ROM (MAME's "oki1" region) is read from SDRAM at
-// SD_SAMPLES through the bridge and the per-channel granule cache (rtl/sound/PROVENANCE.md). On the banked
-// boards (banked_oki_map, vamphalf.cpp:695) the chip's upper 128 KB is the bank's 128 KB of the region.
+// SD_SAMPLES through the bridge and the per-channel granule cache (rtl/sound/PROVENANCE.md).
 //
 // MAME routes the YM2151 at 1.0 to each side and the M6295 at 1.0 to both. Its M6295 reaches full scale with
 // one voice at full volume; jt6295's sum is 14 bits with a voice at 12, so it is scaled by 16 before the
@@ -27,7 +26,7 @@ module vh_ymoki (
 	input       [7:0]   oki_din,
 	output      [7:0]   oki_dout,
 	input       [1:0]   bank,
-	input               banked,           // banked_oki_map: 0x20000-0x3ffff is bank * 0x20000 of the region
+	input               banked,           // banked_oki_map (vamphalf.cpp:695): 0x20000-0x3ffff is bank * 0x20000 of the region
 
 	// SDRAM port 1: one 64-bit granule per request
 	output reg  [26:1]  sd_addr,
@@ -51,7 +50,7 @@ always @(posedge clk) begin
 	{cen_oki, acc_oki} <= {1'b0, acc_oki} + {1'b0, step_oki};
 	if (cen_ym) ym_half <= ~ym_half;
 end
-wire cen_ym_p1 = cen_ym && ym_half;              // half of cen_ym, on its pulses
+wire cen_ym_p1 = cen_ym && ym_half;
 
 // ---------------------------------------------------------------- YM2151
 wire signed [15:0] ym_l, ym_r;

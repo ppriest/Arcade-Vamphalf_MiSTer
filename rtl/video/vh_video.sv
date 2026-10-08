@@ -195,7 +195,7 @@ wire        fx_e  = w0[15] ^ flip_l;
 wire [3:0]  srow  = fy_e ? ~rrow[3:0] : rrow[3:0];
 wire [10:0] xs    = {2'b0, w3[8:0]};
 wire [10:0] x_pos = flip_l ? (11'd366 - xs) : xs;
-wire [38:0] f_in  = {w1 & code_mask, palshift ? w2[14:8] : w2[6:0], x_pos, fx_e, srow};   // 16 + 7 + 11 + 1 + 4
+wire [38:0] f_in  = {w1 & code_mask, palshift ? w2[14:8] : w2[6:0], x_pos, fx_e, srow};   // code 16, colour 7, x 11, fx 1, row 4
 
 // fetch: requests go out back to back (up to four in flight), rows come back in order
 (* ramstyle = "logic" *) reg [38:0]  mf [0:3];                 // meta of the requests in flight
@@ -215,7 +215,6 @@ reg [127:0] d_row;
 reg [10:0]  d_x;
 reg [6:0]   d_color;
 reg         d_fx;
-
 
 // line buffers: two, 512 x 15
 reg         lb_a_we;
@@ -321,7 +320,7 @@ always @(posedge clk) begin
 end
 
 //------------------------------------------------------------------
-// scan-out. One pixel is eight clocks; the pipeline for the pixel at hcnt starts at pcnt 0:
+// scan-out. The pipeline for the pixel at hcnt starts at pcnt 0:
 //   0: line buffer address registered   2: line buffer data, palette address registered, entry cleared
 //   4: palette data                     5: output registers loaded (stable until the next pixel's 5)
 // Pixel x of line y comes from line buffer y[0].

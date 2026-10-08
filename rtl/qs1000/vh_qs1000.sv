@@ -9,9 +9,6 @@
 //                 0x0200-0x0211  writes also go to the wavetable engine
 //   P1 in         the latch      INT1 is the latch's pending flag: set by the main CPU's write,
 //                                cleared by a write to P3 with bit 5 low (qs1000_p3_w)
-//
-// 24 MHz is 3 enables in every 7 clocks of 56 MHz (never two in a row, which jt8052 requires); the
-// engine's 750 kHz tick is every 32nd enable, as MAME's 24 MHz / 32.
 module vh_qs1000 (
 	input               clk,
 	input               rst,
@@ -40,7 +37,8 @@ module vh_qs1000 (
 
 `include "vh_sdram_map.svh"
 
-// 24 MHz enable and the 750 kHz tick
+// 24 MHz: 3 enables in every 7 clocks of 56 MHz, never two in a row (jt8052 requires it). The 750 kHz
+// tick is every 32nd enable, as MAME's 24 MHz / 32.
 reg [2:0] cacc;
 reg       cen;
 reg [4:0] tdiv;
@@ -59,7 +57,6 @@ always @(posedge clk) begin
 	end
 end
 
-// sound latch
 reg [7:0] latch;
 reg       pending;
 wire      p3_we;
@@ -100,8 +97,8 @@ vh_qs1000_voice u_voice (
 	.dbg_drops(dbg_drops), .dbg_stalls(dbg_stalls)
 );
 
-// sample ROM lines from SDRAM. The region holds MAME's first 4 MB; MAME's region is 16 MB with
-// nothing above 0x280000, so lines past 4 MB read as zero without a request.
+// sample ROM lines from SDRAM. SD_SAMPLES holds the first 4 MB of MAME's 16 MB region, which is empty
+// above 0x280000: lines past 4 MB read as zero without a request.
 function [63:0] sw64(input [63:0] g);
 	sw64 = {g[7:0], g[15:8], g[23:16], g[31:24], g[39:32], g[47:40], g[55:48], g[63:56]};
 endfunction

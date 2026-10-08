@@ -27,7 +27,7 @@ module vh_qs1000_voice (
 	input       [4:0]  wr_off,          // register - 0x200
 	input       [7:0]  wr_data,
 	input              tick,            // 750 kHz
-	input              bal_pcb,         // the PCB recording's balance: ADPCM x2, PCM x4 (the core); 0 MAME's x4, x1 (benches)
+	input              bal_pcb,         // 1: the PCB recording's balance (the core); 0: MAME's (benches). See S5
 
 	output reg         rom_req,         // held until rom_ack
 	output reg  [19:0] rom_line,
@@ -51,8 +51,8 @@ reg  [QW-1:0] q_mem [0:255];
 reg  [7:0]  q_wr, q_rd;
 wire [7:0]  q_cnt = q_wr - q_rd;
 reg  [QW-1:0] q_head;
-// a write arriving with a tick is queued a clock later, after it: it belongs to the next sample, as a
-// write MAME stamps with the current tick is applied before that tick's sample (the 8052 writes once in
+// a write arriving with a tick is queued a clock after it: it belongs to the next sample, as MAME
+// applies a write stamped with the current tick before that tick's sample (the 8052 writes once in
 // 28 clocks or more, so the held write is never overtaken)
 reg         wr_h;
 reg  [12:0] wr_hd;
@@ -109,7 +109,7 @@ always @(posedge clk) begin
 	st_q <= st_mem[st_ra];
 end
 
-// sample lines: {voice, slot} -> 16 bytes; tags in registers
+// sample lines: {voice, slot} -> 16 bytes; each slot's line address in tg0_mem/tg1_mem, its valid bit in tag_v
 reg  [127:0] ln_mem [0:63];
 reg  [127:0] ln_q;
 reg  [5:0]  ln_ra;
@@ -159,9 +159,9 @@ localparam [3:0] E_IDLE = 0, E_POP = 1, E_TICK = 2, E_DRAIN = 3, E_KON = 4, E_KW
 reg  [4:0]  clr_n;
 reg  [3:0]  es;
 reg  [4:0]  kch;                // the voice being keyed on
-reg  [2:0]  kstep;              // key-on reads: 0,1 table lines; 2,3 descriptor lines
-reg  [255:0] kbuf;              // two consecutive lines
-reg  [23:0] kbase;              // address of the bytes in kbuf[255:248]
+reg  [2:0]  kstep;              // key-on reads: 0,1 the table entry's line and the next; 2,3 the descriptor's
+reg  [255:0] kbuf;              // the line holding kbase, then the next
+reg  [23:0] kbase;              // table entry, then descriptor address
 reg  [15:0] kfreq;
 
 // fetch unit: one request at a time, from the key-on sequence or the pipeline
@@ -278,7 +278,7 @@ always @(posedge clk) begin
 			ln_wd <= rom_data;
 		end
 	end
-	// a filled line becomes valid the clock after its data is written
+	// a line turns valid on the edge that writes it to ln_mem
 	if (ln_we) begin
 		tag_v[ln_wa] <= 1'b1;
 	end
@@ -301,9 +301,9 @@ always @(posedge clk) begin
 		kch <= 5'd0;
 	end else begin
 		r3_v <= 1'b0;
-		// line requests (demand and prefetch) go out, lowest {voice, slot} first, whenever the fetch unit
-		// is free and no key-on is reading; the slot's tag changes now and turns valid with the data
-		// (not a slot whose line is being written to pf_mem this clock: pf_q would read the old one)
+		// line requests (demand and prefetch) go out when the fetch unit is free and no key-on is reading;
+		// the slot is invalidated now and turns valid with the data (not a slot whose pf_mem entry is
+		// written this clock: pf_q would read the old one)
 		if (!f_busy && !rom_req && es != E_KON && es != E_KWAIT && pf_want != 64'd0 &&
 		    !(pf_we && pf_wa == pf_pick)) begin
 			f_busy <= 1'b1;
@@ -364,7 +364,6 @@ always @(posedge clk) begin
 
 			// ---- key-on: read the table entry (6 bytes at kbase) and the descriptor (9 bytes)
 			E_KON: if (!f_busy && !rom_req) begin
-				// kstep 0/2: the line holding kbase; 1/3: the next line
 				f_busy <= 1'b1;
 				f_kon <= 1'b1;
 				rom_req <= 1'b1;
@@ -390,7 +389,8 @@ always @(posedge clk) begin
 						es <= E_KON;
 					end
 				end else begin
-					// descriptor: start (3 bytes), loop start (unused while looping is off), loop end; byte 8 bit 3 ADPCM
+					// descriptor (MAME start_voice): start = bytes 0-2, loop end = {byte 0 [7:4], byte 5 [3:0],
+					// bytes 6-7}; loop start unused
 					st_we <= 1'b1;
 					st_wa <= kch;
 					st_wd <= {1'b1, kbuf[255 - 8*({1'b0, kbase[3:0]} + 5'd8) - 4],      // playing, adpcm (byte 8 bit 3)
@@ -408,8 +408,8 @@ always @(posedge clk) begin
 				end
 			end
 
-			// ---- one tick: voices 0..31 through S0 (state read), S1 (line check), S2 (sample, write back),
-			// then S3-S5 (volumes, accumulate) below
+			// ---- one tick: voices 0..31 through S0 (state read), S1 (line check), S2 (sample, write back);
+			// S3-S5 below
 			E_TICK, E_DRAIN: begin
 				if (!stall) begin
 					// S0 -> S1
@@ -500,8 +500,8 @@ always @(posedge clk) begin
 		r5_pl <= r4_s * $signed({1'b0, r4_lv});
 		r5_pr <= r4_s * $signed({1'b0, r4_rv});
 		if (r5_v) begin
-			// MAME: ADPCM x4, PCM x1 (qs1000.cpp:484, :513). The PCB balance (MAME_KLUDGES.md, Sound): ADPCM x2,
-			// PCM x4, PCM 18 dB higher against ADPCM than MAME has it
+			// MAME: ADPCM x4, PCM x1 (qs1000.cpp:484, :513). bal_pcb, the PCB balance (MAME_KLUDGES.md, Sound):
+			// ADPCM x2, PCM x4, PCM 18 dB higher against ADPCM than MAME has it
 			acc_l <= acc_l + (r5_adp ? (bal_pcb ? {{3{r5_pl[27]}}, r5_pl, 1'b0} : {{2{r5_pl[27]}}, r5_pl, 2'b0})
 			                         : (bal_pcb ? {{2{r5_pl[27]}}, r5_pl, 2'b0} : {{4{r5_pl[27]}}, r5_pl}));
 			acc_r <= acc_r + (r5_adp ? (bal_pcb ? {{3{r5_pr[27]}}, r5_pr, 1'b0} : {{2{r5_pr[27]}}, r5_pr, 2'b0})

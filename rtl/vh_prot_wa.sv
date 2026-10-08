@@ -2,6 +2,7 @@
 // 33 seed bits written one per access (bit 0), restarted by 0xffff; at the 33rd the seed is looked up among the
 // seven MAME has seen, the device arms, and eight reads return the result's bits 7..0 as 0xffff or 0, then 0.
 // An unknown seed arms with the previous result, as MAME leaves m_retval unchanged.
+// MAME's notes put the seeds, in this order, at about 0:30 of play, then every 15 minutes to 2:00.
 module vh_prot_wa (
 	input             clk,
 	input             rst,
@@ -21,13 +22,13 @@ wire [32:0] seed_n = {seed[31:0], wd[0]};
 reg  [8:0]  look;                  // {found, value}
 always @* begin
 	case (seed_n)
-		33'h18c97f6d7: look = {1'b1, 8'ha7};    // about 0:30
-		33'h0baa9edf7: look = {1'b1, 8'h6d};    // 0:45
-		33'h038f839bf: look = {1'b1, 8'h20};    // 1:00
-		33'h110037f0f: look = {1'b1, 8'h58};    // 1:15
-		33'h10aace5bd: look = {1'b1, 8'h55};    // 1:30
-		33'h0f8cecc8f: look = {1'b1, 8'h74};    // 1:45
-		33'h19678b311: look = {1'b1, 8'hf5};    // 2:00
+		33'h18c97f6d7: look = {1'b1, 8'ha7};
+		33'h0baa9edf7: look = {1'b1, 8'h6d};
+		33'h038f839bf: look = {1'b1, 8'h20};
+		33'h110037f0f: look = {1'b1, 8'h58};
+		33'h10aace5bd: look = {1'b1, 8'h55};
+		33'h0f8cecc8f: look = {1'b1, 8'h74};
+		33'h19678b311: look = {1'b1, 8'hf5};
 		default:       look = {1'b0, 8'h00};
 	endcase
 end

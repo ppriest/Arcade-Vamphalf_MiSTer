@@ -11,8 +11,7 @@
 //   sweep   while sweep is high the tag at sw_idx is cleared; the owner runs sw_idx over every line
 //
 // Byte order inside a half: byte 0 of the half in [63:56] (big-endian, as the CPU sees it).
-// Sizes (AW = address bits of the cached space, LW = line-index bits): data 2^(LW+1) x 64, tags
-// 2^LW x (AW-LW-4+1).
+// AW: address bits of the cached space; LW: line-index bits.
 
 module vh_cache #(
 	parameter AW = 22,
@@ -50,7 +49,7 @@ wire [TW:0]   t_q;
 vh_cache_ram #(.AW(LW), .DW(TW + 1)) u_tag (.clk(clk), .addr(t_addr), .we(t_we),
 	.be(1'b1), .wd(t_wd), .q(t_q));
 
-// data: 8 byte lanes, lane 7 = [63:56] = byte 0 of the half
+// data: 8 byte lanes
 wire [LW:0]   d_addr = fill_we ? {fa[LW+3:4], fill_half} : la[LW+3:3];
 wire [7:0]    d_be   = fill_we ? 8'hff : st_be;
 wire [63:0]   d_wd   = fill_we ? fill_d : st_d;

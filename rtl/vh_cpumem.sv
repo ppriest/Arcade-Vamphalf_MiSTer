@@ -4,42 +4,37 @@
 // Program space (vamphalf.cpp common_map / common_32bit_map, e132xs.cpp iram_4k_map):
 //   0x00000000-0x001fffff  work RAM, 2 MB     SDRAM WRAM_BASE, through the caches
 //   0x40000000-0x4000ffff  sprite RAM         vh_video spr_*
-//   0x40010000-0x4003ffff  sprite RAM         SDRAM SPRHI_BASE, through the caches: the power-on test
-//                                             walks it, nothing else uses it (write sweep)
+//   0x40010000-0x4003ffff  sprite RAM         SDRAM SPRHI_BASE, through the caches: only the power-on
+//                                             test uses it (write sweep)
 //   0x80000000-0x8000ffff  palette            vh_video pal_*
 //   0xc0000000-0xdfffffff  internal RAM, 4 KB mirrored
 //   0xfff00000-0xffffffff  program ROM, 1 MB  SDRAM ROM_BASE, through the caches
-//   anything else reads 0, writes are dropped
+//   anything else reads 0, writes are dropped (0xe000xxxx also pulses xflip_we)
 //
-// Instruction fetches come on their own port (if_*), 8 bytes at a time, from the I-cache (16 KB) or the
-// internal RAM, so the CPU's fetch-ahead never waits for its loads and stores; data reads go through the
-// D-cache (4 KB). Both caches are direct-mapped with 16-byte lines filled by one double read. Stores to work RAM are
-// written through: they update whichever cache holds the line and go to a four-entry write buffer, so
-// the CPU continues while the SDRAM writes run. A miss waits for the buffer to drain.
-// A write-buffer entry is an 8-byte block with a byte mask: a store into the block of the newest entry
-// merges into it unless that entry is being written, and an entry goes to SDRAM as one burst write.
-// Data reads stream: after every D-cache fill the next line is read into a 16-byte prefetch buffer when
-// port 2 has nothing else to do, and a D miss on that line fills from the buffer in two clocks. A store
-// to the buffered line, or to the line in flight, discards it. The buffer is read only after the write
-// buffer has drained (port 2 serves the write buffer first), so it never holds data older than a store.
+// Caches: I 16 KB, D 4 KB, direct-mapped, 16-byte lines filled by one double read. Instruction fetches
+// have their own port (if_*, 8 bytes) so fetch-ahead does not wait behind loads and stores. Stores to
+// work RAM and the upper sprite RAM are written through: they update whichever cache holds the line and
+// enter a four-entry write buffer (wq_*), each entry written as one burst. A miss waits for the buffer
+// to drain.
+// After every D-cache fill the next line is read into a 16-byte prefetch buffer when port 2 is idle; a D
+// miss on that line fills from it in two clocks. A store to the buffered line, or to the line in flight,
+// discards it. Port 2 serves the write buffer first, so the prefetch never holds data older than a store.
 //
-// CPU bus timing (e1_cpu: req held until ack): every access is acked one clock after the request is
-// seen at the earliest. I/O and internal/video RAM ack from a register; a cache hit, a store and the
-// end of a line fill ack combinationally in the clock after the request (the hit compare drives
-// bus_ack), so a hit costs two clocks, not three.
-// Instruction port: if_addr is looked up in every clock in which the RAM it needs is free (the data
-// side has the I-cache for a store's update and the internal RAM for its accesses; a fill has the
-// cache); if_ack comes in the clock after a lookup of the address still requested. The CPU may change
-// if_addr at any time: a lookup of the old address is then dropped. An I-cache miss is filled by the
-// data side's miss logic when that has no request. Fetches outside work RAM, program ROM, the upper
+// CPU bus timing (e1_cpu: req held until ack): I/O and internal/video RAM ack from a register, one clock
+// after the request; a cache hit (S_LOOK), a store (S_WLOOK) and a data fill (S_FILL2) ack
+// combinationally, so a hit costs two clocks, not three.
+// Instruction port: if_addr is looked up in every clock in which the data side, a fill or the sweep does
+// not hold the RAM it needs (i_free); if_ack comes in the clock after a lookup of the address still
+// requested, so a lookup of an address the CPU has since changed is dropped. An I-cache miss is filled by
+// the data side's miss logic when that has no request. Fetches outside work RAM, program ROM, the upper
 // sprite RAM and the internal RAM read 0 (no game executes from anywhere else).
-// A store reaches the I-cache two clocks after its request and is acked then; the CPU drops any
-// fetched 8 bytes the store hits, and every lookup made after the update reads the new data.
+// A store updates the I-cache in S_WLOOK, the clock it is acked in; the CPU drops any fetched 8 bytes the
+// store hits, and every later lookup reads the new data.
 //
-// SDRAM port 2 (sdram.sv's toggle protocol, burst writes) carries, in priority order: the ROM download's writes
-// (sdram_download's dl_*), the write buffer, and line fills. That side is reset only at power-up (prst,
-// the PLL's lock), never by the core reset: MiSTer holds the core reset for the whole download
-// (LESSONS_LEARNED, "Never hold the memory path in the core reset").
+// SDRAM port 2 (sdram.sv's toggle protocol, burst writes), in priority order: download writes (dl_*), the
+// write buffer, line fills, the prefetch. It is reset only by prst (the PLL's lock), never by the core
+// reset: MiSTer holds the core reset for the whole download (LESSONS_LEARNED, "Never hold the memory path
+// in the core reset").
 // SDRAM words hold the even byte in [7:0]; the CPU is big-endian, so data is byte-swapped at this seam.
 
 module vh_cpumem #(
@@ -111,8 +106,8 @@ module vh_cpumem #(
 
 	output reg [31:0] st_imiss = 0,    // counters for the benches
 	output reg [31:0] st_dmiss = 0,
-	output reg [26:1] dbg_fill_a,      // the first line fill after reset: its address and first granule
-	output reg [63:0] dbg_fill_d,      // (its second granule)
+	output reg [26:1] dbg_fill_a,      // the first line fill after reset: its SDRAM address
+	output reg [63:0] dbg_fill_d,      // and its second granule
 	output            dbg_miss,        // one clock per cache miss: dbg_miss_ic, the line in the cached space
 	output            dbg_miss_ic,
 	output     [21:4] dbg_miss_line,
@@ -170,7 +165,7 @@ reg  [21:4] pf_want_line, pf_fl_line, pf_line;
 reg  [63:0] pf0, pf1;
 
 // write buffer: four 8-byte blocks (byte 0 in [63:56], be[7] its enable), drained in order
-(* ramstyle = "logic" *) reg  [21:3] wq_ca [0:3];   // registers: read combinationally (as RAM, the read of an entry written in the same clock depends on bypass logic Quartus may or may not add)
+(* ramstyle = "logic" *) reg  [21:3] wq_ca [0:3];   // registers: read combinationally; as RAM, reading an entry written in the same clock would depend on bypass logic Quartus may not add
 (* ramstyle = "logic" *) reg  [7:0]  wq_be [0:3];
 (* ramstyle = "logic" *) reg  [63:0] wq_d  [0:3];
 reg  [2:0]  wq_w = 3'd0, wq_r = 3'd0;

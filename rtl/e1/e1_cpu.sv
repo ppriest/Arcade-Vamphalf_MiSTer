@@ -11,8 +11,8 @@
 // The bus is always 32 bits wide and big-endian. An E1-16 board puts a width adapter
 // between this port and its 16-bit memory.
 //
-// Not implemented: power-down, the DSP extend opcodes other than the
-// multiplies, floating point (the FP opcodes trap to their emulation code as in MAME).
+// Not implemented: power-down, floating point (the FP opcodes trap to their emulation
+// code as in MAME).
 
 module e1_cpu (
 	input             clk,
@@ -78,7 +78,7 @@ reg [4:0]  state;
 reg [31:0] pc, sr, delay_pc;
 reg        delay_slot, delay_slot_taken;
 reg [31:0] G [0:31];
-// local registers live in e1_regram; a write lands one clock after commit_one, and the
+// local registers live in e1_regram; a write lands one clock after commit_loc, and the
 // read ports forward it
 reg [31:0] lS_r, lS1_r, lD_r, lD1_r, gS_r, gS1_r, gD_r, gD1_r, gM_r, gMD_r;
 reg        l_we_n, l_we_r;
@@ -111,9 +111,7 @@ reg [4:0]  nstate;
 reg        frm_req, frm_fin, ret_pend, frm_body;
 reg [1:0]  frm_kind;
 reg [5:0]  frm_tn;
-// Registers, never RAM: an instruction pushes up to two entries in one clock (CALL, double-register
-// results). Quartus inferred wq_v as a one-write-port altsyncram and kept one of a CALL's two writes; on
-// the board the return address was lost and the first RET jumped to 0 (docs/LESSONS_LEARNED.md).
+// Registers, never RAM: one clock can push several entries (five for the FP trap).
 (* ramstyle = "logic" *) reg        wq_g [0:4];
 (* ramstyle = "logic" *) reg        wq_raw [0:4];
 (* ramstyle = "logic" *) reg [5:0]  wq_i [0:4];
@@ -121,7 +119,7 @@ reg [5:0]  frm_tn;
 reg [2:0]  wq_cnt, wq_rd;
 reg        wq_busy0, retire_pending, wq_g0, did_commit;
 reg [2:0]  wq_cnt_start;
-// head entry as it stood at the start of the cycle (registers, not this cycle's pushes)
+// queue head before this cycle's pushes
 reg        hd_valid, hd_raw;
 reg [5:0]  hd_i;
 reg [31:0] hd_v;
@@ -143,9 +141,9 @@ reg        timer_pend;
 
 // current instruction
 reg [15:0] op, e1, e2;
-reg [1:0]  ilen, ilen0, ilen_x;
+reg [1:0]  ilen, ilen0, ilen_x;      // halfwords in the instruction (1..3); _x: the one in execute
 reg [15:0] op_x;
-reg        fold_done, trace_will;           // halfwords fetched for this instruction (1..3)
+reg        fold_done, trace_will;      // fold_done: the next instruction's fetch started this cycle
 reg [1:0]  fstage;         // the halfword wanted next: 0 op, 1 e1, 2 e2; 3 the instruction is complete
 reg [15:0] e1_cur;         // e1 as of this cycle (ST_RD may take it in the cycle)
 reg [31:0] ipc;            // address of the instruction
@@ -274,12 +272,10 @@ task timer_eval;
 	end
 endtask
 
-// register writes go through a queue drained one entry per clock by commit_one, the
-// only place the register arrays are written
-// Each entry is written under a constant index. On the board, the first of two pushes in one clock
-// (a CALL's return address, the reset state's L0) never reached the queue while the second did; the
-// variable-index form (wq_v[wq_cnt] = v; wq_cnt = wq_cnt + 1, twice in one clock) simulates correctly
-// (docs/LESSONS_LEARNED.md).
+// register writes are queued and drained one entry per clock (commit_loc, commit_glob).
+// Each entry is written under a constant index: the variable-index form (wq_v[wq_cnt] = v;
+// wq_cnt = wq_cnt + 1, twice in one clock) simulates correctly but on the board loses the first
+// push, e.g. a CALL's return address (docs/LESSONS_LEARNED.md).
 task wq_push(input wp_g, input wp_raw, input [5:0] wp_i, input [31:0] wp_v);
 	begin
 		if (wp_g && wp_i[4:0] == 5'd0) pcw_new = 1'b1;
@@ -302,7 +298,7 @@ endtask
 // set_global_register semantics on a destination register
 task write_dst(input g, input [5:0] i, input [31:0] v);
 	begin
-		// a PC write takes effect in this cycle, so the queue never changes PC
+		// a PC write takes effect in this cycle, not through the queue
 		if (g && i[4:0] == 5'd0) pc = {v[31:1], 1'b0};
 		else begin
 			// MAME: a user-mode write that sets L is a privilege error (checked here, applied at commit)
@@ -716,9 +712,8 @@ state <= ST_RESET;
 		if_req <= 1'b0; if_dem <= 1'b0;
 		fc_valid <= 1'b0;
 		pf_valid <= 1'b0;
-		// the queue is read before ST_RESET's code runs in the first clock out of reset, so it is empty
-		// here, not only after ST_RESET: an initial value is not a power-up value in Quartus (the board
-		// committed junk writes and lost a register, docs/LESSONS_LEARNED.md)
+		// emptied here too: the queue is read before ST_RESET's code runs, and an initial value is
+		// not a power-up value in Quartus (docs/LESSONS_LEARNED.md)
 		wq_cnt = 3'd0; wq_rd = 3'd0; ret_pend = 1'b0; retire_pending = 1'b0; late_cap = 1'b0;
 		l_we_r <= 1'b0;
 	end else if (cen && !pause) begin
@@ -734,8 +729,6 @@ gw_new = 1'b0;
 if (if_req && if_ack && !if_dem) begin
 	pf_valid <= 1'b1; pf_addr <= if_addr; pf_data <= if_data; if_req <= 1'b0;
 end
-// one queued register write per clock, applied at the start of the cycle that follows
-// the instruction; the instruction's own cycle only fills the queue
 wq_busy0 = (wq_cnt != 3'd0);
 wq_cnt0 = wq_cnt;
 wq_g0 = (wq_rd < wq_cnt) ? wq_g[wq_rd] : 1'b0;
@@ -786,7 +779,6 @@ wq_push(1'b0, 1'b0, 6'd1, sr);
 		// instruction fetch: stage 0 starts here (interrupts are sampled in ST_RD, so the
 		// fetch does not wait for the previous instruction's register writes)
 		ST_INT: if (wq_pcw) begin
-			// a pending write to PC decides where the fetch starts
 			nstate = ST_INT;
 		end else begin
 			fpc = pc;
@@ -928,7 +920,6 @@ casez (opc)
 						dv_d <= (opc[2] && sreg[31]) ? (~sreg + 32'd1) : sreg;
 						dv_dg <= !dl; dv_di <= dl ? didx : {2'b0, dc};
 						nstate = ST_DIV;
-						
 						fin_req = 1'b0;
 					end
 				end
@@ -1132,7 +1123,7 @@ casez (opc)
 			end
 			//------------------------------------------------ immediate ALU group 0x60-0x7f
 			8'h6?, 8'h7?: begin
-				// immediate value: LIMM variants (odd opcodes) read it from the stream
+				// odd opcodes: sc selects a constant or the extension words; even opcodes: sc itself
 				if (opc[0]) begin
 					case (sc)
 						4'd0: imm = 32'd16;
@@ -1493,7 +1484,6 @@ casez (opc)
 					lp_flag <= (G[18] >= G[19]);
 					p_loop <= 2'd1;
 					nstate = ST_LOOP;
-					
 					fin_req = 1'b0;
 				end
 			end
@@ -1507,7 +1497,6 @@ casez (opc)
 					sr[20:19] = 2'd2;
 				end
 				tmp32 = (!sl && sc == 4'd1) ? 32'd0 : sreg;
-				// dst_code 0 means 16
 				r8 = {1'b0, fp} + (dc == 4'd0 ? 8'd16 : {4'b0, dc});
 				wq_push(1'b0, 1'b0, r8[5:0], {pc[31:1], 1'b0} | {31'b0, sr[18]});
 				wq_push(1'b0, 1'b0, r8[5:0] + 6'd1, sr);
@@ -1527,7 +1516,6 @@ casez (opc)
 					3'd4: cond = sr[2];
 					default: cond = sr[2] | sr[1];
 				endcase
-				// opcodes 0xf0.. test "set" on even opcodes, "clear" on odd
 				if (opc[0]) cond = !cond;
 				if (opc == 8'hfc) cond = 1'b1;
 				if (op[7]) ofs = {(e1[0] ? 9'h1ff : 9'h000), op[6:0], e1[15:1], 1'b0};
@@ -1627,8 +1615,6 @@ end
 p_loop <= 2'd0;
 fin_req = 1'b1;
 nstate = ST_INT;
-				
-				
 			end
 		end
 
@@ -1639,8 +1625,6 @@ if (p_b_en) write_raw(p_b_g, p_b_i, p_b_v);
 if (p_exc) req_exc(TRAP_RANGE);
 fin_req = 1'b1;
 nstate = ST_INT;
-			
-			
 		end
 
 		//----------------------------------------------------------
@@ -1672,11 +1656,8 @@ nstate = ST_INT;
 write_dst(dv_dg, dv_di + 6'd1, res);
 fin_req = 1'b1;
 nstate = ST_INT;
-			
-			
 		end
 
-		// register the products, then use them
 		ST_MUL: begin
 			mp <= $signed({msg & mA[31], mA}) * $signed({msg & mB[31], mB});
 			p_ll <= $signed(mB[15:0]) * $signed(mA[15:0]);

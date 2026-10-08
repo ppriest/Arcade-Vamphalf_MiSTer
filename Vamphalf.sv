@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// Vamphalf (MAME misc/vamphalf.cpp): Mission Craft and Wivern Wings.
+// Vamphalf (MAME misc/vamphalf.cpp): the driver's Hyperstone E1 boards; sets in scripts/build_mra.py SETS.
 //
 // Framework glue: hps_io, PLL, resets, the ROM download, inputs, the EEPROM's .nvm, and the video
-// output chain. The board is rtl/vh_main.sv (CPU, memory, I/O) and rtl/video/vh_video.sv.
+// output chain. The board is rtl/vh_main.sv (CPU, memory, I/O), rtl/video/vh_video.sv and the sound
+// boards (rtl/qs1000/vh_qs1000.sv, rtl/sound/vh_ymoki.sv).
 //
 // Clocks (rtl/pll): clk_sys 56 MHz for everything, SDRAM included; SDRAM_CLK the same lagging by T - 3 ns (rtl/pll/pll_0002.v).
 
@@ -30,7 +31,6 @@ assign LED_POWER = 0;
 assign LED_USER  = ioctl_download;
 assign BUTTONS   = 0;
 
-// no sound yet (Phase 3)
 assign AUDIO_S   = 1;
 assign AUDIO_MIX = status[48:47];
 assign AUDIO_L   = snd_qs ? qs_l : yo_l;
@@ -43,14 +43,14 @@ assign AUDIO_R   = snd_qs ? qs_r : yo_r;
 
 wire [1:0] ar = status[122:121];
 
-// Rotation: Auto follows the set (the .mra's mod byte: Mission Craft ROT90, Wivern Wings ROT270, most others ROT0).
+// Rotation: Auto follows the set's MAME rotation from the mod byte (Mission Craft ROT90, Wivern Wings
+// ROT270, the others ROT0).
 wire       board;
-wire [1:0] game_rot;                 // 0 ROT0, 1 ROT90, 2 ROT270
+wire [1:0] game_rot;
 wire [1:0] rot_sel    = status[64:63];
 wire       rotate_en  = (rot_sel == 2'd0) ? game_rot != 2'd0 : rot_sel != 2'd1;
 wire       rotate_ccw = (rot_sel == 2'd0) ? game_rot == 2'd2 : rot_sel == 2'd3;
 
-// 4:3 screen, 3:4 when rotated
 wire [11:0] base_arx = rotate_en ? 12'd3 : 12'd4;
 wire [11:0] base_ary = rotate_en ? 12'd4 : 12'd3;
 
@@ -204,7 +204,7 @@ end
 
 ///////////////////   .mra: mod byte   ///////////////////////////
 
-// <rom index="1">, two bytes (scripts/build_mra.py FAMILIES):
+// <rom index="1">, two bytes (scripts/build_mra.py SETS, BUS32):
 //   byte 0: [0] the E1-32 board, [2:1] rotation (0 ROT0, 1 ROT90, 2 ROT270), [7:3] the I/O map (vh_main family)
 //   byte 1: [0] 16-bit sprite codes (gfx above 8 MB; 15-bit otherwise)
 reg [7:0] mod_byte = 8'd0, mod_byte1 = 8'd0;
@@ -238,7 +238,7 @@ wire        dbg_coin, dbg_start, dbg_b1;         // the probe's inputs (Vamphalf
 wire [31:0] joy0 = joystick_0 | {key0[31:13], 1'b0, key0[11:5], key0[4] | dbg_b1, key0[3:0]};
 wire [31:0] joy1 = joystick_1 | key1;
 wire [15:0] p1p2 = ~{vh_port(joy1), vh_port(joy0)};
-// SYSTEM: COIN1, SERVICE1, COIN2, SERVICE, service mode switch, unused, START1, START2
+// SYSTEM, bit 0 first: COIN1, SERVICE1, COIN2, SERVICE, service mode switch, unused, START1, START2
 wire [7:0]  sys_in = ~{joy1[8], joy0[8] | dbg_start, 1'b0, status[8] | key_f2, key_f2,
                        joy1[9], joy0[11] | joy1[11] | svc_coin[0], joy0[9] | dbg_coin};
 
@@ -340,8 +340,7 @@ sdram_download u_dl (
 );
 
 // the fast load's copy: DDR3 through ddram_phy (muxed with the rotator below) into the download port's
-// granule mode. The copy covers the image: the graphics region ends 8 MB or 16 MB above SD_GFX
-// (mod byte 1 bit 0, scripts/build_mra.py).
+// granule mode. Its length: the image ends 8 MB or 16 MB above SD_GFX (mod byte 1 bit 0).
 wire        ldr_ddr_req, ldr_ddr_busy, ldr_ddr_valid;
 wire [27:0] ldr_ddr_addr, ldr_tap_addr;
 wire [63:0] ldr_ddr_rdata;
@@ -560,7 +559,7 @@ issp_probe #(.INSTANCE_ID("S"), .PROBE_W(92), .SOURCE_W(8)) u_issp_s (
 	.clk(clk_sys), .probe({spd_frames, spd_lost, spd_max, spd_lastb, spd_lastf}), .source(spd_src)
 );
 `else
-assign dbg_tr_start = 24'hffffff;      // never armed; the outputs are unused, so it is removed
+assign dbg_tr_start = 24'hffffff;      // the trace's outputs are unconnected here, so it is removed
 assign dbg_tr_idx   = 12'd0;
 assign dbg_rd_adj = 2'd0;
 assign dbg_hold   = 1'b0;

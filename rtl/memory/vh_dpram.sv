@@ -1,17 +1,16 @@
 // One clock, two ports: A reads and writes (byte enables, clock enable), B reads every clock.
 //
-// Synthesis instantiates altsyncram in BIDIR_DUAL_PORT. Inferred from behavioural code (port A in one
-// always block, port B in another) Quartus 17 built the palette and sprite RAMs as two simple-dual-port
-// copies each, one per reader: 242 M10K for 128 KB (LESSONS_LEARNED, "Driving a dual-port RAM's
-// second read port can silently REPLICATE the array"). The behavioural model is what Verilator runs
-// (Quartus synthesis defines ALTERA_RESERVED_QIS).
+// Synthesis instantiates altsyncram in BIDIR_DUAL_PORT: inferred from the behavioural model, Quartus 17
+// builds one simple-dual-port copy per reader (242 M10K for the 128 KB of palette and sprite RAM)
+// (LESSONS_LEARNED, "Driving a dual-port RAM's second read port can silently REPLICATE the array").
+// The benches run the behavioural model (Quartus synthesis defines ALTERA_RESERVED_QIS).
 //
 // Port A's read during its own write is unspecified (altsyncram returns the new data, the model the
 // old); no user reads A in a write cycle.
 module vh_dpram #(
 	parameter AW  = 14,
 	parameter DW  = 32,
-	parameter NBE = 4                  // DW / 8, or 1 for a byte-wide RAM
+	parameter NBE = 4                  // DW / 8
 ) (
 	input               clk,
 	input               a_ce,          // port A address, data and write register enable
