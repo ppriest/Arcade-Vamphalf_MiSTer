@@ -29,17 +29,14 @@ that do not complete in time.**
 
 ## History
 
-* **20261008** (`releases/Arcade-Vamphalf_20261008.rbf`): the release revision at commit `eaa95df`, fitter
-  seed 7. Worst slack: setup +0.284 ns (HDMI PLL; clk_sys +0.764 ns), hold +0.208 ns, recovery +4.339 ns,
-  removal +0.577 ns. CPU throughput work (fewer slow frames) and fast ROM loading. Resources under
-  Resource usage.
-
-Development builds that ran on the board:
-
-* `3b95386` (Vamphalf_stp, seed 7): 27 sets deployed; the QS1000's mix balance set from a recording of a
-  Mission Craft PCB.
-* `4e12daf` onwards: QS1000 sound on Mission Craft and Wivern Wings.
-* `eb2dc6a` (Vamphalf_stp): Mission Craft runs on the board.
+* **20261008** (`releases/Arcade-Vamphalf_20261008.rbf`)
+  * Initial release
+  * Fixes relative sound volume of the QS1000 versus YM2151 / OKI M6295 compared to MAME based on PCB recording
+  * A few games suffer a little slowdown/dropped frames, will continue to work on it
+  * Fast rom loading
+  * CRT Adjust
+  * HDMI Flipscreen/rotation
+  * MAME Arcade keyboard mapping
 
 ## Games
 
@@ -50,10 +47,6 @@ OKI M6295 (the other 22 sets, in six I/O map families). All three have the same 
 largest image is 24 MB; work RAM sits above it).
 
 ### Supported
-
-Sets with an `.mra` in `releases/`, all running on the board. "MAME trace" is how many instructions of MAME's trace from reset the
-whole board (`sim/sys_tb`) retires identically; a blank means the set shares the traced set's board and
-was not traced itself.
 
 | Name | Year | Manufacturer | Set | Board | MAME trace | Notes |
 |-|-|-|-|-|-|-|
@@ -159,26 +152,6 @@ Known issues:
 `docs/MAME_KLUDGES.md` lists what is taken from MAME as behaviour and what is known not to be
 right. `docs/HACKS.md` lists this core's own approximations. `docs/ROADMAP.md` is the plan and its
 progress.
-
-### Features
-
-* DIP switches from the `.mra`: n/a, the boards have none
-* Inputs: done; pad and MAME's default keys
-* CRT Adjust (H-Position, V-Shift, H-Size, V-Size): H-Size, H-Position and V-Shift; no V-Size
-* HDMI scaling (integer scale, crop, crop offset): integer scale modes; no crop
-* HDMI rotation (orientation): done; Auto follows each set's orientation
-* Flip screen, HDMI and analog, from the OSD: through the video engine; not yet checked on the board
-* HDMI-only options hidden under direct video: not yet
-* Peripheral menus shown only for games that use them: n/a
-* Rotary joysticks, light guns: n/a
-* Audio mix (Mono, None, 25%, 50%): done (Stereo Mix)
-* Hiscore saving (`hiscore.v`, with autosave): not yet
-* NVRAM / EEPROM saved to the `.nvm` file: in place, not yet checked on the board
-* Fast ROM loading via DDR: done
-* Pause (with CPU suspended): done
-* Sound: done (QS1000; YM2151 + M6295)
-* Savestates (optional): not yet; state inventory in `docs/STATE.md`
-* Cheats (optional): not yet
 
 ### Todo
 
