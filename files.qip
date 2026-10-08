@@ -58,6 +58,8 @@ set_global_assignment -name SYSTEMVERILOG_FILE rtl/sound/oki_rom_bridge.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/sound/sample_cache.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/sound/vh_ymoki.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/memory/sdram_download.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/memory/ddram_phy.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/memory/vh_rom_loader.sv
 set_global_assignment -name QIP_FILE rtl/pll.qip
 set_global_assignment -name SDC_FILE Vamphalf.sdc
 set_global_assignment -name SYSTEMVERILOG_FILE Vamphalf.sv

@@ -85,11 +85,15 @@ module vh_main (
 	input      [26:0] dl_addr,
 	input      [15:0] dl_data,
 	input             dl_we16,
+	input             dl_g,
+	input      [63:0] dl_gdata,
 	output            dl_busy,
 	output     [26:1] mem_addr,
 	output            mem_wrl,
 	output            mem_wrh,
 	output     [15:0] mem_din,
+	output     [47:0] mem_dinx,
+	output      [5:0] mem_wrx,
 	output            mem_dbl,
 	output            mem_req,
 	input             mem_ack,
@@ -125,7 +129,10 @@ module vh_main (
 `include "vh_sdram_map.svh"
 
 // ---------------------------------------------------------------- CPU
-wire        bus_req, bus_wr, bus_io, bus_ifetch, bus_ack;
+wire        bus_req, bus_wr, bus_io, bus_ack;
+wire        if_req, if_ack;
+wire [31:3] if_addr;
+wire [63:0] if_data;
 wire [31:0] bus_addr, bus_wdata, bus_rdata;
 wire [3:0]  bus_be;
 wire [6:0]  irq_ack;
@@ -133,8 +140,9 @@ reg         int2;
 
 e1_cpu u_cpu (
 	.clk(clk), .reset(rst), .cen(1'b1),
-	.bus_req(bus_req), .bus_wr(bus_wr), .bus_io(bus_io), .bus_ifetch(bus_ifetch), .bus_addr(bus_addr),
+	.bus_req(bus_req), .bus_wr(bus_wr), .bus_io(bus_io), .bus_addr(bus_addr),
 	.bus_be(bus_be), .bus_wdata(bus_wdata), .bus_ack(bus_ack), .bus_rdata(bus_rdata),
+	.if_req(if_req), .if_addr(if_addr), .if_ack(if_ack), .if_data(if_data),
 	.irq_in({5'd0, int2, 1'b0}), .irq_ack(irq_ack), .pause(pause), .tick(cpu_tick),
 	.retire(retire), .retire_pc(retire_pc), .retire_npc(retire_npc), .retire_sr(retire_sr),
 	.dbg_rf_we(dbg_rf_we), .dbg_rf_wa(dbg_rf_wa), .dbg_rf_wd(dbg_rf_wd)
@@ -150,7 +158,7 @@ vh_trace u_trace (
 	.clk(clk), .rst(rst), .start(trace_start),
 	.retire(retire), .npc(retire_npc), .sr(retire_sr),
 	.rf_we(dbg_rf_we), .rf_wa(dbg_rf_wa), .rf_wd(dbg_rf_wd),
-	.bus_req(bus_req), .bus_ack(bus_ack), .bus_wr(bus_wr), .bus_io(bus_io), .bus_ifetch(bus_ifetch),
+	.bus_req(bus_req), .bus_ack(bus_ack), .bus_wr(bus_wr), .bus_io(bus_io),
 	.bus_be(bus_be), .bus_addr(bus_addr), .bus_wdata(bus_wdata), .bus_rdata(bus_rdata),
 	.rec_valid(trace_valid), .rec(trace_rec), .rd_idx(trace_idx), .rd_q(trace_q), .count(trace_count)
 );
@@ -163,13 +171,14 @@ reg  [31:0] io_rdata;
 
 vh_cpumem #(.ROM_BASE(SD_MAINCPU), .WRAM_BASE(SD_WRAM), .SPRHI_BASE(SD_SPRHI)) u_mem (
 	.clk(clk), .prst(prst), .rst(rst),
-	.bus_req(bus_req), .bus_wr(bus_wr), .bus_io(bus_io), .bus_ifetch(bus_ifetch), .bus_addr(bus_addr),
+	.bus_req(bus_req), .bus_wr(bus_wr), .bus_io(bus_io), .bus_addr(bus_addr),
 	.bus_be(bus_be), .bus_wdata(bus_wdata), .bus_ack(bus_ack), .bus_rdata(bus_rdata),
+	.if_req(if_req), .if_addr(if_addr), .if_ack(if_ack), .if_data(if_data),
 	.spr_we(spr_we), .spr_be(spr_be), .spr_addr(spr_addr), .spr_wd(spr_wd), .spr_rd(spr_rd),
 	.pal_we(pal_we), .pal_be(pal_be), .pal_addr(pal_addr), .pal_wd(pal_wd), .pal_rd(pal_rd),
 	.io_rd(io_rd), .io_wr(io_wr), .io_port(io_port), .io_wd(io_wd), .io_rdata(io_rdata),
-	.dl_req(dl_req), .dl_addr(dl_addr), .dl_data(dl_data), .dl_we16(dl_we16), .dl_busy(dl_busy),
-	.mem_addr(mem_addr), .mem_wrl(mem_wrl), .mem_wrh(mem_wrh), .mem_din(mem_din), .mem_dbl(mem_dbl),
+	.dl_req(dl_req), .dl_addr(dl_addr), .dl_data(dl_data), .dl_we16(dl_we16), .dl_g(dl_g), .dl_gdata(dl_gdata), .dl_busy(dl_busy),
+	.mem_addr(mem_addr), .mem_wrl(mem_wrl), .mem_wrh(mem_wrh), .mem_din(mem_din), .mem_dinx(mem_dinx), .mem_wrx(mem_wrx), .mem_dbl(mem_dbl),
 	.mem_req(mem_req), .mem_ack(mem_ack), .mem_dout(mem_dout), .mem_doutb(mem_doutb),
 	.st_imiss(st_imiss), .st_dmiss(st_dmiss), .dbg_fill_a(dbg_fill_a), .dbg_fill_d(dbg_fill_d),
 	.dbg_miss(dbg_miss), .dbg_miss_ic(dbg_miss_ic), .dbg_miss_line(dbg_miss_line),

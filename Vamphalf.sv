@@ -159,16 +159,48 @@ assign SDRAM_CLK = clk_sdram_shifted;
 
 wire reset = RESET | status[0] | buttons[1] | ~pll_locked;
 
-// The game is held until a ROM has been downloaded; the memory path is not (LESSONS_LEARNED,
-// "Never hold the memory path in the core reset").
-reg  rom_loaded = 1'b0, dl_seen = 1'b0;
+// The game is held until a ROM is in SDRAM (rom_loaded, by either path) and while the fast load copies
+// it (ldr_active); the memory path is not (LESSONS_LEARNED, "Never hold the memory path in the core
+// reset").
+wire ldr_active;
+reg  rom_loaded = 1'b0, dl_seen = 1'b0, ldr_active_d = 1'b0;
 always @(posedge clk_sys) begin
+	ldr_active_d <= ldr_active;
 	if (ioctl_wr && ioctl_index == 16'd0) dl_seen <= 1'b1;
 	if (dl_seen && !ioctl_download)       rom_loaded <= 1'b1;
+	if (ldr_active_d && !ldr_active)      rom_loaded <= 1'b1;   // the copy finished
 end
 wire [1:0] dbg_rd_adj;              // probe source (Vamphalf_stp); 0 in the release build
 wire       dbg_hold;
-wire core_reset = reset | ioctl_download | ~rom_loaded | dbg_hold;
+wire core_reset = reset | ioctl_download | ~rom_loaded | ldr_active | dbg_hold;
+
+// Fast ROM load (rtl/memory/vh_rom_loader.sv; trigger after Arcade-Seta_MiSTer's Seta.sv, with
+// Arcade-JalecoMS32_MiSTer's dl0_seen). With address="0x30000000" on the .mra's index-0 ROM the HPS
+// puts the image in DDR3 and the download has no ioctl_wr; the copy starts on the next reset release,
+// once per index-0 download. A download that streams bytes is a byte-path load and is not copied over.
+reg  dl0_d = 1'b0, dl0_seen = 1'b0, dl_seen_wr = 1'b0, ldr_pending = 1'b0, ldr_start = 1'b0, ldr_done = 1'b0;
+reg  nvm_seen = 1'b0;
+wire dl0 = ioctl_download && ioctl_index == 16'd0;
+always @(posedge clk_sys) begin
+	ldr_start <= 1'b0;
+	dl0_d <= dl0;
+	if (dl0 && !dl0_d) begin
+		dl0_seen   <= 1'b1;
+		dl_seen_wr <= 1'b0;
+		ldr_done   <= 1'b0;
+		nvm_seen   <= 1'b0;
+	end else if (dl0 && ioctl_wr) dl_seen_wr <= 1'b1;
+	// a .nvm (index 2) loaded before the copy keeps the EEPROM: the copy does not replay the default
+	if (ioctl_download && ioctl_wr && ioctl_index == 16'd2) nvm_seen <= 1'b1;
+	if (reset) ldr_pending <= 1'b1;
+	else if (ldr_pending && !ioctl_download && !ldr_active) begin
+		ldr_pending <= 1'b0;
+		if (dl0_seen && !dl_seen_wr && !ldr_done) begin
+			ldr_start <= 1'b1;
+			ldr_done  <= 1'b1;
+		end
+	end
+end
 
 ///////////////////   .mra: mod byte   ///////////////////////////
 
@@ -225,22 +257,31 @@ wire pause_cpu = pause_toggle | status[82];
 // Blank (a new part) from configuration until the first download; the set's default image arrives in
 // the index-0 stream at SD_EEPROM (Mission Craft), the saved .nvm as index 2 after it. Words are
 // big-endian: the even byte is the high one.
+// The load byte stream: the HPS's, or the fast load's replay of the regions caught here (index 0).
+wire        ldr_tb_wr;
+wire [26:0] ldr_tb_addr;
+wire  [7:0] ldr_tb_dout;
+wire        lb_wr    = ldr_active ? ldr_tb_wr : ioctl_download && ioctl_wr;
+wire [15:0] lb_index = ldr_active ? 16'd0 : ioctl_index;
+wire [26:0] lb_addr  = ldr_active ? ldr_tb_addr : ioctl_addr;
+wire  [7:0] lb_dout  = ldr_active ? ldr_tb_dout : ioctl_dout;
+
 reg        ee_blank = 1'b1;
 reg  [7:0] ee_hi;
 reg        ee_we = 1'b0;
 reg  [5:0] ee_wa;
 reg [15:0] ee_wd;
-wire       in_ee_rom = ioctl_index == 16'd0 && ioctl_addr[26:7] == SD_EEPROM[26:7];
-wire       in_ee_nvm = ioctl_index == 16'd2 && ioctl_addr[26:7] == 20'd0;
+wire       in_ee_rom = lb_index == 16'd0 && lb_addr[26:7] == SD_EEPROM[26:7];
+wire       in_ee_nvm = lb_index == 16'd2 && lb_addr[26:7] == 20'd0;
 always @(posedge clk_sys) begin
 	ee_we <= 1'b0;
 	if (ioctl_download) ee_blank <= 1'b0;
-	if (ioctl_download && ioctl_wr && (in_ee_rom || in_ee_nvm)) begin
-		if (!ioctl_addr[0]) ee_hi <= ioctl_dout;
+	if (lb_wr && (in_ee_rom || in_ee_nvm)) begin
+		if (!lb_addr[0]) ee_hi <= lb_dout;
 		else begin
 			ee_we <= 1'b1;
-			ee_wa <= ioctl_addr[6:1];
-			ee_wd <= {ee_hi, ioctl_dout};
+			ee_wa <= lb_addr[6:1];
+			ee_wd <= {ee_hi, lb_dout};
 		end
 	end
 end
@@ -285,17 +326,62 @@ wire [1:0]  oki_bank;
 wire        dl_req, dl_we16, dl_busy;
 wire [26:0] dl_addr;
 wire [15:0] dl_data;
+wire        bdl_req;
+wire [26:0] bdl_addr;
+wire        ldl_req;
+wire [26:0] ldl_addr;
+wire [63:0] ldl_gdata;
 
 sdram_download u_dl (
 	.clk(clk_sys), .reset(~pll_locked),
 	.ioctl_download(ioctl_download), .ioctl_index(ioctl_index), .ioctl_wr(ioctl_wr),
 	.ioctl_addr(ioctl_addr), .ioctl_dout(ioctl_dout), .ioctl_wait(ioctl_wait),
-	.dl_req(dl_req), .dl_addr(dl_addr), .dl_data(dl_data), .dl_we16(dl_we16), .dl_busy(dl_busy)
+	.dl_req(bdl_req), .dl_addr(bdl_addr), .dl_data(dl_data), .dl_we16(dl_we16), .dl_busy(ldr_active ? 1'b0 : dl_busy)
 );
+
+// the fast load's copy: DDR3 through ddram_phy (muxed with the rotator below) into the download port's
+// granule mode. The copy covers the image: the graphics region ends 8 MB or 16 MB above SD_GFX
+// (mod byte 1 bit 0, scripts/build_mra.py).
+wire        ldr_ddr_req, ldr_ddr_busy, ldr_ddr_valid;
+wire [27:0] ldr_ddr_addr, ldr_tap_addr;
+wire [63:0] ldr_ddr_rdata;
+wire [7:0]  ldr_DDRAM_BURSTCNT, ldr_DDRAM_BE;
+wire [28:0] ldr_DDRAM_ADDR;
+wire        ldr_DDRAM_RD, ldr_DDRAM_WE;
+wire [63:0] ldr_DDRAM_DIN;
+
+ddram_phy u_ldr_ddram (
+	.clk(clk_sys), .reset(~pll_locked),
+	.DDRAM_BUSY(DDRAM_BUSY), .DDRAM_BURSTCNT(ldr_DDRAM_BURSTCNT),
+	.DDRAM_ADDR(ldr_DDRAM_ADDR), .DDRAM_DOUT(DDRAM_DOUT),
+	.DDRAM_DOUT_READY(DDRAM_DOUT_READY), .DDRAM_RD(ldr_DDRAM_RD),
+	.DDRAM_DIN(ldr_DDRAM_DIN), .DDRAM_BE(ldr_DDRAM_BE), .DDRAM_WE(ldr_DDRAM_WE),
+	.req(ldr_ddr_req), .we(1'b0), .addr(ldr_ddr_addr), .wdata(8'd0),
+	.busy(ldr_ddr_busy), .valid(ldr_ddr_valid), .rdata(ldr_ddr_rdata)
+);
+
+// the granules replayed byte by byte: the QS1000's u7 and, unless a .nvm came first, the EEPROM default
+wire ldr_tap = ldr_tap_addr[26:17] == SD_SNDCPU[26:17] || (ldr_tap_addr[26:7] == SD_EEPROM[26:7] && !nvm_seen);
+
+vh_rom_loader u_ldr (
+	.clk(clk_sys), .reset(~pll_locked),
+	.length({1'b0, SD_GFX} + (mod_byte1[0] ? 28'h1000000 : 28'h0800000)),
+	.start(ldr_start), .busy(ldr_active),
+	.ddr_req(ldr_ddr_req), .ddr_addr(ldr_ddr_addr), .ddr_busy(ldr_ddr_busy),
+	.ddr_valid(ldr_ddr_valid), .ddr_rdata(ldr_ddr_rdata),
+	.dl_req(ldl_req), .dl_addr(ldl_addr), .dl_gdata(ldl_gdata), .dl_busy(ldr_active ? dl_busy : 1'b0),
+	.tap_addr(ldr_tap_addr), .tap_want(ldr_tap),
+	.tb_wr(ldr_tb_wr), .tb_addr(ldr_tb_addr), .tb_dout(ldr_tb_dout)
+);
+
+assign dl_req  = ldr_active ? ldl_req  : bdl_req;
+assign dl_addr = ldr_active ? ldl_addr : bdl_addr;
 
 wire [26:1] m2_addr;
 wire        m2_wrl, m2_wrh, m2_dbl, m2_req, m2_ack;
 wire [15:0] m2_din;
+wire [47:0] m2_dinx;
+wire  [5:0] m2_wrx;
 wire [63:0] m_dout, m_doutb;
 
 wire        dbg_retire;
@@ -322,8 +408,8 @@ vh_main u_main (
 	.pal_we(pal_we), .pal_be(pal_be), .pal_addr(pal_addr), .pal_wd(pal_wd), .pal_rd(pal_rd),
 	.ee_blank(ee_blank), .ee_load_we(ee_we), .ee_load_addr(ee_wa), .ee_load_data(ee_wd),
 	.ee_rd_addr(ioctl_addr[6:1]), .ee_rd_data(ee_rd_data), .ee_written(ee_written),
-	.dl_req(dl_req), .dl_addr(dl_addr), .dl_data(dl_data), .dl_we16(dl_we16), .dl_busy(dl_busy),
-	.mem_addr(m2_addr), .mem_wrl(m2_wrl), .mem_wrh(m2_wrh), .mem_din(m2_din), .mem_dbl(m2_dbl),
+	.dl_req(dl_req), .dl_addr(dl_addr), .dl_data(dl_data), .dl_we16(dl_we16), .dl_g(ldr_active), .dl_gdata(ldl_gdata), .dl_busy(dl_busy),
+	.mem_addr(m2_addr), .mem_wrl(m2_wrl), .mem_wrh(m2_wrh), .mem_din(m2_din), .mem_dinx(m2_dinx), .mem_wrx(m2_wrx), .mem_dbl(m2_dbl),
 	.mem_req(m2_req), .mem_ack(m2_ack), .mem_dout(m_dout), .mem_doutb(m_doutb),
 	.retire(dbg_retire), .retire_pc(dbg_pc), .retire_npc(dbg_npc), .retire_sr(dbg_sr), .st_imiss(dbg_imiss), .st_dmiss(dbg_dmiss),
 	.dbg_fill_a(dbg_fill_a), .dbg_fill_d(dbg_fill_d),
@@ -342,14 +428,14 @@ always @(posedge clk_sys) begin
 	if (dbg_retire) dbg_ninstr <= dbg_ninstr + 1'd1;
 	if (pal_we) dbg_palw <= dbg_palw + 1'd1;
 	if (vblank_start) dbg_frames <= dbg_frames + 1'd1;
-	if (ioctl_download && ioctl_wr && ioctl_index == 16'd0) dbg_dlbytes <= dbg_dlbytes + 1'd1;
+	if (lb_wr && lb_index == 16'd0) dbg_dlbytes <= dbg_dlbytes + 1'd1;
 end
 // Instance F: [31:0] instructions retired, [63:32] last retired PC, [79:64] D-misses, [95:80] I-misses,
 // [111:96] palette writes, [119:112] frames, [120] rom_loaded, [121] core_reset, [122] board,
-// [123] ioctl_download, [124] dl_seen, [127] pll_locked
+// [123] ioctl_download, [124] dl_seen, [125] ldr_active, [126] ldr_done, [127] pll_locked
 issp_probe #(.INSTANCE_ID("F"), .PROBE_W(128), .SOURCE_W(8)) u_issp_f (
 	.clk(clk_sys),
-	.probe({pll_locked, 2'b00, dl_seen, ioctl_download, board, core_reset, rom_loaded, dbg_frames, dbg_palw,
+	.probe({pll_locked, ldr_done, ldr_active, dl_seen, ioctl_download, board, core_reset, rom_loaded, dbg_frames, dbg_palw,
 	        dbg_imiss[15:0], dbg_dmiss[15:0], dbg_pc, dbg_ninstr}),
 	.source()
 );
@@ -491,7 +577,7 @@ wire        core_hs, core_vs, core_hb, core_vb, core_ce;
 
 // The OSD's Flip Screen and the game's flip are one path, through the engine, for HDMI and analog.
 vh_video u_video (
-	.clk(clk_sys), .rst(~pll_locked | ioctl_download), .code_mask(mod_byte1[0] ? 16'hffff : 16'h7fff), .palshift(f_suplup),
+	.clk(clk_sys), .rst(~pll_locked | ioctl_download | ldr_active), .code_mask(mod_byte1[0] ? 16'hffff : 16'h7fff), .palshift(f_suplup),
 	.spr_we(spr_we), .spr_be(spr_be), .spr_addr(spr_addr), .spr_wd(spr_wd), .spr_rd(spr_rd),
 	.pal_we(pal_we), .pal_be(pal_be), .pal_addr(pal_addr), .pal_wd(pal_wd), .pal_rd(pal_rd),
 	.flip(game_flip ^ status[65]),
@@ -512,7 +598,7 @@ vh_gfxport #(.GFX_BASE(SD_GFX)) u_gfx (
 
 // The sound boards, one per set (snd_qs), the other held in reset; both read SDRAM port 1 at SD_SAMPLES.
 // The QS1000's u7 is caught on its way to SDRAM.
-wire        snd_dl = ioctl_download && ioctl_wr && ioctl_index == 16'd0 && ioctl_addr[26:17] == SD_SNDCPU[26:17];
+wire        snd_dl = lb_wr && lb_index == 16'd0 && lb_addr[26:17] == SD_SNDCPU[26:17];
 wire [26:1] m1_addr, qs_addr, yo_addr;
 wire        m1_req, m1_ack, qs_req, yo_req;
 wire [63:0] m1_dout, m1_doutb;
@@ -522,7 +608,7 @@ assign m1_req  = snd_qs ? qs_req : yo_req;
 
 vh_qs1000 u_snd (
 	.clk(clk_sys), .rst(core_reset | ~snd_qs),
-	.dl_we(snd_dl), .dl_addr(ioctl_addr[16:0]), .dl_data(ioctl_dout),
+	.dl_we(snd_dl), .dl_addr(lb_addr[16:0]), .dl_data(lb_dout),
 	.latch_wr(snd_latch_wr), .latch_d(snd_latch), .bal_pcb(1'b1),     // the PCB recording's balance (MAME_KLUDGES.md, Sound)
 	.sd_addr(qs_addr), .sd_req(qs_req), .sd_ack(m1_ack), .sd_dout(m1_dout), .sd_doutb(m1_doutb),
 	.out_l(qs_l), .out_r(qs_r),
@@ -530,7 +616,7 @@ vh_qs1000 u_snd (
 );
 
 vh_ymoki u_ymoki (
-	.clk(clk_sys), .rst(core_reset | snd_qs), .xtal14(f_suplup), .dl(ioctl_download),
+	.clk(clk_sys), .rst(core_reset | snd_qs), .xtal14(f_suplup), .dl(ioctl_download | ldr_active),
 	.ym_wr(ym_wr), .ym_a0(ym_a0), .ym_din(snd_wd), .ym_dout(ym_dout),
 	.oki_wr(oki_wr), .oki_din(snd_wd), .oki_dout(oki_dout), .bank(oki_bank), .banked(family == 5'd4),
 	.sd_addr(yo_addr), .sd_req(yo_req), .sd_ack(m1_ack), .sd_dout(m1_dout),
@@ -546,7 +632,7 @@ sdram #(.RFS_INTERVAL(10'd218)) u_sdram (
 	.dbl0(1'b1), .dout0b(m_doutb),
 	.addr1(m1_addr), .wrl1(1'b0), .wrh1(1'b0), .din1(16'd0), .dout1(m1_dout), .req1(m1_req), .ack1(m1_ack),
 	.dbl1(snd_qs), .dout1b(m1_doutb),
-	.addr2(m2_addr), .wrl2(m2_wrl), .wrh2(m2_wrh), .din2(m2_din), .dout2(), .req2(m2_req), .ack2(m2_ack),
+	.addr2(m2_addr), .wrl2(m2_wrl), .wrh2(m2_wrh), .din2(m2_din), .din2x(m2_dinx), .wrx2(m2_wrx), .dout2(), .req2(m2_req), .ack2(m2_ack),
 	.dbl2(m2_dbl), .dout2b()
 );
 
@@ -611,6 +697,19 @@ video_freak video_freak
 
 // HDMI rotation: screen_rotate_two writes the output into DDR3 for the HPS framebuffer; the analog
 // output keeps the native raster. Its flip is not used: Flip Screen goes through the engine.
+// While the fast load copies, the copy has DDR3 and the rotator sees it busy (it has no reset and
+// counts a write as taken whenever BUSY is low: Arcade-Seta_MiSTer, Seta.sv).
+wire        rot_DDRAM_CLK, rot_DDRAM_WE, rot_DDRAM_RD;
+wire [7:0]  rot_DDRAM_BURSTCNT, rot_DDRAM_BE;
+wire [28:0] rot_DDRAM_ADDR;
+wire [63:0] rot_DDRAM_DIN;
+assign DDRAM_CLK      = ldr_active ? clk_sys            : rot_DDRAM_CLK;
+assign DDRAM_BURSTCNT = ldr_active ? ldr_DDRAM_BURSTCNT : rot_DDRAM_BURSTCNT;
+assign DDRAM_ADDR     = ldr_active ? ldr_DDRAM_ADDR     : rot_DDRAM_ADDR;
+assign DDRAM_DIN      = ldr_active ? ldr_DDRAM_DIN      : rot_DDRAM_DIN;
+assign DDRAM_BE       = ldr_active ? ldr_DDRAM_BE       : rot_DDRAM_BE;
+assign DDRAM_WE       = ldr_active ? ldr_DDRAM_WE       : rot_DDRAM_WE;
+assign DDRAM_RD       = ldr_active ? ldr_DDRAM_RD       : rot_DDRAM_RD;
 screen_rotate_two screen_rotate_two
 (
 	.CLK_VIDEO(CLK_VIDEO),
@@ -629,14 +728,14 @@ screen_rotate_two screen_rotate_two
 	.FB_BASE(FB_BASE), .FB_STRIDE(FB_STRIDE),
 	.FB_VBL(FB_VBL), .FB_LL(FB_LL),
 
-	.DDRAM_CLK(DDRAM_CLK),
-	.DDRAM_BUSY(DDRAM_BUSY),
-	.DDRAM_BURSTCNT(DDRAM_BURSTCNT),
-	.DDRAM_ADDR(DDRAM_ADDR),
-	.DDRAM_DIN(DDRAM_DIN),
-	.DDRAM_BE(DDRAM_BE),
-	.DDRAM_WE(DDRAM_WE),
-	.DDRAM_RD(DDRAM_RD)
+	.DDRAM_CLK(rot_DDRAM_CLK),
+	.DDRAM_BUSY(DDRAM_BUSY | ldr_active),
+	.DDRAM_BURSTCNT(rot_DDRAM_BURSTCNT),
+	.DDRAM_ADDR(rot_DDRAM_ADDR),
+	.DDRAM_DIN(rot_DDRAM_DIN),
+	.DDRAM_BE(rot_DDRAM_BE),
+	.DDRAM_WE(rot_DDRAM_WE),
+	.DDRAM_RD(rot_DDRAM_RD)
 );
 
 endmodule

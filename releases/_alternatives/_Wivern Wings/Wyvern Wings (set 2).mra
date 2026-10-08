@@ -15,7 +15,8 @@
          second byte [0] 16-bit sprite codes (gfx above 8 MB) -->
     <rom index="1"><part>0D 01</part></rom>
 
-    <rom index="0" zip="wyvernwga.zip|wivernwg.zip" md5="none">
+    <!-- address: the HPS puts the image in DDR3 and the core copies it to SDRAM (rtl/memory/vh_rom_loader.sv) -->
+    <rom index="0" zip="wyvernwga.zip|wivernwg.zip" md5="none" address="0x30000000">
         <!-- maincpu -->
         <part name="rom1.rom" crc="586881fd"/>
         <part name="rom2.rom" crc="938049ec"/>

@@ -2,11 +2,15 @@
 // byte arrives as ioctl index 1, the image as index 0 one byte per strobe honouring ioctl_wait, with
 // RESET held through the download; then the game runs.
 //
-//   run_verilator.sh top_tb +img=<image.bin> +mod=<byte> [+frames=N] [+pctrace=<instr.trace>]
-//                    [+snap=F,...] [+out=<dir>] [+dlbytes=N]
+//   run_verilator.sh top_tb +img=<image.bin> +mod=<byte> [+mod1=<byte>] [+frames=N] [+pctrace=<instr.trace>]
+//                    [+snap=F,...] [+out=<dir>] [+dlbytes=N] [+ddr=1 [+nvm=<file>]]
 //
 // +dlbytes downloads only the first N bytes of the image (the rest is written into the chip model's
 // array first, to save time); the default is the whole image.
+// +ddr=1 is the fast load: the image goes into the DDR3 model, the index-0 download carries no bytes,
+// SDRAM starts as junk, and the copy runs on the reset release; +nvm downloads a .nvm (index 2) before
+// the release. The copy is checked word for word, and the QS1000's u7 and the EEPROM against what the
+// byte path would have left.
 #include "Vtb_top.h"
 #include "Vtb_top___024root.h"
 #include "verilated.h"
@@ -35,6 +39,9 @@ int main(int argc, char **argv) {
 	Verilated::commandArgs(argc, argv);
 	std::string imgp = arg(argc, argv, "+img=");
 	int mod = (int)strtol(arg(argc, argv, "+mod=", "0").c_str(), nullptr, 0);
+	int mod1 = (int)strtol(arg(argc, argv, "+mod1=", "0").c_str(), nullptr, 0);
+	bool ddr = atoi(arg(argc, argv, "+ddr=", "0").c_str()) != 0;
+	std::string nvmp = arg(argc, argv, "+nvm=");
 	int nframes = atoi(arg(argc, argv, "+frames=", "10").c_str());
 	std::string pctp = arg(argc, argv, "+pctrace=");
 	std::string outd = arg(argc, argv, "+out=", ".");
@@ -72,8 +79,20 @@ int main(int argc, char **argv) {
 	Vtb_top *top = new Vtb_top;
 	auto *r = top->rootp;
 	auto &mem = r->tb_top__DOT__u_chip__DOT__mem;
-	// the part not downloaded: as left by a previous load (here the image itself); the rest is random
-	for (size_t i = dln; i + 1 < img.size(); i += 2) mem[i >> 1] = (uint16_t)(img[i] | (img[i + 1] << 8));
+	if (ddr) {
+		// the image in DDR3, little-endian granules; SDRAM as junk
+		auto &dm = r->tb_top__DOT__ddr_mem;
+		for (size_t g = 0; g * 8 < img.size(); g++) {
+			uint64_t v = 0;
+			for (int b = 7; b >= 0; b--) v = (v << 8) | (g * 8 + b < img.size() ? img[g * 8 + b] : 0);
+			dm[g] = v;
+		}
+		uint32_t x = 12345;
+		for (size_t i = 0; i < (size_t)1 << 24; i++) { x = x * 1103515245u + 12345u; mem[i] = (uint16_t)(x >> 16); }
+	} else {
+		// the part not downloaded: as left by a previous load (here the image itself); the rest is random
+		for (size_t i = dln; i + 1 < img.size(); i += 2) mem[i >> 1] = (uint16_t)(img[i] | (img[i + 1] << 8));
+	}
 
 	auto tick = [&]() { top->clk = 0; top->eval(); top->clk = 1; top->eval(); };
 	auto &dl = r->tb_top__DOT__u_emu__DOT__hps_io__DOT__dl;
@@ -93,20 +112,62 @@ int main(int argc, char **argv) {
 	};
 	dl = 1; idx = 1; tick(); tick();
 	send(1, 0, (uint8_t)mod);
+	send(1, 1, (uint8_t)mod1);
 	tick(); dl = 0; for (int i = 0; i < 100; i++) tick();
 	dl = 1; idx = 0; tick(); tick();
-	for (size_t a = 0; a < dln; a++) {
-		send(0, a, img[a]);
-		if ((a & 0xfffff) == 0xfffff) { printf("download: %zu MB\n", (a + 1) >> 20); fflush(stdout); }
+	if (!ddr) {
+		for (size_t a = 0; a < dln; a++) {
+			send(0, a, img[a]);
+			if ((a & 0xfffff) == 0xfffff) { printf("download: %zu MB\n", (a + 1) >> 20); fflush(stdout); }
+		}
 	}
 	for (int i = 0; i < 20; i++) tick();
 	dl = 0;
 	for (int i = 0; i < 200; i++) tick();
-	size_t bad = 0;
-	for (size_t i = 0; i + 1 < dln; i += 2)
-		if (mem[i >> 1] != (uint16_t)(img[i] | (img[i + 1] << 8))) bad++;
-	printf("download: %zu bytes, %zu SDRAM words differ from the image\n", dln, bad);
+	std::vector<uint8_t> nvm;
+	if (!nvmp.empty()) {
+		FILE *nf = fopen(nvmp.c_str(), "rb");
+		if (!nf) { fprintf(stderr, "cannot open +nvm\n"); return 2; }
+		int c;
+		while ((c = fgetc(nf)) != EOF) nvm.push_back((uint8_t)c);
+		fclose(nf);
+		dl = 1; idx = 2; tick(); tick();
+		for (size_t a = 0; a < nvm.size(); a++) send(2, a, nvm[a]);
+		for (int i = 0; i < 20; i++) tick();
+		dl = 0;
+		for (int i = 0; i < 200; i++) tick();
+	}
+	if (!ddr) {
+		size_t bad = 0;
+		for (size_t i = 0; i + 1 < dln; i += 2)
+			if (mem[i >> 1] != (uint16_t)(img[i] | (img[i + 1] << 8))) bad++;
+		printf("download: %zu bytes, %zu SDRAM words differ from the image\n", dln, bad);
+	}
 	top->reset = 0;
+	if (ddr) {
+		// the copy: from the reset release to the end of ldr_active
+		uint64_t c0 = 0, c = 0;
+		while (!r->tb_top__DOT__u_emu__DOT__ldr_active && c0 < 100000) { tick(); c0++; }
+		while (r->tb_top__DOT__u_emu__DOT__ldr_active) { tick(); c++; }
+		size_t len = 0x800000 + ((mod1 & 1) ? 0x1000000 : 0x800000), bad = 0, n = 0;
+		for (size_t i = 0; i + 1 < len && i + 1 < img.size(); i += 2, n++)
+			if (mem[i >> 1] != (uint16_t)(img[i] | (img[i + 1] << 8))) bad++;
+		printf("fast load: started %llu clocks after the release, copied in %llu clocks; %zu of %zu SDRAM words differ from the image\n",
+			(unsigned long long)c0, (unsigned long long)c, bad, n);
+	}
+	if (ddr || dln > 0x180080) {
+		auto &u7 = r->tb_top__DOT__u_emu__DOT__u_snd__DOT__u_mcu__DOT__u_u7__DOT__mem;
+		size_t u7bad = 0;
+		for (size_t i = 0; i < 0x20000; i++) if (u7[i] != img[0x100000 + i]) u7bad++;
+		auto &ee = r->tb_top__DOT__u_emu__DOT__u_main__DOT__u_ee__DOT__mem;
+		size_t eebad = 0;
+		for (int w = 0; w < 64; w++) {
+			const uint8_t *s = nvm.size() >= 128 ? &nvm[2 * w] : &img[0x180000 + 2 * w];
+			if (ee[w] != (uint16_t)((s[0] << 8) | s[1])) eebad++;
+		}
+		printf("%s: u7 %zu of 131072 bytes differ; EEPROM %d of 64 words differ from the %s\n",
+			ddr ? "fast load" : "download", u7bad, (int)eebad, nvm.size() >= 128 ? ".nvm" : "image's default");
+	}
 
 	size_t pci = 0;
 	bool pc_ok = true;

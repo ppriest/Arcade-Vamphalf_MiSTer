@@ -15,7 +15,8 @@
          second byte [0] 16-bit sprite codes (gfx above 8 MB) -->
     <rom index="1"><part>38 00</part></rom>
 
-    <rom index="0" zip="luplup.zip|suplup.zip" md5="none">
+    <!-- address: the HPS puts the image in DDR3 and the core copies it to SDRAM (rtl/memory/vh_rom_loader.sv) -->
+    <rom index="0" zip="luplup.zip|suplup.zip" md5="none" address="0x30000000">
         <!-- maincpu -->
         <part name="luplup-rom1.v30" crc="9ea67f87"/>
         <part name="luplup-rom2.v30" crc="99840155"/>

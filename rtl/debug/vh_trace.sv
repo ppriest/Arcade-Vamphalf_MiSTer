@@ -7,7 +7,8 @@
 //
 // Record, 188 bits, MSB first:
 //   [187:176] clock count, low 12 bits (informational: board and bench timing differ)
-//   [175] retire  [174] register-file write  [173] bus transfer  [172] bus write  [171] I/O  [170] fetch
+//   [175] retire  [174] register-file write  [173] bus transfer  [172] bus write  [171] I/O  [170] 0 (instruction
+//   fetches have their own port and are not recorded)
 //   [169:166] byte enables   [165:160] register slot
 //   [159:128] PC after the instruction   [127:96] SR after it   [95:64] register value
 //   [63:32] bus address   [31:0] bus data (written, or read back)
@@ -27,7 +28,6 @@ module vh_trace (
 	input              bus_ack,
 	input              bus_wr,
 	input              bus_io,
-	input              bus_ifetch,
 	input      [3:0]   bus_be,
 	input      [31:0]  bus_addr,
 	input      [31:0]  bus_wdata,
@@ -47,7 +47,7 @@ wire        armed = nret >= {8'd0, start};
 wire        f_bus = bus_req && bus_ack;
 
 assign rec_valid = armed && (retire || rf_we || f_bus);
-assign rec = {cyc, retire, rf_we, f_bus, bus_wr, bus_io, bus_ifetch, bus_be, rf_wa,
+assign rec = {cyc, retire, rf_we, f_bus, bus_wr, bus_io, 1'b0, bus_be, rf_wa,
               npc, sr, rf_wd, bus_addr, bus_wr ? bus_wdata : bus_rdata};
 
 (* ramstyle = "M10K" *) reg [187:0] mem [0:4095];

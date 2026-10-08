@@ -247,7 +247,27 @@ int main(int argc, char **argv) {
 				}
 			}
 	};
+	uint32_t if_prev = 0;
+	int if_wcnt = 0;
+	bool if_on = false;
 	while (instr < max_n && errors == 0) {
+		// instruction port: the 8 bytes at if_addr, wait_states clocks after the address appears (an
+		// unchanged request is answered again at once, as vh_cpumem's lookup is)
+		top->if_ack = 0;
+		if (top->if_req) {
+			uint32_t ia = (uint32_t)top->if_addr << 3;
+			if (!if_on || ia != if_prev) { if_on = true; if_prev = ia; if_wcnt = wait_states; }
+			if (if_wcnt > 0) if_wcnt--;
+			else {
+				uint64_t d = 0;
+				for (uint32_t k = 0; k < 4; k++) {
+					uint32_t h = ia + 2 * k;
+					d = (d << 16) | (fetchmem.count(h) ? (fetchmem[h] & 0xffff) : ((k & 1) ? 0xbeef : 0xdead));
+				}
+				top->if_data = d;
+				top->if_ack = 1;
+			}
+		} else if_on = false;
 		// bus responder
 		top->bus_ack = 0;
 		if (top->bus_req) {
@@ -256,12 +276,7 @@ int main(int argc, char **argv) {
 			else {
 				uint32_t a = top->bus_addr;
 				bool wr = top->bus_wr;
-				if (top->bus_ifetch) {
-					uint32_t base = a & ~3u;
-					uint32_t hi = fetchmem.count(base) ? fetchmem[base] : 0xdead;
-					uint32_t lo = fetchmem.count(base + 2) ? fetchmem[base + 2] : 0xbeef;
-					top->bus_rdata = (hi << 16) | lo;
-				} else {
+				{
 					char space = top->bus_io ? 'I' : 'P';
 					uint32_t be = top->bus_be;
 					if (row_pos >= rows->size()) {

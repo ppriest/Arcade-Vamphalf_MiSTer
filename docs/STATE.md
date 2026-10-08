@@ -9,7 +9,7 @@ every frame.
 | Region | RTL | Width x depth | Bytes | Save? |
 |---|---|---|---|---|
 | E1 local registers | `rtl/e1/e1_regram.sv` (5 MLAB copies, identical) | 32 x 64 | 256 | yes; one copy is enough, plus the pending write `l_we_r/l_wa_r/l_wd_r` |
-| E1 internal RAM | `rtl/vh_cpumem.sv` `u_iram` | 32 x 1024 | 4 KB | yes |
+| E1 internal RAM | `rtl/vh_cpumem.sv` `u_iram` | 64 x 512 | 4 KB | yes |
 | Work RAM | SDRAM `SD_WRAM` | 2 MB | 2 MB | yes (in SDRAM: the dump reads it through port 2) |
 | Sprite RAM above 64 KB | SDRAM `SD_SPRHI` | 192 KB | 192 KB | yes (only the power-on test writes it) |
 | Sprite RAM | `rtl/video/vh_video.sv` `u_spr` | 32 x 16384 | 64 KB | yes |
@@ -37,7 +37,7 @@ every frame.
 | E1 timer | `tr_val`, `tr_cnt`, `tr_period`, `tpr_pending`, `tpr_next`, `timer_pend` | ~90 | yes | `tr_*`, `timer_int_pending` |
 | E1 first-instruction flag | `first_ins` | 1 | no (only after reset) | `m_instruction_length_valid` |
 | E1 instruction in flight: `op`, `e1`, `e2`, `ilen`, `ilen_x`, `op_x`, `ipc`, `fpc`, state | `e1_cpu.sv` | ~120 | restore at an instruction boundary (state ST_INT) | `m_op`, `m_instruction_length` |
-| E1 write queue, fetch caches `fc_*`, `pf_*` | `e1_cpu.sv` | ~400 | no: drain the queue and drop the caches at the restore point | none |
+| E1 write queue, fetched blocks `fc_*`, `pf_*`, instruction port `if_*` | `e1_cpu.sv` | ~560 | no: drain the queue, drop the blocks and the port's request at the restore point | none |
 | Vblank interrupt line | `vh_main.sv` `int2` | 1 | yes | the CPU's input line state |
 | Flip | `vh_main.sv` `flip` | 1 | yes | `m_flipscreen` |
 | Sound latch | `rtl/qs1000/vh_qs1000.sv` `latch`, `pending` | 9 | yes | `soundlatch` (`m_latched_value`, `m_latch_written`) |
@@ -48,7 +48,7 @@ every frame.
 | EEPROM pins and serial state | `vh_main.sv` `ee_di/ee_clk/ee_cs`; `vh_eeprom93c46.v` `st, cs_l, sk_l, locked, cmd, nbits, shreg, addr, op, busy` | ~80 | yes | `eeprom_serial_base_device` state |
 | Mission Craft / Wivern Wings protection | `rtl/vh_prot.sv` `retval, idx, armed, ok16, ok8, okw` | 34 | yes (the seed itself is not stored: the match flags are its state) | `m_seed, m_retval, m_idx, m_is_armed` |
 | SemiCom bit stream | `vh_main.sv` `strm_which, strm_idx` | 5 | yes | `m_semicom_prot_which, m_semicom_prot_idx` |
-| Memory unit FSM, write buffer | `vh_cpumem.sv` `st`, `wb_*`, `m_who` | ~100 | no: restore with the CPU between accesses and the buffer drained | none |
+| Memory unit FSM, write buffer, instruction-port lookup | `vh_cpumem.sv` `st`, `wq_*`, `m_who`, `i_*` | ~400 | no: restore with the CPU between accesses and the buffer drained | none |
 
 ## Chip state
 

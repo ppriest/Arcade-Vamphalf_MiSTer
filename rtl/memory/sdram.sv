@@ -84,6 +84,11 @@ module sdram #(
 	output     [63:0] dout2,
 	input             dbl2,       // [VH] port 2 double read, as dbl0
 	output     [63:0] dout2b,
+	// [VH] port 2 writes up to four words in one burst: word 0 is din2 at addr2 (wrl2/wrh2), words
+	// 1-3 are din2x[15:0], [31:16], [47:32] at the next addresses of the 4-word block (wrapping),
+	// written where wrx2 = {wrh3, wrl3, wrh2, wrl2, wrh1, wrl1} says
+	input      [47:0] din2x,
+	input       [5:0] wrx2,
 	input             req2,
 	output reg        ack2 = 1'b0
 );
@@ -97,9 +102,9 @@ localparam ACCESS_TYPE    = 1'd0; // 0=sequential, 1=interleaved -- sequential: 
                                    // words in ascending address order, matching gfx ROM layout
 localparam CAS_LATENCY    = 3'd2; // 2/3 allowed
 localparam OP_MODE        = 2'd0; // only 0 (standard operation) allowed
-localparam NO_WRITE_BURST = 1'd1; // 0=write burst enabled, 1=only single access write --
-                                   // writes stay single-word; only the HPS byte-at-a-time
-                                   // download path writes, no burst needed there
+localparam NO_WRITE_BURST = 1'd0; // 0=write burst enabled, 1=only single access write --
+                                   // [VH] bursts of 4: a write masks the words it does not
+                                   // write (DQM per beat, below)
 
 localparam MODE = { 3'b000, NO_WRITE_BURST, OP_MODE, CAS_LATENCY, ACCESS_TYPE, BURST_LENGTH};
 
@@ -137,13 +142,15 @@ reg        chip = 1'b0;    // [GX] byte address bit 26: which chip of the 128 MB
 reg        rchip = 1'b0;   // [GX] the chip the next refresh goes to
 reg        ichip = 1'b0;   // [GX] the chip an initialisation command goes to
 reg [15:0] data;
+reg [47:0] datax;   // [VH] words 1-3 of a burst write
+reg  [5:0] wx;      // [VH] their byte enables ({h,l} per word)
 reg        we;
 reg        dbl = 0;   // [GX] this access is a double read
 reg  [1:0] ba = 0;
 reg  [1:0] dqm;
 reg        active = 0;
 reg  [2:0] ram_req = 0;
-wire [2:0] wr = {wrl2|wrh2,wrl1|wrh1,wrl0|wrh0};
+wire [2:0] wr = {wrl2|wrh2|(|wrx2),wrl1|wrh1,wrl0|wrh0};
 
 // rfs_cnt/rfs/rfs2 (access-manager block below) and init_old
 // (initialization block further down) both used to be declared as
@@ -230,6 +237,7 @@ always @(posedge clk) begin
 		else if (ack0 != req0) begin
 			{chip,a25,ba,a} <= addr0;
 			data <= din0;
+			wx <= 6'd0;
 			we <= wr[0];
 			dbl <= dbl0 && !wr[0];
 			dqm <= wr[0] ? ~{wrh0,wrl0} : 2'b00;
@@ -241,6 +249,7 @@ always @(posedge clk) begin
 		else if (ack1 != req1) begin
 			{chip,a25,ba,a} <= addr1;
 			data <= din1;
+			wx <= 6'd0;
 			we <= wr[1];
 			dbl <= dbl1 && !wr[1];   // [VH]
 			dqm <= wr[1] ? ~{wrh1,wrl1} : 2'b00;
@@ -252,6 +261,8 @@ always @(posedge clk) begin
 		else if (ack2 != req2) begin
 			{chip,a25,ba,a} <= addr2;
 			data <= din2;
+			datax <= din2x;
+			wx <= wr[2] ? wrx2 : 6'd0;
 			we <= wr[2];
 			dbl <= dbl2 && !wr[2];   // [VH]
 			dqm <= wr[2] ? ~{wrh2,wrl2} : 2'b00;
@@ -370,6 +381,15 @@ always @(posedge clk) begin
 	// [GX] a double read's second READ, the row still open
 	if(mode == MODE_NORMAL && state == STATE_CONT2 && active && !we && dbl)
 		{SDRAM_nRAS, SDRAM_nCAS, SDRAM_nWE} <= CMD_READ;
+	// [VH] a write's beats 1-3, the clocks after the WRITE: DQM (A[12:11]) masks the words not written,
+	// with no latency for writes, so every write burst writes only what was asked
+	if(mode == MODE_NORMAL && active && we && state > STATE_CONT && state <= STATE_CONT + 4'd3) begin
+		case (state - STATE_CONT)
+			4'd1: begin dq_out <= datax[15:0];  dq_oe <= |wx[1:0]; end
+			4'd2: begin dq_out <= datax[31:16]; dq_oe <= |wx[3:2]; end
+			default: begin dq_out <= datax[47:32]; dq_oe <= |wx[5:4]; end
+		endcase
+	end
 
 	if(mode == MODE_NORMAL) begin
 		casex(state)
@@ -395,6 +415,10 @@ always @(posedge clk) begin
 			// for its second, at the next four columns, which precharges
 			STATE_CONT:  SDRAM_A <= {dqm, !dbl, a25, a[9:1]};
 			STATE_CONT2: if (dbl) SDRAM_A <= {dqm, 1'b1, a25, a[9:3], 2'b00} | 13'd4;
+			// [VH] a write's beats 1-3: their DQM
+			STATE_CONT + 4'd1: if (active && we) SDRAM_A[12:11] <= ~wx[1:0];
+			STATE_CONT + 4'd2: if (active && we) SDRAM_A[12:11] <= ~wx[3:2];
+			STATE_CONT + 4'd3: if (active && we) SDRAM_A[12:11] <= ~wx[5:4];
 		endcase
 	end
 	else if(mode == MODE_LDM && state == STATE_START) SDRAM_A <= MODE;

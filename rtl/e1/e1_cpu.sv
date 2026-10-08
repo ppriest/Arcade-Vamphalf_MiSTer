@@ -3,7 +3,9 @@
 // copyright-holders Pierpaolo Prazzoli and the MAME team).
 //
 // One instruction at a time: fetch words, one execute cycle, then bus cycles for
-// loads, stores and the frame/return spill loops. Behaviour follows the interpreter,
+// loads, stores and the frame/return spill loops. Instructions come from their own port,
+// 8 bytes at a time, into two buffers: the block being executed and the one after it,
+// read ahead while the instruction runs. Behaviour follows the interpreter,
 // including its quirks; each is marked "MAME:" where it is not what the ISA manual says.
 //
 // The bus is always 32 bits wide and big-endian. An E1-16 board puts a width adapter
@@ -23,12 +25,18 @@ module e1_cpu (
 	output reg        bus_req,
 	output reg        bus_wr,
 	output reg        bus_io,
-	output reg        bus_ifetch,
 	output reg [31:0] bus_addr,
 	output reg [3:0]  bus_be,
 	output reg [31:0] bus_wdata,
 	input             bus_ack,
 	input      [31:0] bus_rdata,
+
+	// instruction port: req held until ack, or until addr changes (the old request is then dropped);
+	// data is the aligned 8 bytes, the lowest-addressed halfword in [63:48]
+	output reg        if_req,
+	output reg [31:3] if_addr,
+	input             if_ack,
+	input      [63:0] if_data,
 
 	input      [6:0]  irq_in,      // ISR bits: INT1..INT4, IO1..IO3
 	output reg [6:0]  irq_ack,     // one-cycle pulse when the interrupt is taken
@@ -138,15 +146,15 @@ reg [15:0] op, e1, e2;
 reg [1:0]  ilen, ilen0, ilen_x;
 reg [15:0] op_x;
 reg        fold_done, trace_will;           // halfwords fetched for this instruction (1..3)
-reg [1:0]  fstage;         // 0 op, 1 e1, 2 e2
+reg [1:0]  fstage;         // the halfword wanted next: 0 op, 1 e1, 2 e2; 3 the instruction is complete
+reg [15:0] e1_cur;         // e1 as of this cycle (ST_RD may take it in the cycle)
 reg [31:0] ipc;            // address of the instruction
 
-// instruction fetch cache: last dword read
-reg        fc_valid;
-// next-dword prefetch: filled while the bus would otherwise be idle
-reg        pf_valid, pf_infl, pf_want, req_issued;
-reg [31:0] pf_addr, pf_data;
-reg [31:0] fc_addr, fc_data;
+// fetched 8-byte blocks: fc holds the instruction being fetched, pf the block after it (read ahead)
+reg        fc_valid, pf_valid;
+reg [31:3] fc_addr, pf_addr;
+reg [63:0] fc_data, pf_data;
+reg        if_dem;         // the port's request is the one ST_FWAIT waits for, not a read-ahead
 
 // bus job engine
 reg        p_wr, p_io;
@@ -529,26 +537,29 @@ task ret_loop_start;
 	end
 endtask
 
-// fetch one halfword at fpc: from the cached dword in this cycle, else a bus read
+function [15:0] hw_of(input [63:0] d, input [1:0] i);
+	case (i)
+		2'd0: hw_of = d[63:48];
+		2'd1: hw_of = d[47:32];
+		2'd2: hw_of = d[31:16];
+		default: hw_of = d[15:0];
+	endcase
+endfunction
+
+// fetch one halfword at fpc: from a fetched block in this cycle, else from the port. A request
+// for another address replaces a read-ahead in flight; one for the same address continues it.
 task fetch_word;
-	reg [31:0] w;
 	begin
-		if (fc_valid && fc_addr == {fpc[31:2], 2'b00}) begin
-			w = fpc[1] ? {16'b0, fc_data[15:0]} : {16'b0, fc_data[31:16]};
-			consume_word(w[15:0]);
-		end else if (pf_valid && pf_addr == {fpc[31:2], 2'b00}) begin
-			// the prefetched dword becomes the current one and the next is wanted
-			w = fpc[1] ? {16'b0, pf_data[15:0]} : {16'b0, pf_data[31:16]};
+		if (fc_valid && fc_addr == fpc[31:3]) begin
+			consume_word(hw_of(fc_data, fpc[2:1]));
+		end else if (pf_valid && pf_addr == fpc[31:3]) begin
+			// the read-ahead block becomes the current one; read the one after it
 			fc_valid <= 1'b1; fc_addr <= pf_addr; fc_data <= pf_data;
-			pf_valid <= 1'b0; pf_want = 1'b1; pf_addr = pf_addr + 32'd4;
-			consume_word(w[15:0]);
-		end else if (pf_infl) begin
-			// the prefetch owns the bus; try again next cycle
-			nstate = ST_FETCH;
+			pf_valid <= 1'b0;
+			if_req <= 1'b1; if_addr <= pf_addr + 29'd1; if_dem <= 1'b0;
+			consume_word(hw_of(pf_data, fpc[2:1]));
 		end else begin
-			bus_req <= 1'b1; bus_wr <= 1'b0; bus_io <= 1'b0; bus_ifetch <= 1'b1;
-			bus_addr <= {fpc[31:2], 2'b00}; bus_be <= 4'b1111; bus_wdata <= 32'd0;
-			req_issued = 1'b1;
+			if_req <= 1'b1; if_addr <= fpc[31:3]; if_dem <= 1'b1;
 			nstate = ST_FWAIT;
 		end
 	end
@@ -570,28 +581,69 @@ task fold_fetch;
 	end
 endtask
 
+// one halfword of the instruction; ST_RD takes the extension words if the fetched blocks hold them
 task consume_word(input [15:0] w);
 	begin
 `ifdef E1_DEBUG
 		$display("consume stage=%0d fpc=%08x w=%04x", fstage, fpc, w);
 `endif
 		fpc = fpc + 32'd2;
+		nstate = ST_RD;
 		case (fstage)
 			2'd0: begin
 				op <= w;
-				if (need_e1(w)) begin fstage = 2'd1; ilen = 2'd2; nstate = ST_FETCH; end
-				else nstate = ST_RD;
+				if (need_e1(w)) begin fstage = 2'd1; ilen = 2'd2; end
+				else fstage = 2'd3;
 			end
 			2'd1: begin
 				e1 <= w;
-				if (need_e2(op, w)) begin fstage = 2'd2; ilen = 2'd3; nstate = ST_FETCH; end
-				else nstate = ST_RD;
+				if (need_e2(op, w)) begin fstage = 2'd2; ilen = 2'd3; end
+				else fstage = 2'd3;
 			end
 			default: begin
 				e2 <= w;
-				nstate = ST_RD;
+				fstage = 2'd3;
 			end
 		endcase
+	end
+endtask
+
+// ST_RD: the extension words still wanted, from the fetched blocks; what they do not hold is left to
+// ST_FETCH. A halfword taken from the read-ahead block makes it the current one.
+task rd_ext;
+	reg        h1, h2, p1, p2;
+	reg [15:0] w1, w2;
+	reg [31:0] f2;
+	begin
+		h1 = 1'b0; p1 = 1'b0; w1 = 16'd0;
+		if (fc_valid && fc_addr == fpc[31:3]) begin h1 = 1'b1; w1 = hw_of(fc_data, fpc[2:1]); end
+		else if (pf_valid && pf_addr == fpc[31:3]) begin h1 = 1'b1; p1 = 1'b1; w1 = hw_of(pf_data, fpc[2:1]); end
+		f2 = fpc + 32'd2;
+		h2 = 1'b0; p2 = 1'b0; w2 = 16'd0;
+		if (fc_valid && fc_addr == f2[31:3]) begin h2 = 1'b1; w2 = hw_of(fc_data, f2[2:1]); end
+		else if (pf_valid && pf_addr == f2[31:3]) begin h2 = 1'b1; p2 = 1'b1; w2 = hw_of(pf_data, f2[2:1]); end
+		if (h1) begin
+			if (fstage == 2'd2) begin
+				e2 <= w1; fpc = f2; fstage = 2'd3;
+				p2 = 1'b0;
+			end else begin
+				e1 <= w1; e1_cur = w1;
+				if (!need_e2(op, w1)) begin
+					fpc = f2; fstage = 2'd3;
+					p2 = 1'b0;
+				end else if (h2) begin
+					e2 <= w2; fpc = f2 + 32'd2; ilen = 2'd3; fstage = 2'd3;
+				end else begin
+					fpc = f2; ilen = 2'd3; fstage = 2'd2;
+					p2 = 1'b0;
+				end
+			end
+			if (p1 || p2) begin
+				fc_valid <= 1'b1; fc_addr <= pf_addr; fc_data <= pf_data;
+				pf_valid <= 1'b0;
+				if_req <= 1'b1; if_addr <= pf_addr + 29'd1; if_dem <= 1'b0;
+			end
+		end
 	end
 endtask
 
@@ -661,8 +713,9 @@ irq_ack <= 7'd0;
 	if (reset) begin
 state <= ST_RESET;
 		bus_req <= 1'b0;
+		if_req <= 1'b0; if_dem <= 1'b0;
 		fc_valid <= 1'b0;
-		pf_valid <= 1'b0; pf_infl = 1'b0; pf_want = 1'b0;
+		pf_valid <= 1'b0;
 		// the queue is read before ST_RESET's code runs in the first clock out of reset, so it is empty
 		// here, not only after ST_RESET: an initial value is not a power-up value in Quartus (the board
 		// committed junk writes and lost a register, docs/LESSONS_LEARNED.md)
@@ -677,9 +730,9 @@ fold_done = 1'b0;
 ilen0 = ilen;
 pcw_new = 1'b0;
 gw_new = 1'b0;
-req_issued = 1'b0;
-if (pf_infl && bus_req && bus_ack) begin
-	pf_data <= bus_rdata; pf_valid <= 1'b1; pf_infl = 1'b0; bus_req <= 1'b0;
+// a read-ahead arrives (a state below may replace the request in this cycle)
+if (if_req && if_ack && !if_dem) begin
+	pf_valid <= 1'b1; pf_addr <= if_addr; pf_data <= if_data; if_req <= 1'b0;
 end
 // one queued register write per clock, applied at the start of the cycle that follows
 // the instruction; the instruction's own cycle only fills the queue
@@ -746,12 +799,11 @@ wq_push(1'b0, 1'b0, 6'd1, sr);
 		ST_FETCH: fetch_word;
 
 		ST_FWAIT: begin
-			if (bus_req && bus_ack) begin
-				bus_req <= 1'b0;
-				fc_valid <= 1'b1; fc_addr <= bus_addr; fc_data <= bus_rdata;
-				pf_valid <= 1'b0; pf_want = 1'b1; pf_addr = bus_addr + 32'd4;
-				tmp32 = fpc[1] ? {16'b0, bus_rdata[15:0]} : {16'b0, bus_rdata[31:16]};
-				consume_word(tmp32[15:0]);
+			if (if_ack) begin
+				fc_valid <= 1'b1; fc_addr <= if_addr; fc_data <= if_data;
+				pf_valid <= 1'b0;
+				if_req <= 1'b1; if_addr <= if_addr + 29'd1; if_dem <= 1'b0;
+				consume_word(hw_of(if_data, fpc[2:1]));
 			end
 		end
 
@@ -759,7 +811,12 @@ wq_push(1'b0, 1'b0, 6'd1, sr);
 		// operand read: register file and global registers into plain registers, so the
 		// execute cycle starts from flip-flops. Earlier writes must have reached the arrays.
 		// The interrupt is sampled here, once, when the instruction goes on.
-		ST_RD: if (wq_cnt0 > 3'd1 || (wq_cnt0 == 3'd1 && wq_g0)) begin
+		ST_RD: begin
+		e1_cur = e1;
+		if (fstage != 2'd3) rd_ext;
+		if (fstage != 2'd3) begin
+			nstate = ST_FETCH;
+		end else if (wq_cnt0 > 3'd1 || (wq_cnt0 == 3'd1 && wq_g0)) begin
 			// one pending local write is bypassed below; anything else waits
 			nstate = ST_RD;
 		end else begin
@@ -772,7 +829,7 @@ wq_push(1'b0, 1'b0, 6'd1, sr);
 			if (!frm_req) begin
 				pc = fpc;
 				op_x <= op; ilen_x <= ilen;
-				if (first_ins) begin sr[20:19] = first_ilc(op, e1); first_ins = 1'b0; end
+				if (first_ins) begin sr[20:19] = first_ilc(op, e1_cur); first_ins = 1'b0; end
 				lS_r  <= (l_we_n && l_wa_n == w_sidx)  ? l_wd_n : lS;
 				lS1_r <= (l_we_n && l_wa_n == w_sidx1) ? l_wd_n : lS1;
 				lD_r  <= (l_we_n && l_wa_n == w_didx)  ? l_wd_n : lD;
@@ -786,10 +843,9 @@ wq_push(1'b0, 1'b0, 6'd1, sr);
 				nstate = ST_EXEC;
 			end
 		end
+		end
 
-		ST_EXEC: if (pf_infl && ((op[15:8] >= 8'h90 && op[15:8] <= 8'h9f) || (op[15:8] >= 8'hd0 && op[15:8] <= 8'hdf))) begin
-			nstate = ST_EXEC;
-		end else begin
+		ST_EXEC: begin
 			fin_req = 1'b1;
 nstate = ST_INT;
 			opc = op[15:8]; dc = op[7:4]; sc = op[3:0];
@@ -1509,18 +1565,18 @@ casez (opc)
 			bus_req <= 1'b1;
 			bus_wr <= p_wr;
 			bus_io <= p_io;
-			bus_ifetch <= 1'b0;
 			bus_addr <= (p_k == 2'd0) ? p_a0 : p_a1;
 			bus_be <= p_io ? 4'b1111 : be_of((p_k == 2'd0) ? p_a0 : p_a1, p_kind);
 			bus_wdata <= wd_of((p_k == 2'd0) ? p_a0 : p_a1, p_kind, (p_k == 2'd0) ? p_wd0 : p_wd1);
-			req_issued = 1'b1;
 			nstate = ST_MWAIT;
 		end
 
 		ST_MWAIT: begin
 			if (bus_req && bus_ack) begin
 				bus_req <= 1'b0;
-				if (p_wr) begin fc_valid <= 1'b0; pf_valid <= 1'b0; pf_want = 1'b0; end
+				// a store into a fetched block: fetch it again (the memory has the new data from this clock)
+				if (p_wr && !p_io && bus_addr[31:3] == fc_addr) fc_valid <= 1'b0;
+				if (p_wr && !p_io && bus_addr[31:3] == pf_addr) pf_valid <= 1'b0;
 				if (!p_wr) begin
 					if (p_k == 2'd0) p_r0 <= p_io ? bus_rdata : lane_ext(bus_rdata, bus_addr, p_kind);
 					else p_r1 <= p_io ? bus_rdata : lane_ext(bus_rdata, bus_addr, p_kind);
@@ -1551,7 +1607,7 @@ end
 			end
 		end
 
-		ST_LOOP: if (wq_busy0 || pf_infl) begin
+		ST_LOOP: if (wq_busy0) begin
 			// the stack pointer update from the previous word has to reach G before it is used
 			nstate = ST_LOOP;
 		end else begin
@@ -1709,19 +1765,13 @@ nstate = ST_INT;
 			if (!fold_done) nstate = frm_req ? ST_FRM : ST_INT;
 			else if (frm_req) nstate = ST_FRM;
 		end
-		// an exception after the next fetch was started: the read, if any, finishes as a prefetch
-		if (fold_done && frm_req && req_issued) begin pf_infl = 1'b1; pf_addr = {fpc[31:2], 2'b00}; pf_want = 1'b0; end
+		// an exception after the next fetch was started: a request for it finishes as a read-ahead
+		if (fold_done && frm_req) if_dem <= 1'b0;
 		// the instruction completes once its writes have drained and any frame is built
 		if (retire_pending && wq_cnt == 3'd0 && nstate != ST_FRM) begin
 			retire_pending = 1'b0;
 			retire <= 1'b1;
 			if (late_cap) begin retire_npc <= pc; retire_sr <= sr; late_cap = 1'b0; end
-		end
-		// prefetch when nothing else uses the bus this cycle
-		if (pf_want && !pf_infl && !req_issued && !bus_req && nstate != ST_FWAIT && nstate != ST_MWAIT && nstate != ST_MEM) begin
-			bus_req <= 1'b1; bus_wr <= 1'b0; bus_io <= 1'b0; bus_ifetch <= 1'b1;
-			bus_addr <= pf_addr; bus_be <= 4'b1111; bus_wdata <= 32'd0;
-			pf_infl = 1'b1; pf_want = 1'b0;
 		end
 		state <= nstate;
 
@@ -1745,9 +1795,8 @@ task job_start(input wr, input io, input [2:0] kind, input [1:0] n,
 		p_wr <= wr; p_io <= io; p_kind <= kind; p_n <= n; p_k <= 2'd0;
 		p_a0 <= a0; p_a1 <= a1; p_wd0 <= w0; p_wd1 <= w1;
 		// the first access goes out in this cycle
-		bus_req <= 1'b1; bus_wr <= wr; bus_io <= io; bus_ifetch <= 1'b0;
+		bus_req <= 1'b1; bus_wr <= wr; bus_io <= io;
 		bus_addr <= a0; bus_be <= io ? 4'b1111 : be_of(a0, kind); bus_wdata <= wd_of(a0, kind, w0);
-		req_issued = 1'b1;
 		nstate = ST_MWAIT;
 		fin_req = 1'b0;
 	end

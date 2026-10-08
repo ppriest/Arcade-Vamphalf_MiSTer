@@ -155,7 +155,7 @@ which `scripts/build_mra.py` reads.
 | Sprite RAM above 64 KB (192 KB) | SDRAM `SD_SPRHI`, through the caches | only the power-on test touches it; the video reads bands 1-15 |
 | Sprite RAM 64 KB, palette 64 KB | BRAM in `vh_video` | read by the line engine every line |
 | E1 internal RAM 4 KB at 0xc0000000 | BRAM in `vh_cpumem` | zero-wait on the chip; about a quarter of Wivern Wings' fetches |
-| DDR3 | the HDMI rotator only | no run-time game data |
+| DDR3 | the HDMI rotator; the ROM image at load time (fast load: `rtl/memory/vh_rom_loader.sv` copies it to SDRAM with the game in reset) | no run-time game data |
 
 Ports, fixed priority: 0 the sprite rows (a line deadline), 1 the sound board (Phase 3), 2 the CPU's
 line fills and buffered writes, and the ROM download.
@@ -231,6 +231,24 @@ checks of a 2-hour run, 0 differ. Not done: video frames against MAME per set (t
 and wivernwg; suplup's colour shift is new and unchecked), solitaire (an 11-button panel: its own joystick layout and
 keys), finalgdr and mrkickera (32 KB banked backup RAM, 32 more M10K, and its .nvm; mrkickera MACHINE_NOT_WORKING),
 yorijori (MACHINE_NOT_WORKING), boonggab and aoh (groups f and g).
+
+**CPU throughput** (`ff38ff1`, asked for by the user after Phase 5). `sim/sys_tb +prof` split the busy clocks by
+CPU state: in the slow sets stores waited for the write buffer 20-26% of the time (a 32-bit store was two SDRAM
+writes) and extension words and fetch waits took 20%. Changes: an instruction port of its own (8 bytes per fetch,
+read-ahead independent of loads and stores), extension words taken in ST_RD, SDRAM burst writes of up to 8 bytes,
+and a write buffer that merges stores into the newest 8-byte entry. Bench, 1000 frames, coin at 300, play from 600
+(`debug/speed/<set>_prof*.txt`):
+
+| set | clk/instruction before → after | frames that never reached the idle loop, before → after |
+|---|---|---|
+| misncrft | 4.69 → 3.73 | 0 → 0 |
+| newxpang | 5.54 → 3.39 | 113 → 30 |
+| jmpbreak | 4.93 → 3.58 | 81 → 3 |
+| toyland | 5.29 → 3.78 | 59 → 10 |
+
+What is left, by the same profile: data reads (D-cache misses are 15-18% of busy clocks; misses per instruction
+barely fall with cache size and halve with line size, `scripts/cpu_mem_model.py`, so they are streaming reads) and
+the two clocks every instruction spends in ST_RD and ST_EXEC.
 
 **Phase 6: Savestates and cheats.** Optional. Design for state capture from the first RTL.
 

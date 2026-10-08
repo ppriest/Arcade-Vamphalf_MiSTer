@@ -190,7 +190,7 @@ progress; `docs/LESSONS_LEARNED.md` is what it cost.
 * Audio mix (Mono, None, 25%, 50%): done (Stereo Mix)
 * Hiscore saving (`hiscore.v`, with autosave): not yet
 * NVRAM / EEPROM saved to the `.nvm` file: in place, not yet checked on the board
-* Fast ROM loading via DDR: not yet
+* Fast ROM loading via DDR: in place (the HPS loads the image into DDR3, the core copies it to SDRAM); checked in simulation, not yet timed on the board
 * Pause (with CPU suspended): done
 * Sound: done (QS1000; YM2151 + M6295)
 * Savestates (optional): not yet; state inventory in `docs/STATE.md`

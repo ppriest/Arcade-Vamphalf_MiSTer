@@ -105,6 +105,8 @@ sdram_download u_dl (
 wire [26:1] m2_addr;
 wire        m2_wrl, m2_wrh, m2_dbl, m2_req, m2_ack;
 wire [15:0] m2_din;
+wire [47:0] m2_dinx;
+wire  [5:0] m2_wrx;
 wire [63:0] m_dout, m_doutb;
 
 vh_main u_main (
@@ -117,8 +119,8 @@ vh_main u_main (
 	.pal_we(pal_we), .pal_be(pal_be), .pal_addr(pal_addr), .pal_wd(pal_wd), .pal_rd(pal_rd),
 	.ee_blank(ee_blank), .ee_load_we(ee_load_we), .ee_load_addr(ee_load_addr), .ee_load_data(ee_load_data),
 	.ee_rd_addr(6'd0), .ee_rd_data(), .ee_written(),
-.dl_req(dl_req), .dl_addr(dl_addr), .dl_data(dl_data), .dl_we16(dl_we16), .dl_busy(dl_busy),
-	.mem_addr(m2_addr), .mem_wrl(m2_wrl), .mem_wrh(m2_wrh), .mem_din(m2_din), .mem_dbl(m2_dbl),
+.dl_req(dl_req), .dl_addr(dl_addr), .dl_data(dl_data), .dl_we16(dl_we16), .dl_g(1'b0), .dl_gdata(64'd0), .dl_busy(dl_busy),
+	.mem_addr(m2_addr), .mem_wrl(m2_wrl), .mem_wrh(m2_wrh), .mem_din(m2_din), .mem_dinx(m2_dinx), .mem_wrx(m2_wrx), .mem_dbl(m2_dbl),
 	.mem_req(m2_req), .mem_ack(m2_ack), .mem_dout(m_dout), .mem_doutb(m_doutb),
 	.retire(retire), .retire_pc(retire_pc), .retire_npc(retire_npc), .retire_sr(retire_sr),
 	.dbg_fill_a(), .dbg_fill_d(), .dbg_miss(dbg_miss), .dbg_miss_ic(dbg_miss_ic), .dbg_miss_line(dbg_miss_line),
@@ -204,7 +206,7 @@ sdram #(.RFS_INTERVAL(10'd218)) u_sdram (
 	.dbl0(1'b1), .dout0b(m_doutb),
 	.addr1(m1_addr), .wrl1(1'b0), .wrh1(1'b0), .din1(16'd0), .dout1(m1_dout), .req1(m1_req), .ack1(m1_ack),
 	.dbl1(snd_qs), .dout1b(m1_doutb),
-	.addr2(m2_addr), .wrl2(m2_wrl), .wrh2(m2_wrh), .din2(m2_din), .dout2(), .req2(m2_req), .ack2(m2_ack),
+	.addr2(m2_addr), .wrl2(m2_wrl), .wrh2(m2_wrh), .din2(m2_din), .din2x(m2_dinx), .wrx2(m2_wrx), .dout2(), .req2(m2_req), .ack2(m2_ack),
 	.dbl2(m2_dbl), .dout2b()
 );
 

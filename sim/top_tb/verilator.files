@@ -64,6 +64,8 @@ rtl/video/crt_adjust.sv
 rtl/video/vh_crt.sv
 rtl/memory/sdram.sv
 rtl/memory/sdram_download.sv
+rtl/memory/ddram_phy.sv
+rtl/memory/vh_rom_loader.sv
 sim/top_tb/stubs.sv
 Vamphalf.sv
 sim/common/sdram_chip_model_wide.sv

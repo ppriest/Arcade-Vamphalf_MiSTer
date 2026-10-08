@@ -202,7 +202,7 @@ int main(int argc, char **argv) {
 	double max_busy = 0, max_busy_win = 0;
 	// +prof=1: clocks by memory-unit state while the CPU is outside the idle loop (needs +idle)
 	int prof = atoi(arg(argc, argv, "+prof=", "0").c_str());
-	uint64_t pst[16] = {0}, pidle_req = 0, pnoreq = 0, pfetch = 0, pdata = 0, pwr = 0, pmiss_i = 0, pmiss_d = 0, pwbwait = 0;
+	uint64_t cst[16] = {0}, pst[16] = {0}, pidle_req = 0, pnoreq = 0, pfetch = 0, pdata = 0, pwr = 0, pmiss_i = 0, pmiss_d = 0, pwbwait = 0;
 
 	// +rerst=F: hold the core in reset for 2000 clocks at frame F (as probe D's hold bit does on the
 	// board) and start the trace over from the release
@@ -269,12 +269,13 @@ int main(int argc, char **argv) {
 			int st = r->tb_sys__DOT__u_main__DOT__u_mem__DOT__st;
 			bool req = r->tb_sys__DOT__u_main__DOT__u_mem__DOT__bus_req;
 			pst[st & 15]++;
+			cst[r->tb_sys__DOT__u_main__DOT__u_cpu__DOT__state & 15]++;
 			if (!req && st == 1) pnoreq++;
 			if (req) {
 				if (r->tb_sys__DOT__u_main__DOT__u_mem__DOT__bus_wr) { pwr++; if (st == 1 && r->tb_sys__DOT__u_main__DOT__u_mem__DOT__wb_valid) pwbwait++; }
-				else if (r->tb_sys__DOT__u_main__DOT__u_mem__DOT__bus_ifetch) pfetch++;
 				else pdata++;
 			}
+			if (r->tb_sys__DOT__u_main__DOT__u_mem__DOT__if_req) pfetch++;
 		}
 		if (top->retire) {
 			retired++;
@@ -365,8 +366,13 @@ int main(int argc, char **argv) {
 		printf("profile, %llu busy clocks:", (unsigned long long)t);
 		for (int i = 0; i < 8; i++) printf(" %s %.1f%%", nm[i], 100.0 * pst[i] / t);
 		printf("; store waiting for the write buffer %.1f%%", 100.0 * pwbwait / t);
-		printf("; no request %.1f%%; bus held by fetch %.1f%% data read %.1f%% write %.1f%%\n",
+		printf("; no data request %.1f%%; fetch port requesting %.1f%%; data bus held by read %.1f%% write %.1f%%\n",
 			100.0 * pnoreq / t, 100.0 * pfetch / t, 100.0 * pdata / t, 100.0 * pwr / t);
+		static const char *cn[] = {"RESET", "INT", "FETCH", "FWAIT", "EXEC", "MEM", "MWAIT", "MPOST", "LOOP", "DIV",
+			"DIVEND", "FRM", "RD", "MUL", "MUL2", "?"};
+		printf("CPU states:");
+		for (int i = 0; i < 16; i++) if (cst[i]) printf(" %s %.1f%%", cn[i], 100.0 * cst[i] / t);
+		printf("\n");
 	}
 	if (ptf) fclose(ptf);
 	if (wvf) fclose(wvf);

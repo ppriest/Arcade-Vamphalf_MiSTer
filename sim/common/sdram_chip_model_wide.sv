@@ -18,6 +18,7 @@
 // the original; see that file for the CAS-latency/burst-length protocol
 // modeling this preserves unchanged.
 // Modified for Arcade-KonamiGX_MiSTer: open_row sized for four banks ([GX] below).
+// Modified for Arcade-Vamphalf_MiSTer: burst writes ([VH] below).
 module sdram_chip_model_wide (
 	input  logic         clk,
 
@@ -64,6 +65,12 @@ module sdram_chip_model_wide (
 	logic [8:0] rcol;
 	logic [1:0] rbank;
 	int          rburst_left;
+	// [VH] burst write (mode register bit 9 clear): beats after the first, one per clock at the next
+	// column, wrapping within the burst, each masked by the DQM it is given with (A[12:11] here, as
+	// sdram.sv wires DQMH/DQML)
+	int          wburst_left = 0;
+	logic [8:0] wcol;
+	logic [1:0] wbank;
 
 	logic         driving;
 	logic [15:0] drive_word;
@@ -102,6 +109,14 @@ module sdram_chip_model_wide (
 			end
 		endcase
 
+		if (wburst_left > 0) begin   // [VH]
+			widx = addr_of(wbank, open_row[wbank], wcol);
+			if (!SDRAM_A[11]) mem[widx][7:0]  <= SDRAM_DQ[7:0];
+			if (!SDRAM_A[12]) mem[widx][15:8] <= SDRAM_DQ[15:8];
+			wburst_left <= wburst_left - 1;
+			wcol <= (wcol & ~(9'(burst_words) - 9'd1)) | ((wcol + 9'd1) & (9'(burst_words) - 9'd1));
+		end
+
 		// after the burst in progress: a READ during a burst starts the new one
 		// (a read-to-read at the burst's end, sdram.sv's double read, runs on
 		// without a gap), so its column and length must win
@@ -112,6 +127,11 @@ module sdram_chip_model_wide (
 				widx = addr_of(SDRAM_BA, open_row[SDRAM_BA], SDRAM_A[8:0]);
 				if (!SDRAM_A[11]) mem[widx][7:0]  <= SDRAM_DQ[7:0];
 				if (!SDRAM_A[12]) mem[widx][15:8] <= SDRAM_DQ[15:8];
+				if (!mode_reg[9] && burst_words > 1) begin   // [VH]
+					wburst_left <= int'(burst_words) - 1;
+					wbank <= SDRAM_BA;
+					wcol <= (SDRAM_A[8:0] & ~(9'(burst_words) - 9'd1)) | ((SDRAM_A[8:0] + 9'd1) & (9'(burst_words) - 9'd1));
+				end
 			end
 			CMD_READ: begin
 				rstate      <= R_WAIT_CAS;
