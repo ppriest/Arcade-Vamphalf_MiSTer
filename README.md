@@ -18,7 +18,6 @@ that do not complete in time.**
 - [Installation](#installation)
 - [Controls](#controls)
 - [Status](#status)
-  - [Features](#features)
   - [Todo](#todo)
   - [Resource usage](#resource-usage)
 - [AI Attestation](#ai-attestation)
@@ -31,20 +30,19 @@ that do not complete in time.**
 
 * **20261008** (`releases/Arcade-Vamphalf_20261008.rbf`)
   * Initial release
-  * Fixes relative sound volume of the QS1000 versus YM2151 / OKI M6295 compared to MAME based on PCB recording
+  * QS1000 sound: the level of the effects against the music set from a PCB recording, not MAME's
   * A few games suffer a little slowdown/dropped frames, will continue to work on it
-  * Fast rom loading
+  * Fast ROM loading
   * CRT Adjust
-  * HDMI Flipscreen/rotation
-  * MAME Arcade keyboard mapping
+  * Flip screen, HDMI rotation
+  * MAME's default keyboard mapping
 
 ## Games
 
 The supported sets run on three boards: the E1-16 (GMS30C2116 / E1-16T) board with a QS1000 sound board
 (Mission Craft), the E1-32 board with a QS1000 (Wivern Wings), and the E1-16 board with a YM2151 and an
-OKI M6295 (the other 22 sets, in six I/O map families). All three have the same video: one layer of
-16x16 sprites from a list in sprite RAM, and a 15-bit palette. A 32 MB SDRAM module holds every set (the
-largest image is 24 MB; work RAM sits above it).
+OKI M6295 (the other 22 sets, in seven I/O map families). All three have the same video: one layer of
+16x16 sprites from a list in sprite RAM, and a 15-bit palette.
 
 ### Supported
 
@@ -70,7 +68,7 @@ largest image is 24 MB; work RAM sits above it).
 | New Cross Pang (set 1) | 1999 | F2 System | `newxpang` | E1-16, YM2151 + M6295 | | mrdig's board |
 | New Cross Pang (set 2) | 1999 | F2 System | `newxpanga` | E1-16, YM2151 + M6295 | | Clone of `newxpang` (jmpbreak's board) |
 | Mr. Dig | 2000 | Sun | `mrdig` | E1-16, YM2151 + M6295 | 1,000,000 of 1,000,000 | |
-| Super Lup Lup Puzzle / Zhuan Zhuan Puzzle (version 4.0 / 990518) | 1999 | Omega System | `suplup` | E1-16, YM2151 + M6295 | 1,000,000 of 1,000,000 | Runs 2.2% slow (pixel clock) |
+| Super Lup Lup Puzzle / Zhuan Zhuan Puzzle (version 4.0 / 990518) | 1999 | Omega System | `suplup` | E1-16, YM2151 + M6295 | 1,000,000 of 1,000,000 | |
 | Lup Lup Puzzle / Zhuan Zhuan Puzzle (version 3.0 / 990128) | 1999 | Omega System | `luplup` | E1-16, YM2151 + M6295 | | Clone of `suplup` |
 | Lup Lup Puzzle / Zhuan Zhuan Puzzle (version 2.9 / 990108) | 1999 | Omega System | `luplup29` | E1-16, YM2151 + M6295 | | Clone of `suplup` |
 | Lup Lup Puzzle / Zhuan Zhuan Puzzle (version 1.05 / 981214) | 1999 | Omega System (Adko license) | `luplup10` | E1-16, YM2151 + M6295 | | Clone of `suplup` |
@@ -115,7 +113,7 @@ board's dot clock is 14.318181 MHz / 2 = 7.159 MHz (60.53 Hz, `:1251`); the core
 
 ## Installation
 
-A 32 MB SDRAM module is required.
+A 32 MB SDRAM module is required (the largest image is 24 MB; work RAM sits above it).
 
 * Take the latest `*.rbf` from `releases/` and put it in `_Arcade/cores`, renamed to drop the
   `Arcade-` prefix (`Arcade-Vamphalf_YYYYMMDD.rbf` becomes `Vamphalf_YYYYMMDD.rbf`)
@@ -129,8 +127,8 @@ with a `mister.env` (see `scripts/deploy.py`).
 ## Controls
 
 Pad: Button 1-4, Start, Coin, Pause, Service (the `.mra` names Wivern Wings' Shot, Defense and Bomb).
-Pause suspends the main CPU. MAME gives the boards no DIP switches; F2, or the OSD's Service Mode, is the
-service switch.
+Pause suspends the main CPU. MAME gives the boards no DIP switches; the OSD's Service Mode is the service
+switch.
 
 Keyboard, MAME's defaults: arrows / R F D G, buttons LCtrl LAlt Space LShift / A S Q W, Start 1 / 2,
 Coin 5 / 6; F2 service switch, 9 service coin, P pause.
@@ -143,15 +141,11 @@ Known issues:
   complete in time. On the bench (900 frames, coin then play, after commit `ff38ff1`), frames in which
   the game never reached its idle loop: New Cross Pang 30, Toy Land 10, Jumping Break 3, Mission Craft 0.
   The other sets have not been measured since that change.
-* The QS1000 follows MAME's model, which has no envelopes, filter or looping. Its balance of ADPCM against
-  PCM voices is taken from a recording of a Mission Craft PCB instead of MAME's (effects 18 dB higher
-  against the music, `docs/MAME_KLUDGES.md`).
-* The SUPLUP board's games run 2.2% slow (pixel clock).
+* The QS1000 follows MAME's model, which has no envelopes, filter or looping.
+* The SUPLUP board's games run 2.2% slow (Video timing).
 * Not yet checked on the board: flip screen, the `.nvm` save and restore.
 
-`docs/MAME_KLUDGES.md` lists what is taken from MAME as behaviour and what is known not to be
-right. `docs/HACKS.md` lists this core's own approximations. `docs/ROADMAP.md` is the plan and its
-progress.
+`docs/ROADMAP.md` is the plan and its progress.
 
 ### Todo
 
@@ -177,15 +171,12 @@ grade 7, every clock meeting timing (clk_sys +0.764 ns):
 
 This core is being developed with heavy use of a frontier coding assistant.
 
-MAME's `vamphalf.cpp`, `vamphalf_prot.cpp`, `qs1000.cpp` and `e132xs` are the reference. Where the core
-follows MAME on something MAME marks as uncertain, it is listed in `docs/MAME_KLUDGES.md`; the core's own
-approximations are in `docs/HACKS.md`. The one place the core departs from MAME on purpose, the QS1000's
-mix balance, is taken from a PCB recording of Mission Craft (https://www.youtube.com/watch?v=ur5dur6w9L4).
-What has been checked is listed under Verification.
-
 ## Verification
 
-Not PCB-validated. MAME is the accuracy reference.
+MAME's `vamphalf.cpp`, `vamphalf_prot.cpp`, `qs1000.cpp` and `e132xs` are the reference, except for the
+QS1000's sound levels, which are set from and checked against a PCB recording (below). Where the core
+follows MAME on something MAME marks as uncertain, it is listed in `docs/MAME_KLUDGES.md`; the core's own
+approximations are in `docs/HACKS.md`.
 
 * CPU: `rtl/e1/e1_cpu.sv` agrees with MAME's interpreter after every instruction (PC, SR, all registers,
   every bus access), at 0 and 3 bus wait states, on Mission Craft's first 1,000,000 instructions, Wivern
@@ -202,8 +193,14 @@ Not PCB-validated. MAME is the accuracy reference.
   EEPROM identical to the image (or to a `.nvm` loaded after it).
 * QS1000: the 8052 with the board's memories agrees with MAME's trace for 3,000,000 instructions per set
   (`sim/qs1000_tb`); the wavetable engine equals a transcription of MAME's on every tick, 3,000,000 per
-  set alone (`sim/qs1000v_tb`) and 6.9M and 7.0M in the whole board in play, where the 8052's register
-  writes equal MAME's.
+  set alone (`sim/qs1000v_tb`) and 6.9M and 7.0M ticks in the whole board in play, where the 8052's
+  register writes equal MAME's.
+* QS1000 sound levels against a
+  [PCB recording of Mission Craft](https://www.youtube.com/watch?v=ur5dur6w9L4) (1188 s analysed): the
+  music is ADPCM, the shot and other effects PCM. The shot peaks at a median -2.9 dB of the recording's
+  RMS (range -5.5 to -1.9 dB over 18 one-minute windows); MAME's balance gives -20.3 dB. The core's balance (ADPCM x2, PCM x4: effects 18 dB higher
+  against the music than MAME) gives -2.6 dB with the same measurement (`scripts/qs1000_stems.py`,
+  `docs/MAME_KLUDGES.md`, Sound).
 * YM2151 + M6295 against MAME's audio of `vamphalf`: correlation 0.971, RMS ratio 1.008.
 * Protection: Mission Craft's power-on check, 90 of 90 accesses as MAME; World Adventure's seven checks of
   a 2-hour MAME run, 0 differences.
