@@ -229,9 +229,8 @@ solitaire (869,671, then a YM2151 status read differs, as vamphalf's); their clo
 newxpang, newxpanga, luplup, luplup29, luplup10, puzlbang, puzlbanga). 31 sets with misncrft and wivernwg's five. The YM2151 + M6295 board
 against MAME's audio: correlation 0.971, RMS ratio 1.008 (vamphalf). World Adventure's protection replays MAME's seven
 checks of a 2-hour run, 0 differ. Not done: video frames against MAME per set (the engine is the one checked on misncrft
-and wivernwg; suplup's colour shift is new and unchecked), solitaire and finalgdr on the board, yorijori (in progress: agrees with MAME with the SETADR fix
-and without its ROM patch for 439,730 instructions, then the timer interrupt's timing differs; boots to attract on the
-board at 98186f0, play not checked) and aoh (group g).
+and wivernwg; suplup's colour shift is new and unchecked), and aoh (group g). yorijori agrees with MAME (SETADR fix, no ROM patch) for 439,730 instructions, then the timer
+interrupt's timing differs; it plays on the board (the user).
 
 **CPU throughput** (`ff38ff1`, asked for by the user after Phase 5). `sim/sys_tb +prof` split the busy clocks by
 CPU state: in the slow sets stores waited for the write buffer 20-26% of the time (a 32-bit store was two SDRAM

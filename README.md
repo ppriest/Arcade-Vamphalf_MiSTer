@@ -29,8 +29,8 @@ Boong-Ga Boong-Ga needs the 128 MB SDRAM module.**
 ## History
 
 * **20261009** (`releases/Arcade-Vamphalf_20261009.rbf`)
-  * New sets: Mr. Kicker (SEMICOM-003b PCB), Boong-Ga Boong-Ga (128 MB SDRAM), Solitaire, Final Godori
-  * Yori Jori Kuk Kuk boots; in progress
+  * New sets: Mr. Kicker (SEMICOM-003b PCB), Boong-Ga Boong-Ga (128 MB SDRAM), Solitaire, Final Godori,
+    Yori Jori Kuk Kuk
   * CPU: SETADR fix, which stops Mr. Kicker (SEMICOM-003b PCB) hanging when it rewrites its EEPROM
   * Service Mode is a held pad input, as on the board
 * **20261008** (`releases/Arcade-Vamphalf_20261008.rbf`)
@@ -45,7 +45,7 @@ Boong-Ga Boong-Ga needs the 128 MB SDRAM module.**
 ## Games
 
 The supported sets run on four boards: the E1-16 (GMS30C2116 / E1-16T) board with a QS1000 sound board
-(Mission Craft), the E1-32 board with a QS1000 (Wivern Wings), the E1-16 board with a YM2151 and an
+(Mission Craft), the E1-32 board with a QS1000 (Wivern Wings, Yori Jori Kuk Kuk), the E1-16 board with a YM2151 and an
 OKI M6295 (24 sets, in nine I/O map families), and the E1-32 board with the YM2151 and a banked M6295
 (Mr. Kicker, SEMICOM-003b PCB; Final Godori, with a 32 KB backup RAM). All four have the same video: one layer of
 16x16 sprites from a list in sprite RAM, and a 15-bit palette.
@@ -59,6 +59,7 @@ OKI M6295 (24 sets, in nine I/O map families), and the E1-32 board with the YM21
 | Wivern Wings | 2001 | SemiCom | `wivernwg` | E1-32, QS1000 | 8,000,000 (CPU bench) | |
 | Wyvern Wings (set 1) | 2001 | SemiCom (Game Vision license) | `wyvernwg` | E1-32, QS1000 | | Clone of `wivernwg` |
 | Wyvern Wings (set 2) | 2001 | SemiCom (Game Vision license) | `wyvernwga` | E1-32, QS1000 | | Clone of `wivernwg` |
+| Yori Jori Kuk Kuk | 2002 | Golden Bell Entertainment | `yorijori` | E1-32, QS1000 | 439,730, then the timer interrupt's timing differs | MACHINE_NOT_WORKING in MAME, which patches the program to boot; with the SETADR fix it boots unpatched (Verification) |
 | Vamf x1/2 (Europe, version 1.1.0908) | 1999 | Danbi / F2 System | `vamphalf` | E1-16, YM2151 + M6295 | 893,119, then the YM2151's busy flag is polled a different number of times | |
 | Vamf x1/2 (Europe, version 1.0.0903) | 1999 | Danbi / F2 System | `vamphalfr1` | E1-16, YM2151 + M6295 | | Clone of `vamphalf` |
 | Vamp x1/2 (Korea, version 1.1.0908) | 1999 | Danbi / F2 System | `vamphalfk` | E1-16, YM2151 + M6295 | | Clone of `vamphalf` |
@@ -91,7 +92,6 @@ OKI M6295 (24 sets, in nine I/O map families), and the E1-32 board with the YM21
 | Name | Why |
 |-|-|
 | Age Of Heroes - Silkroad 2 | An E1-32XN CPU at 80 MHz, its own sprite format and screen, 64 MB of graphics |
-| Yori Jori Kuk Kuk | In progress. MACHINE_NOT_WORKING in MAME, which patches the program to boot; with the SETADR fix (Verification) MAME boots it unpatched. The core boots it to attract on the board (`98186f0`); play is not yet checked |
 
 ## Hardware
 
@@ -222,7 +222,8 @@ approximations are in `docs/HACKS.md`.
   version Mr. Kicker (SEMICOM-003b PCB) hangs whenever it rewrites its EEPROM (from blank, or after a
   damaged save), which is why MAME marks it not working; with the carry in bit 9 it rebuilds a blank EEPROM
   to the ROM's defaults and boots (`sim/sys_tb`), and the other sets' traces are unchanged
-  (`docs/MAME_KLUDGES.md`, CPU and I/O).
+  (`docs/MAME_KLUDGES.md`, CPU and I/O). MAME's ROM patch for Yori Jori Kuk Kuk works around the same
+  fault: with the carry in bit 9, MAME boots it unpatched.
 * YM2151 + M6295 against MAME's audio of `vamphalf`: correlation 0.971, RMS ratio 1.008.
 * Protection: Mission Craft's power-on check, 90 of 90 accesses as MAME; World Adventure's seven checks of
   a 2-hour MAME run, 0 differences.
