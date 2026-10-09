@@ -16,6 +16,7 @@ every frame.
 | Palette | `vh_video.sv` `u_pal` | 32 x 16384 | 64 KB | yes |
 | Sprite-list snapshot | `vh_video.sv` `vh_sdp` | 64 x 4096 | 32 KB | yes, or restore before the copy window (line 252) and let the copy rebuild it |
 | EEPROM | `rtl/vh_eeprom93c46.v` `mem` | 16 x 64 | 128 | yes (also the `.nvm`) |
+| finalgdr backup RAM | `rtl/vh_main.sv` `u_bk` | 8 x 32768 | 32 KB | yes (also the `.nvm`, after the EEPROM's 128 bytes) |
 | 8052 internal RAM | `rtl/qs1000/vh_qs1000.sv` `vh_qs1000_mcu` `iram` | 8 x 256 | 256 | yes |
 | 8052 external RAM 0x0000-0x00ff | `vh_qs1000_mcu` `xram` | 8 x 256 | 256 | yes |
 | u7 (8052 program and data) | `vh_qs1000_mcu` `u_u7` | 8 x 131072 | 128 KB | no: ROM, from the `.mra` |
@@ -48,6 +49,7 @@ every frame.
 | EEPROM pins and serial state | `vh_main.sv` `ee_di/ee_clk/ee_cs`; `vh_eeprom93c46.v` `st, cs_l, sk_l, locked, cmd, nbits, shreg, addr, op, busy` | ~80 | yes | `eeprom_serial_base_device` state |
 | Mission Craft / Wivern Wings protection | `rtl/vh_prot.sv` `retval, idx, armed, ok16, ok8, okw` | 34 | yes (the seed itself is not stored: the match flags are its state) | `m_seed, m_retval, m_idx, m_is_armed` |
 | SemiCom bit stream | `vh_main.sv` `strm_which, strm_idx` | 5 | yes | `m_semicom_prot_which, m_semicom_prot_idx` |
+| finalgdr backup RAM bank | `vh_main.sv` `bk_bank` | 8 | yes | `m_finalgdr_backupram_bank` |
 | Memory unit FSM, write buffer, instruction-port lookup | `vh_cpumem.sv` `st`, `wq_*`, `m_who`, `i_*` | ~400 | no: restore with the CPU between accesses and the buffer drained | none |
 
 ## Chip state

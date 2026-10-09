@@ -1363,8 +1363,10 @@ casez (opc)
 						end
 					end else begin
 						if (sc == 4'd0) begin
-							res = (G[18] & 32'hfffffe00) | {23'b0, fp, 2'b00} |
-							      {31'b0, (G[18][8] && !sr[31])};
+							// SETADR: the wrap carry goes into bit 9, as MAME's original comment says; MAME's
+							// code puts it in bit 0 (MAME_KLUDGES.md, CPU and I/O: mrkickera hangs with it)
+							res = ((G[18] & 32'hfffffe00) | {23'b0, fp, 2'b00}) +
+							      ((G[18][8] && !sr[31]) ? 32'h200 : 32'd0);
 							write_raw(!dl, dl ? didx : {2'b0, dc}, res);
 						end else if (sc >= 4'd2) begin
 							if (sc[0]) res = {31'b0, !cond};

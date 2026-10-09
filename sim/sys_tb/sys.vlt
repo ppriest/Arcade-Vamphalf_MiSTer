@@ -1,6 +1,8 @@
 `verilator_config
 // main.cpp writes the download image straight into the chip model
 public_flat_rw -module "sdram_chip_model_wide" -var "mem"
+// +bk= writes finalgdr's backup RAM
+public_flat_rw -module "vh_dpram" -var "mem"
 // the per-frame state line
 public_flat_rw -module "e1_cpu" -var "G"
 public_flat_rw -module "e1_cpu" -var "sr"
@@ -11,3 +13,9 @@ public_flat_rw -module "vh_cpumem" -var "bus_wr"
 public_flat_rw -module "vh_cpumem" -var "if_req"
 public_flat_rw -module "vh_cpumem" -var "wb_valid"
 public_flat_rw -module "e1_cpu" -var "state"
+public_flat_rw -module "vh_main" -var "io_rd"
+public_flat_rw -module "vh_main" -var "io_wr"
+public_flat_rw -module "vh_main" -var "io_port"
+public_flat_rw -module "vh_main" -var "io_wd"
+public_flat_rw -module "vh_main" -var "io_rdata"
+public_flat_rw -module "vh_main" -var "g_bram"

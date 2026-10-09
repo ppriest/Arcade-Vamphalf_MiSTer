@@ -193,6 +193,16 @@ core's idiom. Reconstruct known words from the ROM files and score them against 
 (`lea $ffff7000.l,A0 -> 41F9 FFFF 7000`, ...): 18/18 for one model, 5/18 for the other, in seconds,
 no hardware.
 
+### [Vamphalf] A `ROM_REGION32_BE` graphics region is drawn in host byte order, not ROM_START's
+
+`solitaire`'s "gfx" is `ROM_REGION32_BE` with `ROM_LOAD32_WORD_SWAP`, decoded `gfx_16x16x8_raw`.
+`build_mra.py` reproduced the region's logical (big-endian) layout and reported "identical to
+ROM_START"; on the board every 4-pixel group was mirrored. A raw layout draws from the region's
+memory, which on a little-endian host holds each dword of that layout reversed. Rendering MAME's
+captured sprite RAM through `render_model.py` decided it: 46,174 pixels differed with ROM_START's order,
+0 with each dword reversed. Check an image against a MAME frame, not only against ROM_START, whenever
+a region is not plain `ROM_REGION`.
+
 ### Treat the map-digit rule as mechanical and check it
 
 mra-tools-c decrements each map digit and emits bytes in that order: `map="12"` is a pairwise swap,
@@ -1288,6 +1298,12 @@ the PC MAME's speed-up handler names, waiting for a flag the vblank handler sets
   conclusion ("no sound commands during play") was an artefact. A tap the frame callback refers to (to
   remove it at the end) survived. Hold taps in globals, and check that a capture has accesses up to its
   last frame.
+- **[Vamphalf] A `PORT_CUSTOM_MEMBER` field declared `IP_ACTIVE_LOW` reaches the bus inverted.**
+  `ioport_port::read()` merges the callbacks' values and then XORs the whole port with its default
+  (`src/emu/ioport.cpp:1595`), custom fields included, so a callback's "7 = no hit" reads as 0. `boonggab`'s
+  photo-sensor field was transcribed from the callback's table and idled at the strongest hit; the I/O log
+  settled it (P1_P2 0xc7ff idle, 0xcfff with the weakest). Take a custom field's encoding from a tap of the
+  port, not from the callback.
 
 ## Hardware bring-up (MiSTer / DE10-nano)
 

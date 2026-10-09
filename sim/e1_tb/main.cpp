@@ -184,6 +184,7 @@ int main(int argc, char **argv) {
 	std::vector<BusRow> *rows = &busrows[0];
 	uint32_t irq_pending = 0;
 	int ints_taken = 0;
+	int setadr_carries = 0;
 
 	int nfail = 0, ncascade = 0;
 	bool inst_failed = false;
@@ -221,6 +222,26 @@ int main(int argc, char **argv) {
 			}
 			for (int i = 0; i < 64; i++)
 				if (l[i] != nx.l[i]) { snprintf(t, sizeof t, " l%d rtl=%08x mame=%08x;", i, l[i], nx.l[i]); diff += t; bad = true; }
+			// SETADR differs from MAME on purpose (docs/MAME_KLUDGES.md, CPU and I/O): MAME puts the wrap
+			// carry in bit 0, the RTL in bit 9. Accept exactly that difference and go on from MAME's value.
+			if (bad && pc == nx.pc && sr == nx.sr && exp.dis.find("SETADR") != std::string::npos) {
+				int ng = -1, nl = -1, n = 0;
+				for (int i = 2; i < 32; i++) if (i != 23 && i != 25 && g[i] != nx.g[i]) { ng = i; n++; }
+				for (int i = 0; i < 64; i++) if (l[i] != nx.l[i]) { nl = i; n++; }
+				uint32_t rv = ng >= 0 ? g[ng] : (nl >= 0 ? l[nl] : 0), mv = ng >= 0 ? nx.g[ng] : (nl >= 0 ? nx.l[nl] : 0);
+				if (n == 1 && (mv & 1) && rv == mv - 1 + 0x200) {
+					auto *r = top->rootp;
+					if (ng >= 0) r->tb_e1__DOT__cpu__DOT__G[ng] = mv;
+					else {
+						r->tb_e1__DOT__cpu__DOT__rf__DOT__m0[nl] = mv; r->tb_e1__DOT__cpu__DOT__rf__DOT__m1[nl] = mv;
+						r->tb_e1__DOT__cpu__DOT__rf__DOT__m2[nl] = mv; r->tb_e1__DOT__cpu__DOT__rf__DOT__m3[nl] = mv;
+						r->tb_e1__DOT__cpu__DOT__rf__DOT__m4[nl] = mv;
+						if (r->tb_e1__DOT__cpu__DOT__l_we_r && r->tb_e1__DOT__cpu__DOT__l_wa_r == nl) r->tb_e1__DOT__cpu__DOT__l_wd_r = mv;
+					}
+					setadr_carries++;
+					bad = false;
+				}
+			}
 			if (bad && errors == 0) {
 				if (fail("state differs after instruction")) {
 					fprintf(stderr, "  instruction idx %llu: %08x %04x  %s\n", (unsigned long long)exp.idx, exp.pc, exp.ops[0], exp.dis.c_str());
@@ -453,6 +474,7 @@ int main(int argc, char **argv) {
 	for (auto &kv : rd2_mn)
 		if (kv.second * 200 > (uint64_t)instr) printf("    depth2 after %s: %.3f\n", kv.first.c_str(), (double)kv.second / instr);
 	printf("interrupts taken: %d\n", ints_taken);
+	printf("SETADR wrap carries (bit 9 here, bit 0 in MAME): %d\n", setadr_carries);
 	if (cont) printf("failing instructions: %d (+%d cascade)\n", nfail, ncascade);
 	if (cont && nfail) errors++;
 	printf("%s: %llu instructions, %llu cycles (%.2f clk/instr), %llu bus cycles\n", errors ? "FAIL" : "PASS",

@@ -75,7 +75,6 @@ localparam CONF_STR = {
 	"H3O[106:100],CRT H-Position,0,+1,+2,+3,+4,+5,+6,+7,+8,+9,+10,+11,+12,+13,+14,+15,+16,+17,+18,+19,+20,+21,+22,+23,+24,+25,+26,+27,+28,+29,+30,+31,+32,+33,+34,+35,+36,+37,+38,+39,+40,+41,+42,+43,+44,+45,+46,+47,+48,-48,-47,-46,-45,-44,-43,-42,-41,-40,-39,-38,-37,-36,-35,-34,-33,-32,-31,-30,-29,-28,-27,-26,-25,-24,-23,-22,-21,-20,-19,-18,-17,-16,-15,-14,-13,-12,-11,-10,-9,-8,-7,-6,-5,-4,-3,-2,-1;",
 	"H3O[112:107],CRT V-Shift,0,+1,+2,+3,+4,+5,+6,+7,+8,+9,+10,+11,+12,+13,+14,+15,+16,+17,+18,+19,+20,+21,+22,+23,+24,+25,+26,+27,+28,+29,+30,+31,-32,-31,-30,-29,-28,-27,-26,-25,-24,-23,-22,-21,-20,-19,-18,-17,-16,-15,-14,-13,-12,-11,-10,-9,-8,-7,-6,-5,-4,-3,-2,-1;",
 	"-;",
-	"O[8],Service Mode,Off,On;",
 	"-;",
 	"H1P1,Debug;",
 	"H1P1-;",
@@ -84,7 +83,7 @@ localparam CONF_STR = {
 	"T[0],Reset;",
 	"R[0],Reset and close OSD;",
 	// entry i is joystick bit 4 + i, matching the .mra <buttons>
-	"J1,Button 1,Button 2,Button 3,Button 4,Start,Coin,Pause,Service;",
+	"J1,Button 1,Button 2,Button 3,Button 4,Start,Coin,Pause,Service Coin,Service Mode;",
 	"jn,A,B,X,Y,Start,Select,L,R;",
 	"v,0;",
 	"V,v",`BUILD_DATE
@@ -206,7 +205,8 @@ end
 
 // <rom index="1">, two bytes (scripts/build_mra.py SETS, BUS32):
 //   byte 0: [0] the E1-32 board, [2:1] rotation (0 ROT0, 1 ROT90, 2 ROT270), [7:3] the I/O map (vh_main family)
-//   byte 1: [0] 16-bit sprite codes (gfx above 8 MB; 15-bit otherwise)
+//   byte 1: [0] 16-bit sprite codes (gfx above 8 MB; 15-bit otherwise), [1] a 2 MB program, [2] 17-bit
+//           sprite codes with the gfx above 16 MB at SD_GFXHI (boonggab: needs the 128 MB SDRAM module)
 reg [7:0] mod_byte = 8'd0, mod_byte1 = 8'd0;
 always @(posedge clk_sys)
 	if (ioctl_wr && ioctl_index == 16'd1) begin
@@ -216,7 +216,8 @@ always @(posedge clk_sys)
 assign board    = mod_byte[0];
 assign game_rot = mod_byte[2:1];
 wire [4:0] family = mod_byte[7:3];
-wire       snd_qs = family < 5'd2;   // the QS1000 boards; the others have the YM2151 + M6295
+wire       snd_qs = family < 5'd2 || family == 5'd11;   // the QS1000 boards; the others have the YM2151 + M6295
+wire       prg2 = mod_byte1[1];      // a 2 MB program (yorijori)
 wire       f_suplup = family == 5'd7;   // the SUPLUP board: 14.318181 MHz sound clocks, colour in word 2's high byte
 
 ///////////////////////   INPUTS   ///////////////////////////////
@@ -227,19 +228,20 @@ function automatic [7:0] vh_port(input [31:0] j);
 	vh_port = {j[7], j[6], j[5], j[4], j[0], j[1], j[2], j[3]};
 endfunction
 // MAME's default keys (rtl/mame_keys.sv) ORed into the pads. F2 is MAME's service switch (SYSTEM bits 3
-// and 4, IPT_SERVICE), so it goes to a joystick bit no pad button drives (12); 9 is SERVICE1.
+// and 4, IPT_SERVICE, momentary: PORT_SERVICE_NO_TOGGLE), on the pads' Service Mode bit (12); 9 is SERVICE1.
 wire [31:0] key0, key1;
 wire  [1:0] svc_coin;
 mame_keys #(.BUTTONS(4), .START(8), .COIN(9), .PAUSE(10), .SERVICE(12)) u_keys (
-	.clk(clk_sys), .ps2_key(ps2_key), .key0(key0), .key1(key1), .svc_coin(svc_coin)
+	.clk(clk_sys), .ps2_key(ps2_key), .alt(family == 5'd8), .key0(key0), .key1(key1), .svc_coin(svc_coin)
 );
-wire        key_f2 = key0[12];
 wire        dbg_coin, dbg_start, dbg_b1;         // the probe's inputs (Vamphalf_stp only)
-wire [31:0] joy0 = joystick_0 | {key0[31:13], 1'b0, key0[11:5], key0[4] | dbg_b1, key0[3:0]};
+wire [31:0] joy0 = joystick_0 | {key0[31:5], key0[4] | dbg_b1, key0[3:0]};
 wire [31:0] joy1 = joystick_1 | key1;
+wire        svc_mode = joy0[12] | joy1[12];
 wire [15:0] p1p2 = ~{vh_port(joy1), vh_port(joy0)};
+wire  [6:0] xbtn = ~joy0[19:13];   // solitaire's buttons 5-11: its .mra names them after Service Mode
 // SYSTEM, bit 0 first: COIN1, SERVICE1, COIN2, SERVICE, service mode switch, unused, START1, START2
-wire [7:0]  sys_in = ~{joy1[8], joy0[8] | dbg_start, 1'b0, status[8] | key_f2, key_f2,
+wire [7:0]  sys_in = ~{joy1[8], joy0[8] | dbg_start, 1'b0, svc_mode, svc_mode,
                        joy1[9], joy0[11] | joy1[11] | svc_coin[0], joy0[9] | dbg_coin};
 
 // Pause: joystick bit 10 (or P) toggles; the Debug page's Pause CPU is ORed in
@@ -273,6 +275,10 @@ reg  [5:0] ee_wa;
 reg [15:0] ee_wd;
 wire       in_ee_rom = lb_index == 16'd0 && lb_addr[26:7] == SD_EEPROM[26:7];
 wire       in_ee_nvm = lb_index == 16'd2 && lb_addr[26:7] == 20'd0;
+// a .nvm's bytes after the EEPROM's 128: finalgdr's 32 KB backup RAM
+wire [26:0] bk_off    = lb_addr - 27'h80;
+wire        bk_load   = ioctl_download && ioctl_index == 16'd2;
+wire        bk_ld_we  = lb_wr && lb_index == 16'd2 && lb_addr[26:7] != 20'd0 && bk_off[26:15] == 12'd0;
 always @(posedge clk_sys) begin
 	ee_we <= 1'b0;
 	if (ioctl_download) ee_blank <= 1'b0;
@@ -286,15 +292,18 @@ always @(posedge clk_sys) begin
 	end
 end
 
-// the .nvm upload reads the array; a save is requested a second after the game's last write
+// the .nvm upload reads the arrays; a save is requested a second after the game's last write
 wire [15:0] ee_rd_data;
 wire        ee_written;
-assign ioctl_din = ioctl_addr[0] ? ee_rd_data[7:0] : ee_rd_data[15:8];
+wire  [7:0] bk_rd_data;
+wire        bk_written;
+wire [26:0] bk_rd_off = ioctl_addr - 27'h80;
+assign ioctl_din = ioctl_addr[26:7] != 20'd0 ? bk_rd_data : ioctl_addr[0] ? ee_rd_data[7:0] : ee_rd_data[15:8];
 reg  [25:0] ee_quiet = 26'd0;
 reg         ee_dirty = 1'b0;
 always @(posedge clk_sys) begin
 	nvram_save <= 1'b0;
-	if (ee_written) begin
+	if (ee_written || bk_written) begin
 		ee_dirty <= 1'b1;
 		ee_quiet <= 26'd0;
 	end else if (ee_dirty) begin
@@ -321,7 +330,7 @@ wire [7:0]  snd_latch;
 wire        snd_latch_wr;
 wire        ym_wr, ym_a0, oki_wr;
 wire [7:0]  snd_wd, ym_dout, oki_dout;
-wire [1:0]  oki_bank;
+wire [2:0]  oki_bank;
 
 wire        dl_req, dl_we16, dl_busy;
 wire [26:0] dl_addr;
@@ -364,7 +373,7 @@ wire ldr_tap = ldr_tap_addr[26:17] == SD_SNDCPU[26:17] || (ldr_tap_addr[26:7] ==
 
 vh_rom_loader u_ldr (
 	.clk(clk_sys), .reset(~pll_locked),
-	.length({1'b0, SD_GFX} + (mod_byte1[0] ? 28'h1000000 : 28'h0800000)),
+	.length(mod_byte1[2] ? {1'b0, SD_GFXHI} + 28'h1000000 : {1'b0, SD_GFX} + (mod_byte1[0] ? 28'h1000000 : 28'h0800000)),
 	.start(ldr_start), .busy(ldr_active),
 	.ddr_req(ldr_ddr_req), .ddr_addr(ldr_ddr_addr), .ddr_busy(ldr_ddr_busy),
 	.ddr_valid(ldr_ddr_valid), .ddr_rdata(ldr_ddr_rdata),
@@ -388,7 +397,7 @@ wire [31:0] dbg_pc, dbg_npc, dbg_sr, dbg_imiss, dbg_dmiss;
 wire [26:1] dbg_fill_a;
 wire [63:0] dbg_fill_d;
 wire        dbg_miss, dbg_miss_ic;
-wire [21:4] dbg_miss_line;
+wire [22:4] dbg_miss_line;
 wire        dbg_rf_we;
 wire [5:0]  dbg_rf_wa;
 wire [31:0] dbg_rf_wd;
@@ -398,8 +407,8 @@ wire [187:0] dbg_tr_q;
 wire [12:0] dbg_tr_count;
 
 vh_main u_main (
-	.clk(clk_sys), .prst(~pll_locked), .rst(core_reset), .board(board), .family(family), .pause(pause_cpu), .cpu_tick(cpu_tick),
-	.vblank_irq(vblank_start), .p1p2(p1p2), .system(sys_in),
+	.clk(clk_sys), .prst(~pll_locked), .rst(core_reset), .board(board), .family(family), .prg2(prg2), .pause(pause_cpu), .cpu_tick(cpu_tick),
+	.vblank_irq(vblank_start), .p1p2(p1p2), .system(sys_in), .xbtn(xbtn),
 	.flip(game_flip), .snd_latch(snd_latch), .snd_latch_wr(snd_latch_wr),
 	.ym_wr(ym_wr), .ym_a0(ym_a0), .oki_wr(oki_wr), .snd_wd(snd_wd), .oki_bank(oki_bank),
 	.ym_dout(ym_dout), .oki_dout(oki_dout),
@@ -407,6 +416,8 @@ vh_main u_main (
 	.pal_we(pal_we), .pal_be(pal_be), .pal_addr(pal_addr), .pal_wd(pal_wd), .pal_rd(pal_rd),
 	.ee_blank(ee_blank), .ee_load_we(ee_we), .ee_load_addr(ee_wa), .ee_load_data(ee_wd),
 	.ee_rd_addr(ioctl_addr[6:1]), .ee_rd_data(ee_rd_data), .ee_written(ee_written),
+	.bk_load(bk_load), .bk_load_we(bk_ld_we), .bk_load_addr(bk_off[14:0]), .bk_load_data(lb_dout),
+	.bk_rd_addr(bk_rd_off[14:0]), .bk_rd_data(bk_rd_data), .bk_written(bk_written),
 	.dl_req(dl_req), .dl_addr(dl_addr), .dl_data(dl_data), .dl_we16(dl_we16), .dl_g(ldr_active), .dl_gdata(ldl_gdata), .dl_busy(dl_busy),
 	.mem_addr(m2_addr), .mem_wrl(m2_wrl), .mem_wrh(m2_wrh), .mem_din(m2_din), .mem_dinx(m2_dinx), .mem_wrx(m2_wrx), .mem_dbl(m2_dbl),
 	.mem_req(m2_req), .mem_ack(m2_ack), .mem_dout(m_dout), .mem_doutb(m_doutb),
@@ -459,7 +470,7 @@ always @(posedge clk_sys) begin
 	else begin
 		if (dbg_retire) dbg_log_ni <= dbg_log_ni + 1'd1;
 		if (dbg_miss) begin
-			dbg_log[dbg_log_n[7:0]] <= {dbg_miss_ic, 13'd0, dbg_miss_line, dbg_log_ni};
+			dbg_log[dbg_log_n[7:0]] <= {dbg_miss_ic, 12'd0, dbg_miss_line, dbg_log_ni};
 			if (dbg_log_n != 16'hffff) dbg_log_n <= dbg_log_n + 1'd1;
 		end
 	end
@@ -569,14 +580,14 @@ assign dbg_b1     = 1'b0;
 `endif
 
 wire        gfx_req, gfx_rdy, gfx_dv;
-wire [23:0] gfx_addr;
+wire [24:0] gfx_addr;
 wire [31:0] gfx_data;
 wire [7:0]  core_r, core_g, core_b;
 wire        core_hs, core_vs, core_hb, core_vb, core_ce;
 
 // The OSD's Flip Screen and the game's flip are one path, through the engine, for HDMI and analog.
 vh_video u_video (
-	.clk(clk_sys), .rst(~pll_locked | ioctl_download | ldr_active), .code_mask(mod_byte1[0] ? 16'hffff : 16'h7fff), .palshift(f_suplup),
+	.clk(clk_sys), .rst(~pll_locked | ioctl_download | ldr_active), .code_mask(mod_byte1[0] ? 16'hffff : 16'h7fff), .palshift(f_suplup), .code17(mod_byte1[2]),
 	.spr_we(spr_we), .spr_be(spr_be), .spr_addr(spr_addr), .spr_wd(spr_wd), .spr_rd(spr_rd),
 	.pal_we(pal_we), .pal_be(pal_be), .pal_addr(pal_addr), .pal_wd(pal_wd), .pal_rd(pal_rd),
 	.flip(game_flip ^ status[65]),
@@ -590,7 +601,7 @@ vh_video u_video (
 wire [26:1] m0_addr;
 wire        m0_req, m0_ack;
 
-vh_gfxport #(.GFX_BASE(SD_GFX)) u_gfx (
+vh_gfxport #(.GFX_BASE(SD_GFX), .GFXHI_BASE(SD_GFXHI)) u_gfx (
 	.clk(clk_sys), .prst(~pll_locked), .gfx_req(gfx_req), .gfx_rdy(gfx_rdy), .gfx_addr(gfx_addr), .gfx_dv(gfx_dv), .gfx_data(gfx_data),
 	.mem_addr(m0_addr), .mem_req(m0_req), .mem_ack(m0_ack), .mem_dout(m_dout), .mem_doutb(m_doutb)
 );
@@ -617,7 +628,7 @@ vh_qs1000 u_snd (
 vh_ymoki u_ymoki (
 	.clk(clk_sys), .rst(core_reset | snd_qs), .xtal14(f_suplup), .dl(ioctl_download | ldr_active),
 	.ym_wr(ym_wr), .ym_a0(ym_a0), .ym_din(snd_wd), .ym_dout(ym_dout),
-	.oki_wr(oki_wr), .oki_din(snd_wd), .oki_dout(oki_dout), .bank(oki_bank), .banked(family == 5'd4),
+	.oki_wr(oki_wr), .oki_din(snd_wd), .oki_dout(oki_dout), .bank(oki_bank), .banked(family == 5'd4 || family == 5'd10 || family == 5'd12 || family == 5'd13),
 	.sd_addr(yo_addr), .sd_req(yo_req), .sd_ack(m1_ack), .sd_dout(m1_dout),
 	.out_l(yo_l), .out_r(yo_r)
 );

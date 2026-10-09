@@ -56,7 +56,7 @@ SUCCESS = "Full Compilation was successful"
 REMOTE_ARCADE = "/media/fat/_Arcade/_%s" % PROJECT
 # Sets that are built but cannot yet run are held back from the device (name
 # the .mra stems). --all copies them anyway.
-HELD_BACK_SETS = ()
+HELD_BACK_SETS = ()   # .mra files not deployed by default (sets not yet booting in the core)
 # ---------------------------------------------------------------------------
 
 

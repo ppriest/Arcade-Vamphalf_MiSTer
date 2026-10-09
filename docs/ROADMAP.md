@@ -143,13 +143,14 @@ table says where to look.
 
 ## Memory plan
 
-One 32 MB SDRAM module (the 128 MB one works too), all on `clk_sys`, through `rtl/memory/sdram.sv`
+One 32 MB SDRAM module, and the 128 MB module for boonggab alone (the user's choice: its graphics from 16 MB up
+at `SD_GFXHI`, above the 32 MB line), all on `clk_sys`, through `rtl/memory/sdram.sv`
 (KonamiGX's controller: burst-4 granules, a double read of 16 bytes). Layout: `rtl/vh_sdram_map.svh`,
 which `scripts/build_mra.py` reads.
 
 | What | Where | Why |
 |---|---|---|
-| Program ROM 1 MB, 8052 code 128 KB, samples 4 MB, graphics 8/16 MB | SDRAM, loaded by the `.mra` | too large for BRAM |
+| Program ROM 1 MB (yorijori 2 MB), 8052 code 128 KB, samples 4 MB, graphics 8/16 MB (boonggab 28 MB) | SDRAM, loaded by the `.mra` | too large for BRAM |
 | 8052 code (u7) 128 KB | also BRAM in `vh_qs1000_mcu` (128 M10K), caught on its way to SDRAM | the 8052 reads program and banked data every machine cycle; the firmware uses all 128 KB |
 | Work RAM 2 MB | SDRAM `SD_WRAM`, through a 16 KB I-cache and a 4 KB D-cache (16-byte lines, write-through, one-entry write buffer) | too large for BRAM. Cache sizes from `scripts/cpu_mem_model.py` over 150 attract frames of the wivernwg trace: 1.24 I-misses and 69 D-misses per 1000 instructions |
 | Sprite RAM above 64 KB (192 KB) | SDRAM `SD_SPRHI`, through the caches | only the power-on test touches it; the video reads bands 1-15 |
@@ -223,14 +224,14 @@ Order: b first (22 sets on one new sound board), then c and d, then e; f and g o
 
 **Phase 5 progress.** In the core, each against MAME's trace from reset (`sim/sys_tb +pctrace`, `sim/ref/<set>`):
 vamphalf (893,119 instructions, then the YM2151's busy flag is polled a different number of times: MAME_KLUDGES),
-coolmini, mrkicker, jmpbreak, mrdig, suplup and worldadv (1,000,000 of 1,000,000 each); their clones and siblings share
-the families (vamphalfr1, vamphalfk, coolminii, dquizgo2, toyland, dtfamily, jmpbreaka, poosho, newxpang, newxpanga,
-luplup, luplup29, luplup10, puzlbang, puzlbanga). 27 sets with misncrft and wivernwg's five. The YM2151 + M6295 board
+coolmini, mrkicker, mrkickera, jmpbreak, mrdig, suplup, worldadv, boonggab and finalgdr (1,000,000 of 1,000,000 each),
+solitaire (869,671, then a YM2151 status read differs, as vamphalf's); their clones and siblings share the families (vamphalfr1, vamphalfk, coolminii, dquizgo2, toyland, dtfamily, jmpbreaka, poosho,
+newxpang, newxpanga, luplup, luplup29, luplup10, puzlbang, puzlbanga). 31 sets with misncrft and wivernwg's five. The YM2151 + M6295 board
 against MAME's audio: correlation 0.971, RMS ratio 1.008 (vamphalf). World Adventure's protection replays MAME's seven
 checks of a 2-hour run, 0 differ. Not done: video frames against MAME per set (the engine is the one checked on misncrft
-and wivernwg; suplup's colour shift is new and unchecked), solitaire (an 11-button panel: its own joystick layout and
-keys), finalgdr and mrkickera (32 KB banked backup RAM, 32 more M10K, and its .nvm; mrkickera MACHINE_NOT_WORKING),
-yorijori (MACHINE_NOT_WORKING), boonggab and aoh (groups f and g).
+and wivernwg; suplup's colour shift is new and unchecked), solitaire and finalgdr on the board, yorijori (in progress: agrees with MAME with the SETADR fix
+and without its ROM patch for 439,730 instructions, then the timer interrupt's timing differs; boots to attract on the
+board at 98186f0, play not checked) and aoh (group g).
 
 **CPU throughput** (`ff38ff1`, asked for by the user after Phase 5). `sim/sys_tb +prof` split the busy clocks by
 CPU state: in the slow sets stores waited for the write buffer 20-26% of the time (a 32-bit store was two SDRAM

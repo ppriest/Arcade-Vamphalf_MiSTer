@@ -1,0 +1,18 @@
+{
+ "groups": [
+  {"name": "Hyperstone E1", "match": "^emu\\|u_main\\|u_cpu", "color": "#e6194b"},
+  {"name": "EEPROM", "match": "^emu\\|u_main\\|u_ee", "color": "#dcbeff"},
+  {"name": "Main memory", "match": "^emu\\|u_main\\|u_mem", "color": "#911eb4"},
+  {"name": "Main other", "match": "^emu\\|u_main", "color": "#bfef45"},
+  {"name": "QS1000 MCU (8052)", "match": "^emu\\|u_snd\\|u_mcu", "color": "#ff7b9c"},
+  {"name": "QS1000 voices", "match": "^emu\\|u_snd\\|u_voice", "color": "#ffe119"},
+  {"name": "QS1000 other", "match": "^emu\\|u_snd", "color": "#d4a017"},
+  {"name": "YM2151", "match": "^emu\\|u_ymoki\\|u_ym", "color": "#f58231"},
+  {"name": "OKI M6295, sample cache", "match": "^emu\\|u_ymoki", "color": "#d4a017"},
+  {"name": "Video", "match": "^emu\\|(u_video|u_gfx|vid_rtl)", "color": "#3cb44b"},
+  {"name": "SDRAM", "match": "^emu\\|u_sdram", "color": "#4363d8"},
+  {"name": "CRT Adjust", "match": "^emu\\|u_crt", "color": "#9a6324"},
+  {"name": "Video out", "match": "^emu\\|(arcade_video|video_freak|screen_rotate_two)", "color": "#808000"},
+  {"name": "hps_io", "match": "^emu\\|hps_io", "color": "#2f6f6a"}
+ ]
+}

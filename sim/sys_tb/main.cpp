@@ -103,13 +103,14 @@ int main(int argc, char **argv) {
 	Vtb_sys *top = new Vtb_sys;
 	auto &mem = top->rootp->tb_sys__DOT__u_chip__DOT__mem;
 	size_t dl_n = (size_t)strtoul(arg(argc, argv, "+dl=", "0").c_str(), nullptr, 0);
-	for (size_t i = 0; i + 1 < img.size() && i < (32u << 20); i += 2)
+	for (size_t i = 0; i + 1 < img.size() && i < (64u << 20); i += 2)
 		mem[i >> 1] = i < dl_n ? 0x5a5a : (uint16_t)(img[i] | (img[i + 1] << 8));
 	top->ioctl_download = 0; top->ioctl_wr = 0; top->snd_dl_we = 0;
 
 	top->clk = 0; top->rst = 1; top->vrst = 1; top->prst = 1; top->board = board; top->pause = 0;
 	top->code_mask = board ? 0xffff : 0x7fff;
 	top->family = family;
+	top->prg2 = atoi(arg(argc, argv, "+prg2=", family == 11 ? "1" : "0").c_str());
 	top->bal_pcb = arg(argc, argv, "+bal=", "mame") == "pcb";   // +bal=pcb: the PCB recording's QS1000 balance
 	top->p1p2 = 0xffff; top->system = 0xff; top->flip_osd = atoi(arg(argc, argv, "+flip=", "0").c_str());
 	top->ee_blank = 1; top->ee_load_we = 0;
@@ -119,13 +120,24 @@ int main(int argc, char **argv) {
 	top->prst = 0;
 	for (int i = 0; i < 64; i++) tick();          // blank the EEPROM array
 	top->ee_blank = 0;
-	if (board == 0 && img.size() >= SD_EEPROM + 128) {
+	if (img.size() >= SD_EEPROM + 128) {   // sets without a default image carry 0xff there (build_mra.py)
 		for (int w = 0; w < 64; w++) {
 			top->ee_load_we = 1; top->ee_load_addr = w;
 			top->ee_load_data = (img[SD_EEPROM + 2 * w] << 8) | img[SD_EEPROM + 2 * w + 1];
 			tick();
 		}
 		top->ee_load_we = 0;
+	}
+	// +bk=<file>: finalgdr's backup RAM (32 KB, as a .nvm carries it after the EEPROM), into the array
+	{
+		std::string bkp = arg(argc, argv, "+bk=");
+		if (!bkp.empty()) {
+			FILE *bf = fopen(bkp.c_str(), "rb");
+			if (!bf) { fprintf(stderr, "cannot open +bk=%s\n", bkp.c_str()); return 2; }
+			auto &bk = top->rootp->tb_sys__DOT__u_main__DOT__u_bk__DOT__mem;
+			for (int i = 0; i < 0x8000; i++) { int c = fgetc(bf); bk[i] = c == EOF ? 0 : (uint8_t)c; }
+			fclose(bf);
+		}
 	}
 	// +phase=N: the video runs from here, and the CPU leaves reset N clocks later than it would (on the
 	// board the video runs through the download, so the CPU starts at an arbitrary line and pixel)
@@ -212,6 +224,10 @@ int main(int argc, char **argv) {
 	FILE *mxf = mixp.empty() ? nullptr : fopen(mixp.c_str(), "w");
 	std::string protp = arg(argc, argv, "+prot=");
 	FILE *ptf = protp.empty() ? nullptr : fopen(protp.c_str(), "w");
+	// +iolog=<file>: every main-CPU I/O access, as scripts/mame/iotrace.lua writes MAME's (no PC: 0)
+	std::string iologp = arg(argc, argv, "+iolog=");
+	FILE *iof = iologp.empty() ? nullptr : fopen(iologp.c_str(), "w");
+	int late_port = -1;
 	std::vector<int16_t> pcm;
 	uint64_t snd_ticks = 0, snd_mixes = 0, snd_writes = 0;
 	int64_t acc_l = 0, acc_r = 0;
@@ -295,6 +311,20 @@ int main(int argc, char **argv) {
 					printf("pctrace: all %zu instructions agree\n", pci + 1);
 			}
 		}
+		if (iof) {
+			auto *rm = top->rootp;
+			// a late read (finalgdr's backup RAM: vh_cpumem's S_IOW) takes io_rdata a clock after io_rd
+			if (late_port >= 0) {
+				fprintf(iof, "%d 00000000 R %04x %08x\n", frame, late_port, rm->tb_sys__DOT__u_main__DOT__io_rdata);
+				late_port = -1;
+			}
+			if (rm->tb_sys__DOT__u_main__DOT__io_rd && rm->tb_sys__DOT__u_main__DOT__g_bram)
+				late_port = rm->tb_sys__DOT__u_main__DOT__io_port & 0x1fff;
+			else if (rm->tb_sys__DOT__u_main__DOT__io_wr || rm->tb_sys__DOT__u_main__DOT__io_rd)
+				fprintf(iof, "%d 00000000 %c %04x %08x\n", frame, rm->tb_sys__DOT__u_main__DOT__io_wr ? 'W' : 'R',
+					rm->tb_sys__DOT__u_main__DOT__io_port & 0x1fff, rm->tb_sys__DOT__u_main__DOT__io_wr ?
+					rm->tb_sys__DOT__u_main__DOT__io_wd : rm->tb_sys__DOT__u_main__DOT__io_rdata);
+		}
 		if (ptf && (top->prot_wr || top->prot_rd))
 			fprintf(ptf, "%d %c %04x %08x\n", frame, top->prot_wr ? 'W' : 'R', top->prot_tab16 ? 0x0d0 : 0x1a0,
 				top->prot_wr ? top->prot_wd : top->prot_rdata);
@@ -375,6 +405,7 @@ int main(int argc, char **argv) {
 		printf("\n");
 	}
 	if (ptf) fclose(ptf);
+	if (iof) fclose(iof);
 	if (wvf) fclose(wvf);
 	if (mxf) fclose(mxf);
 	if (!wavp.empty()) {

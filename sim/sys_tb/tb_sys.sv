@@ -8,7 +8,8 @@ module tb_sys (
 	input             rst,
 	input             vrst,             // the video's reset: on the board it runs while the CPU is held
 	input             board,
-	input      [4:0]  family,           // the I/O map (vh_main); 0 and 1 the QS1000 boards
+	input      [4:0]  family,           // the I/O map (vh_main); 0, 1 and 11 the QS1000 boards
+	input             prg2,             // a 2 MB program (yorijori)
 	input             bal_pcb,          // the QS1000 mix balance: 0 MAME's (the benches' reference), 1 the PCB's
 	input             pause,
 	input      [15:0] code_mask,
@@ -49,7 +50,7 @@ module tb_sys (
 	output            game_flip,
 	output            dbg_miss,
 	output            dbg_miss_ic,
-	output     [21:4] dbg_miss_line,
+	output     [22:4] dbg_miss_line,
 	output            dbg_rf_we,
 	output     [5:0]  dbg_rf_wa,
 	output     [31:0] dbg_rf_wd,
@@ -110,8 +111,8 @@ wire  [5:0] m2_wrx;
 wire [63:0] m_dout, m_doutb;
 
 vh_main u_main (
-	.clk(clk), .prst(prst), .rst(rst), .board(board), .family(family), .pause(pause), .cpu_tick(cpu_tick),
-	.vblank_irq(vblank_start), .p1p2(p1p2), .system(system),
+	.clk(clk), .prst(prst), .rst(rst), .board(board), .family(family), .prg2(prg2), .pause(pause), .cpu_tick(cpu_tick),
+	.vblank_irq(vblank_start), .p1p2(p1p2), .system(system), .xbtn(7'h7f),
 	.flip(game_flip), .snd_latch(snd_latch), .snd_latch_wr(snd_latch_wr),
 	.ym_wr(ym_wr), .ym_a0(ym_a0), .oki_wr(oki_wr), .snd_wd(snd_wd), .oki_bank(oki_bank),
 	.ym_dout(ym_dout), .oki_dout(oki_dout),
@@ -119,6 +120,8 @@ vh_main u_main (
 	.pal_we(pal_we), .pal_be(pal_be), .pal_addr(pal_addr), .pal_wd(pal_wd), .pal_rd(pal_rd),
 	.ee_blank(ee_blank), .ee_load_we(ee_load_we), .ee_load_addr(ee_load_addr), .ee_load_data(ee_load_data),
 	.ee_rd_addr(6'd0), .ee_rd_data(), .ee_written(),
+	.bk_load(1'b0), .bk_load_we(1'b0), .bk_load_addr(15'd0), .bk_load_data(8'd0),
+	.bk_rd_addr(15'd0), .bk_rd_data(), .bk_written(),
 .dl_req(dl_req), .dl_addr(dl_addr), .dl_data(dl_data), .dl_we16(dl_we16), .dl_g(1'b0), .dl_gdata(64'd0), .dl_busy(dl_busy),
 	.mem_addr(m2_addr), .mem_wrl(m2_wrl), .mem_wrh(m2_wrh), .mem_din(m2_din), .mem_dinx(m2_dinx), .mem_wrx(m2_wrx), .mem_dbl(m2_dbl),
 	.mem_req(m2_req), .mem_ack(m2_ack), .mem_dout(m_dout), .mem_doutb(m_doutb),
@@ -130,11 +133,11 @@ vh_main u_main (
 );
 
 wire        gfx_req, gfx_rdy, gfx_dv;
-wire [23:0] gfx_addr;
+wire [24:0] gfx_addr;
 wire [31:0] gfx_data;
 
 vh_video u_video (
-	.clk(clk), .rst(vrst), .code_mask(code_mask), .palshift(family == 5'd7),
+	.clk(clk), .rst(vrst), .code_mask(code_mask), .palshift(family == 5'd7), .code17(family == 5'd12),
 	.spr_we(spr_we), .spr_be(spr_be), .spr_addr(spr_addr), .spr_wd(spr_wd), .spr_rd(spr_rd),
 	.pal_we(pal_we), .pal_be(pal_be), .pal_addr(pal_addr), .pal_wd(pal_wd), .pal_rd(pal_rd),
 	.flip(game_flip ^ flip_osd),
@@ -148,7 +151,7 @@ vh_video u_video (
 wire [26:1] m0_addr;
 wire        m0_req, m0_ack;
 
-vh_gfxport #(.GFX_BASE(SD_GFX)) u_gfx (
+vh_gfxport #(.GFX_BASE(SD_GFX), .GFXHI_BASE(SD_GFXHI)) u_gfx (
 	.clk(clk), .prst(prst), .gfx_req(gfx_req), .gfx_rdy(gfx_rdy), .gfx_addr(gfx_addr), .gfx_dv(gfx_dv), .gfx_data(gfx_data),
 	.mem_addr(m0_addr), .mem_req(m0_req), .mem_ack(m0_ack), .mem_dout(m_dout), .mem_doutb(m_doutb)
 );
@@ -160,17 +163,17 @@ wire        SDRAM_DQML, SDRAM_DQMH, SDRAM_nCS, SDRAM_nWE, SDRAM_nRAS, SDRAM_nCAS
 wire [26:1] m1_addr, qs_addr, yo_addr;
 wire        m1_req, m1_ack, qs_req, yo_req;
 wire [63:0] m1_dout, m1_doutb;
-wire        snd_qs = family < 5'd2;
+wire        snd_qs = family < 5'd2 || family == 5'd11;
 wire        ym_wr, ym_a0, oki_wr;
 wire [7:0]  snd_wd, ym_dout, oki_dout;
-wire [1:0]  oki_bank;
+wire [2:0]  oki_bank;
 assign m1_addr = snd_qs ? qs_addr : yo_addr;
 assign m1_req  = snd_qs ? qs_req : yo_req;
 
 vh_ymoki u_ymoki (
 	.clk(clk), .rst(rst | snd_qs), .xtal14(family == 5'd7), .dl(1'b0),
 	.ym_wr(ym_wr), .ym_a0(ym_a0), .ym_din(snd_wd), .ym_dout(ym_dout),
-	.oki_wr(oki_wr), .oki_din(snd_wd), .oki_dout(oki_dout), .bank(oki_bank), .banked(family == 5'd4),
+	.oki_wr(oki_wr), .oki_din(snd_wd), .oki_dout(oki_dout), .bank(oki_bank), .banked(family == 5'd4 || family == 5'd10 || family == 5'd12 || family == 5'd13),
 	.sd_addr(yo_addr), .sd_req(yo_req), .sd_ack(m1_ack), .sd_dout(m1_dout),
 	.out_l(yo_l), .out_r(yo_r)
 );

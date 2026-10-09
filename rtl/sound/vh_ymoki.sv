@@ -25,7 +25,7 @@ module vh_ymoki (
 	input               oki_wr,
 	input       [7:0]   oki_din,
 	output      [7:0]   oki_dout,
-	input       [1:0]   bank,
+	input       [2:0]   bank,
 	input               banked,           // banked_oki_map (vamphalf.cpp:695): 0x20000-0x3ffff is bank * 0x20000 of the region
 
 	// SDRAM port 1: one 64-bit granule per request
@@ -76,7 +76,7 @@ jt6295 #(.INTERPOL(0)) u_oki (
 wire        br_req, br_valid;
 wire [19:0] br_addr;
 wire [7:0]  br_data;
-wire [19:0] oki_eff = (banked && oki_rom_addr[17]) ? {1'b0, bank, oki_rom_addr[16:0]} : {2'd0, oki_rom_addr};
+wire [19:0] oki_eff = (banked && oki_rom_addr[17]) ? {bank, oki_rom_addr[16:0]} : {2'd0, oki_rom_addr};
 oki_rom_bridge u_bridge (
 	.clk(clk), .reset(rst),
 	.rom_addr(oki_eff[17:0]), .rom_data(oki_rom_data), .rom_ok(oki_rom_ok), .bank(oki_eff[19:18]),

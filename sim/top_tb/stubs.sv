@@ -30,6 +30,7 @@ module hps_io #(parameter CONF_STR = "", CONF_STR_BRAM = 0, PS2DIV = 0, WIDE = 0
 	reg [15:0] idx = 0;
 	reg [26:0] addr = 0;
 	reg [7:0]  dout = 0;
+	wire [7:0] din_probe /*verilator public_flat_rd*/ = ioctl_din;   // the .nvm save's byte (main.cpp)
 	reg [127:0] st = 0;
 	reg [31:0] j0 = 0, j1 = 0;
 	assign gamma_bus = 0;

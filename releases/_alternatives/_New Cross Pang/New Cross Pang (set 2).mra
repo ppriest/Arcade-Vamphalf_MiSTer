@@ -9,10 +9,11 @@
     <manufacturer>F2 System</manufacturer>
     <category>Arcade</category>
     <rotation>horizontal</rotation>
-    <buttons names="Button 1,Button 2,Button 3,Button 4,Start,Coin,Pause,Service" default="A,B,X,Y,Start,Select,L,R" count="4"/>
+    <buttons names="Button 1,Button 2,Button 3,Button 4,Start,Coin,Pause,Service Coin,Service Mode" default="A,B,X,Y,Start,Select,L,R" count="4"/>
 
     <!-- mod bytes (Vamphalf.sv): [0] E1-32 board, [2:1] rotation, [7:3] I/O map family;
-         second byte [0] 16-bit sprite codes (gfx above 8 MB) -->
+         second byte [0] 16-bit sprite codes (gfx above 8 MB), [1] a 2 MB program, [2] 17-bit codes,
+         the gfx above 16 MB at SD_GFXHI (needs the 128 MB SDRAM module) -->
     <rom index="1"><part>28 00</part></rom>
 
     <!-- address: the HPS puts the image in DDR3 and the core copies it to SDRAM (rtl/memory/vh_rom_loader.sv) -->

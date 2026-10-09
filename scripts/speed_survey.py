@@ -21,7 +21,7 @@ REPO = Path(__file__).resolve().parent.parent
 IDLE = {
     "misncrft": (0, 0, 0xff5a),   "wivernwg": (1, 1, 0x10766),  "vamphalf": (2, 0, 0x82ec),
     "coolmini": (3, 0, 0x75f88),  "dquizgo2": (3, 0, 0xaa630),  "toyland":  (3, 0, 0x130c2),
-    "mrkicker": (4, 0, 0x41ec6),  "dtfamily": (4, 0, 0x12fa6),  "jmpbreak": (5, 0, 0x984a),
+    "mrkicker": (4, 0, 0x41ec6),  "mrkickera": (10, 1, 0x46a30),  "boonggab": (12, 0, 0x131a6),  "dtfamily": (4, 0, 0x12fa6),  "jmpbreak": (5, 0, 0x984a),
     "poosho":   (5, 0, 0xa8c78),  "newxpang": (6, 0, 0x8b8e),   "mrdig":    (6, 0, 0xae38),
     "suplup":   (7, 0, 0xaf184),  "worldadv": (9, 0, 0x93ae),
 }

@@ -88,7 +88,7 @@ int main(int argc, char **argv) {
 			dm[g] = v;
 		}
 		uint32_t x = 12345;
-		for (size_t i = 0; i < (size_t)1 << 24; i++) { x = x * 1103515245u + 12345u; mem[i] = (uint16_t)(x >> 16); }
+		for (size_t i = 0; i < (size_t)1 << 25; i++) { x = x * 1103515245u + 12345u; mem[i] = (uint16_t)(x >> 16); }
 	} else {
 		// the part not downloaded: as left by a previous load (here the image itself); the rest is random
 		for (size_t i = dln; i + 1 < img.size(); i += 2) mem[i >> 1] = (uint16_t)(img[i] | (img[i + 1] << 8));
@@ -167,6 +167,19 @@ int main(int argc, char **argv) {
 		}
 		printf("%s: u7 %zu of 131072 bytes differ; EEPROM %d of 64 words differ from the %s\n",
 			ddr ? "fast load" : "download", u7bad, (int)eebad, nvm.size() >= 128 ? ".nvm" : "image's default");
+	}
+	if (nvm.size() > 128) {
+		// finalgdr's backup RAM after the .nvm load, and every .nvm byte read back through the save path
+		auto &bk = r->tb_top__DOT__u_emu__DOT__u_main__DOT__u_bk__DOT__mem;
+		size_t n = nvm.size() - 128, bkbad = 0, rdbad = 0;
+		for (size_t i = 0; i < n; i++) if (bk[i] != nvm[128 + i]) bkbad++;
+		for (size_t a = 0; a < nvm.size(); a++) {
+			addr = (uint32_t)a;
+			tick(); tick(); tick();
+			if (r->tb_top__DOT__u_emu__DOT__hps_io__DOT__din_probe != nvm[a]) rdbad++;
+		}
+		printf("backup RAM: %zu of %zu bytes differ from the .nvm; the save path reads %zu of %zu bytes differently\n",
+			bkbad, n, rdbad, nvm.size());
 	}
 
 	size_t pci = 0;

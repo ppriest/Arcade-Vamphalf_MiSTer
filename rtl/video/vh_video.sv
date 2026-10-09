@@ -18,6 +18,7 @@ module vh_video (
 	input             rst,
 	input      [15:0] code_mask,       // 16'h7fff for the 8 MB graphics ROM (MAME wraps codes by the element count)
 	input             palshift,        // colour from word 2 bits 14:8 instead of 6:0 (m_palshift 8: suplup)
+	input             code17,          // code bit 16 from word 2 bit 8 (m_has_extra_gfx: boonggab)
 
 	// CPU side, 32-bit words
 	input             spr_we,
@@ -36,7 +37,7 @@ module vh_video (
 	// graphics ROM
 	output reg        gfx_req,
 	input             gfx_rdy,         // the memory takes a request in this clock
-	output reg [23:0] gfx_addr,
+	output reg [24:0] gfx_addr,
 	input             gfx_dv,
 	input      [31:0] gfx_data,
 
@@ -178,7 +179,7 @@ reg [8:0]  eng_t;            // target line of the running pass
 
 // FIFO of sprites that hit the line
 localparam FD = 16;
-(* ramstyle = "logic" *) reg [38:0] fifo [0:FD-1];
+(* ramstyle = "logic" *) reg [39:0] fifo [0:FD-1];
 reg [4:0]  f_wr, f_rd;
 wire [4:0] f_cnt = f_wr - f_rd;
 wire       f_full  = (f_cnt >= FD - 3);
@@ -195,16 +196,16 @@ wire        fx_e  = w0[15] ^ flip_l;
 wire [3:0]  srow  = fy_e ? ~rrow[3:0] : rrow[3:0];
 wire [10:0] xs    = {2'b0, w3[8:0]};
 wire [10:0] x_pos = flip_l ? (11'd366 - xs) : xs;
-wire [38:0] f_in  = {w1 & code_mask, palshift ? w2[14:8] : w2[6:0], x_pos, fx_e, srow};   // code 16, colour 7, x 11, fx 1, row 4
+wire [39:0] f_in  = {code17 && w2[8], w1 & code_mask, palshift ? w2[14:8] : w2[6:0], x_pos, fx_e, srow};   // code 17, colour 7, x 11, fx 1, row 4
 
 // fetch: requests go out back to back (up to four in flight), rows come back in order
-(* ramstyle = "logic" *) reg [38:0]  mf [0:3];                 // meta of the requests in flight
+(* ramstyle = "logic" *) reg [39:0]  mf [0:3];                 // meta of the requests in flight
 reg [2:0]   mf_wr, mf_rd;
 wire [2:0]  mf_cnt = mf_wr - mf_rd;
 reg [1:0]   f_beat;
 reg [95:0]  f_acc;
 (* ramstyle = "logic" *) reg [127:0] rf_row [0:3];             // rows waiting for the draw stage
-reg [38:0]  rf_meta [0:3];
+reg [39:0]  rf_meta [0:3];
 reg [2:0]   rf_wr, rf_rd;
 wire [2:0]  rf_cnt = rf_wr - rf_rd;
 wire        f_idle = (mf_cnt == 3'd0) && (rf_cnt == 3'd0);
@@ -279,7 +280,7 @@ always @(posedge clk) begin
 				mf_wr <= mf_wr + 3'd1;
 				f_rd <= f_rd + 5'd1;
 				gfx_req <= 1'b1;
-				gfx_addr <= {fifo[f_rd[3:0]][38:23], fifo[f_rd[3:0]][3:0], 4'b0000};
+				gfx_addr <= {fifo[f_rd[3:0]][39:23], fifo[f_rd[3:0]][3:0], 4'b0000};
 			end
 			// fetch: collect four beats into a row
 			if (gfx_dv) begin

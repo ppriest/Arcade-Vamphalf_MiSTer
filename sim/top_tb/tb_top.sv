@@ -23,13 +23,13 @@ wire [3:0]  ADC_BUS;
 // DDR3, the HPS's 0x30000000 window, for the fast load: main.cpp fills ddr_mem with the image. A read
 // is taken when BUSY is low and answered 12 clocks later; BUSY is high about one clock in four
 // (an LFSR), so the client's handshake is exercised.
-reg  [63:0] ddr_mem [0:(1 << 22) - 1];
+reg  [63:0] ddr_mem [0:(1 << 23) - 1];
 wire        DDRAM_RD;
 wire [28:0] DDRAM_ADDR;
 reg         ddr_busy = 1'b0, ddr_rdy = 1'b0;
 reg  [63:0] ddr_q;
 reg  [4:0]  ddr_cnt = 5'd0;
-reg  [21:0] ddr_a;
+reg  [22:0] ddr_a;
 reg  [15:0] ddr_lfsr = 16'hace1;
 always @(posedge clk) begin
 	ddr_lfsr <= {ddr_lfsr[14:0], ddr_lfsr[15] ^ ddr_lfsr[13] ^ ddr_lfsr[12] ^ ddr_lfsr[10]};
@@ -39,7 +39,7 @@ always @(posedge clk) begin
 		ddr_cnt <= ddr_cnt - 5'd1;
 		if (ddr_cnt == 5'd1) begin ddr_rdy <= 1'b1; ddr_q <= ddr_mem[ddr_a]; end
 	end else if (DDRAM_RD && !ddr_busy) begin
-		ddr_a   <= DDRAM_ADDR[21:0];
+		ddr_a   <= DDRAM_ADDR[22:0];
 		ddr_cnt <= 5'd12;
 	end
 end
