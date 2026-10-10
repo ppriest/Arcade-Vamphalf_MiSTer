@@ -107,7 +107,7 @@ YM2151 and two M6295s (Age Of Heroes: a 384 x 224 screen and 18-bit sprite codes
 
 | Chip | Function | Status |
 |-|-|-|
-| Hyperstone E1-16T / GMS30C2116, E1-32T, 50 MHz | Main CPU | Written here (`rtl/e1/e1_cpu.sv`) from MAME's `e132xs`, multi-cycle, behind a 16 KB I-cache and a 4 KB D-cache (`rtl/vh_cpumem.sv`) |
+| Hyperstone E1-16T / GMS30C2116, E1-32T, 50 MHz | Main CPU | Written here from MAME's `e132xs`: `rtl/e1/e1_pipe.sv`, pipelined (fetch and operand read run ahead of execute; the next instruction goes in beside the last clock of an ALU instruction, a load or store, or a predicted branch), built from the multi-cycle `rtl/e1/e1_cpu.sv`, which stays as the reference; behind a 16 KB I-cache and a 4 KB D-cache (`rtl/vh_cpumem.sv`) |
 | Sprites and palette | Video | Written here (`rtl/video/vh_video.sv`): rendered per scanline from a copy of the sprite list taken once a frame |
 | QS1000 (8052 + 32-voice wavetable) | Sound, QS1000 boards | 8052: jotego's JT8051, changed (`rtl/qs1000/PROVENANCE.md`); wavetable written here from MAME's `qs1000.cpp` (`rtl/qs1000/vh_qs1000_voice.sv`) |
 | YM2151 | FM sound | jotego's JT51 (`rtl/sound/PROVENANCE.md`) |
@@ -126,7 +126,7 @@ board's dot clock is 14.318181 MHz / 2 = 7.159 MHz (60.53 Hz, `:1251`); the core
 
 Where the logic sits on the Cyclone V, read from the compiled design with `scripts/floorplan.py` (blocks defined in `scripts/floorplan.json`). One cell per LAB, M10K or DSP site, coloured by the block owning most of it, brighter when fuller. The thin columns are M10K and DSP; the empty area at the top right is the HPS; grey is the MiSTer framework. LUT counts are combinational cells, two per ALM.
 
-Revision `Vamphalf`, fitted 08 Oct 2026:
+Revision `Vamphalf` at `5c4af03` (the 20261010 release), fitted 10 Oct 2026:
 
 ![Floorplan of Vamphalf](docs/floorplan/Vamphalf.png)
 
@@ -208,10 +208,10 @@ instruction (both below). Where the core
 follows MAME on something MAME marks as uncertain, it is listed in `docs/MAME_KLUDGES.md`; the core's own
 approximations are in `docs/HACKS.md`.
 
-* CPU: `rtl/e1/e1_cpu.sv` agrees with MAME's interpreter after every instruction (PC, SR, all registers,
-  every bus access), at 0 and 3 bus wait states, on Mission Craft's first 1,000,000 instructions, Wivern
-  Wings' first 8,000,000 (E1-32) and the random conformance suite (`scripts/e1_regress.py`, 255 of 255
-  primary opcodes).
+* CPU: `rtl/e1/e1_pipe.sv`, and `rtl/e1/e1_cpu.sv` it was built from, agree with MAME's interpreter after
+  every instruction (PC, SR, all registers, every bus access), at 0 and 3 bus wait states, on Mission
+  Craft's first 1,000,000 instructions, Wivern Wings' first 8,000,000 (E1-32) and the random conformance
+  suite (`scripts/e1_regress.py`, 255 of 255 primary opcodes; `--replay --pipe` for `e1_pipe`).
 * Whole board (`sim/sys_tb`, the SDRAM controller and a chip model) against MAME's trace from reset:
   1,000,000 of 1,000,000 instructions on `misncrft`, `coolmini`, `mrkicker`, `mrkickera`, `jmpbreak`, `mrdig`,
   `suplup`, `worldadv`, `boonggab` and `finalgdr`; 893,119 on `vamphalf` and 869,671 on `solitaire`, each
