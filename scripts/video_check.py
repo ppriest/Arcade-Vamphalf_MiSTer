@@ -20,9 +20,9 @@ sys.path.insert(0, str(REPO / "scripts"))
 import render_model as rm  # noqa: E402
 
 
-def bench(d, fn, gfx, flip, out, lat):
+def bench(d, fn, gfx, flip, out, lat, aoh=False):
     cmd = ["scripts/run_verilator.sh", "video_tb", f"+dir={d}", f"+frame={fn}", f"+gfx={gfx}",
-           f"+out={out}", f"+flip={int(flip)}", f"+lat={lat}"]
+           f"+out={out}", f"+flip={int(flip)}", f"+lat={lat}", f"+aoh={int(aoh)}"]
     bash = "C:/Program Files/Git/bin/bash.exe"
     r = subprocess.run([bash] + cmd, cwd=REPO, capture_output=True, text=True)
     return r
@@ -45,6 +45,8 @@ def main():
     a = ap.parse_args()
     dirs = [Path(d) for d in (a.dirs or [REPO / "debug" / "vcap" / f"{a.set}_attract", REPO / "debug" / "vcap" / f"{a.set}_play"])]
     gfx = rm.find_gfx(dirs)
+    aoh = a.set == "aoh"
+    rm.set_aoh(aoh)
     model = rm.Model(np.fromfile(gfx, dtype=np.uint8))
     out = REPO / "debug" / "video_tb.ppm"
     tot = ok = 0
@@ -62,7 +64,7 @@ def main():
             n += 1
             spr, pal = rm.load_frame(d, fn)
             exp = model.render(spr, pal, flip, clip_flip=flip, collect=False)["rgb"]
-            r = bench(d.as_posix(), fn, Path(gfx).as_posix(), flip, out.as_posix(), a.lat)
+            r = bench(d.as_posix(), fn, Path(gfx).as_posix(), flip, out.as_posix(), a.lat, aoh)
             if r.returncode != 0:
                 print(r.stdout[-600:], r.stderr[-600:])
                 sys.exit("bench failed")

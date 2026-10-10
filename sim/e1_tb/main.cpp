@@ -16,6 +16,10 @@
 // value MAME read) and the timer interrupt (tick is tied off in tb_e1; timer_pend is forced when the trace shows
 // the timer vector). Interrupt vectors are recognised for the MEM3 table and for tables relocated by TPR.
 //
+// Bus accesses and interrupts belong to the instruction in ST_EXEC or the states after it (o_xseq counts the
+// instructions that have entered it), not to the one after the last retired: e1_pipe starts the next
+// instruction before the last has retired (+define+E1_PIPE builds the bench with it).
+//
 // MAME's interpreter trace gives the register state before every instruction and the
 // bus accesses each made. The bench serves instruction fetches from the words seen
 // in the trace, serves data reads by replaying the trace in order, checks that every
@@ -161,10 +165,40 @@ int main(int argc, char **argv) {
 		fclose(f);
 	}
 
+	// MAME takes an interrupt after instruction a when the record after it is an interrupt entry: I set, FL=2
+	// (a trap instruction to the same address leaves FL=6), a vector of the MEM3 table or of a table
+	// relocated by TPR (MEM0, MEM1, MEM2, IRAM entry: vector = entry | (63 - trapno) * 4)
+	std::map<uint64_t, int> int_after;
+	{
+		static const struct { uint32_t addr; int bit; } vec[] = {
+			{0xffffffd4, 0}, {0xffffffd0, 1}, {0xffffffcc, 2}, {0xffffffc8, 3},
+			{0xffffffc4, 4}, {0xffffffc0, 5}, {0xffffffd8, 6}, {0xffffffdc, 7} };
+		static const struct { uint32_t off; int bit; } rel[] = {
+			{0x28, 0}, {0x2c, 1}, {0x30, 2}, {0x34, 3}, {0x38, 4}, {0x3c, 5}, {0x24, 6}, {0x20, 7} };
+		TraceReader ts;
+		if (ts.open(instr_path.c_str()) && ts.next()) {
+			uint64_t a_idx = ts.cur.idx;
+			uint32_t a_pc = ts.cur.pc;
+			while (ts.next()) {
+				const Rec &la = ts.cur;
+				if ((la.sr & 0x80) && ((la.sr >> 21) & 0xf) == 2 && la.pc != a_pc) {
+					for (auto &v : vec) if (la.pc == v.addr) int_after[a_idx] = v.bit;
+					if (!int_after.count(a_idx))
+						for (auto &v : rel) if ((la.pc & 0x3fffffff) == v.off) int_after[a_idx] = v.bit;
+				}
+				a_idx = la.idx; a_pc = la.pc;
+				if (a_idx >= max_n + 4) break;
+			}
+		}
+	}
+
 	TraceReader tr;
 	if (!tr.open(instr_path.c_str())) { fprintf(stderr, "cannot open %s\n", instr_path.c_str()); return 2; }
 	tr.next();
 	Rec exp = tr.cur;               // state before the instruction about to run
+	const uint64_t idx0 = exp.idx;  // the trace index of the first instruction
+	std::map<uint64_t, size_t> rpos;   // bus rows consumed, per instruction
+	uint32_t xseq_prev = 0;
 
 	Vtb_e1 *top = new Vtb_e1;
 	top->clk = 0; top->reset = 1; top->pause = 0; top->irq_in = 0; top->bus_ack = 0; top->bus_rdata = 0;
@@ -173,7 +207,6 @@ int main(int argc, char **argv) {
 	top->reset = 0;
 
 	uint64_t instr = 0;           // instructions retired
-	size_t row_pos = 0;           // next unconsumed bus row of the running instruction
 	int wcnt = 0;
 	bool bus_busy = false;
 	uint64_t cycles = 0, bus_cycles = 0;
@@ -181,7 +214,6 @@ int main(int argc, char **argv) {
 	uint64_t rd_hist[8] = {0};
 	std::map<std::string, uint64_t> rd2_mn;
 	int errors = 0;
-	std::vector<BusRow> *rows = &busrows[0];
 	uint32_t irq_pending = 0;
 	int ints_taken = 0;
 	int setadr_carries = 0;
@@ -264,6 +296,29 @@ int main(int argc, char **argv) {
 					r->tb_e1__DOT__cpu__DOT__delay_slot = 0;
 					r->tb_e1__DOT__cpu__DOT__delay_slot_taken = 0;
 					r->tb_e1__DOT__cpu__DOT__intblock = 0;
+#ifdef E1_PIPE
+					// what has started after the instruction is dropped: X idle, D, F and the queue empty, the
+					// next instruction to go in is the trace's next
+					r->tb_e1__DOT__cpu__DOT__state = 1;
+					r->tb_e1__DOT__cpu__DOT__d_valid = 0;
+					r->tb_e1__DOT__cpu__DOT__fpc = nx.pc;
+					r->tb_e1__DOT__cpu__DOT__fc_valid = 0;
+					r->tb_e1__DOT__cpu__DOT__pf_valid = 0;
+					r->tb_e1__DOT__cpu__DOT__if_req = 0;
+					r->tb_e1__DOT__cpu__DOT__bus_req = 0;
+					r->tb_e1__DOT__cpu__DOT__wq_cnt = 0;
+					r->tb_e1__DOT__cpu__DOT__wq_rd = 0;
+					r->tb_e1__DOT__cpu__DOT__rq_n = 0;
+					r->tb_e1__DOT__cpu__DOT__rq_rp = 0;
+					r->tb_e1__DOT__cpu__DOT__rq_wp = 0;
+					r->tb_e1__DOT__cpu__DOT__push_seq = 0;
+					r->tb_e1__DOT__cpu__DOT__commit_seq = 0;
+					r->tb_e1__DOT__cpu__DOT__x_srw = 0;
+					r->tb_e1__DOT__cpu__DOT__x_seq = (uint32_t)(nx.idx - idx0);
+					xseq_prev = (uint32_t)(nx.idx - idx0);
+					bus_busy = false;
+					for (auto it = rpos.begin(); it != rpos.end();) it = it->first >= nx.idx ? rpos.erase(it) : std::next(it);
+#endif
 					last_resync = (long long)instr;
 				}
 			}
@@ -292,6 +347,9 @@ int main(int argc, char **argv) {
 		// bus responder
 		top->bus_ack = 0;
 		if (top->bus_req) {
+			const uint64_t xk = idx0 + (uint64_t)top->o_xseq - 1;
+			std::vector<BusRow> *rows = &busrows[xk];
+			size_t &row_pos = rpos[xk];
 			if (!bus_busy) { bus_busy = true; wcnt = wait_states; }
 			if (wcnt > 0) wcnt--;
 			else {
@@ -395,9 +453,13 @@ int main(int argc, char **argv) {
 
 		if (top->retire) {
 			instr++;
-			if (row_pos != rows->size() && errors == 0) {
-				if (fail("RTL made fewer bus accesses than MAME"))
-					fprintf(stderr, "  expected %zu rows, consumed %zu; instruction %s at %08x\n", rows->size(), row_pos, exp.dis.c_str(), exp.pc);
+			{
+				size_t want = busrows.count(exp.idx) ? busrows[exp.idx].size() : 0, got = rpos.count(exp.idx) ? rpos[exp.idx] : 0;
+				if (got != want && errors == 0) {
+					if (fail("RTL made fewer bus accesses than MAME"))
+						fprintf(stderr, "  expected %zu rows, consumed %zu; instruction %s at %08x\n", want, got, exp.dis.c_str(), exp.pc);
+				}
+				rpos.erase(exp.idx);
 			}
 			if (!tr.next()) break;
 			Rec nx = tr.cur;
@@ -413,24 +475,6 @@ int main(int argc, char **argv) {
 				arm_for = -1; irq_raised = false; irq_pending = 0; top->irq_in = 0; int_ack_seen = false;
 				top->rootp->tb_e1__DOT__cpu__DOT__timer_pend = 0;
 			}
-			// does MAME take an interrupt after the instruction that runs next (nx)?
-			{
-				static const struct { uint32_t addr; int bit; } vec[] = {
-					{0xffffffd4, 0}, {0xffffffd0, 1}, {0xffffffcc, 2}, {0xffffffc8, 3},
-					{0xffffffc4, 4}, {0xffffffc0, 5}, {0xffffffd8, 6}, {0xffffffdc, 7} };
-				Rec la = tr.peek();
-				// execute_int leaves FL=2 and sets I; a trap instruction to the same address leaves FL=6
-				if (arm_for < 0 && la.idx != ~0ull && (la.sr & 0x80) && ((la.sr >> 21) & 0xf) == 2 && la.pc != nx.pc)
-					for (auto &v : vec)
-						if (la.pc == v.addr) { arm_for = (long long)nx.idx; arm_bit = v.bit; irq_raised = false; }
-				// trap table relocated by TPR (MEM0, MEM1, MEM2, IRAM entry): vector = entry | (63 - trapno) * 4
-				if (arm_for < 0 && la.idx != ~0ull && (la.sr & 0x80) && ((la.sr >> 21) & 0xf) == 2 && la.pc != nx.pc) {
-					static const struct { uint32_t off; int bit; } rel[] = {
-						{0x28, 0}, {0x2c, 1}, {0x30, 2}, {0x34, 3}, {0x38, 4}, {0x3c, 5}, {0x24, 6}, {0x20, 7} };
-					for (auto &v : rel)
-						if ((la.pc & 0x3fffffff) == v.off) { arm_for = (long long)nx.idx; arm_bit = v.bit; irq_raised = false; }
-				}
-			}
 			inst_failed = false;
 			if (verbose) printf("%llu %08x %s\n", (unsigned long long)exp.idx, exp.pc, exp.dis.c_str());
 			exp = nx;
@@ -444,16 +488,19 @@ int main(int argc, char **argv) {
 					if (la.idx != ~0ull) top->rootp->tb_e1__DOT__cpu__DOT__tr_val = la.l[(((exp.sr >> 25) & 0x7f) + dn) & 63];
 				}
 			}
-			rows = &busrows[exp.idx];
-			row_pos = 0;
 		}
-		// MAME takes an interrupt after instruction arm_for: raise the line while that
-		// instruction executes, so the next operand-read state samples it
-		if (arm_for >= 0 && !irq_raised && top->o_state == 4) {
-			// bit 7 is the timer interrupt: internal to the RTL (tick is tied off in tb_e1), forced through timer_pend
-			if (arm_bit == 7) top->rootp->tb_e1__DOT__cpu__DOT__timer_pend = 1;
-			else { irq_pending = 1u << arm_bit; top->irq_in = irq_pending; }
-			irq_raised = true;
+		// MAME takes an interrupt after instruction arm_for: raise the line when that instruction enters
+		// ST_EXEC, so the interrupt is sampled before the one after it goes on
+		if (top->o_xseq != xseq_prev) {
+			xseq_prev = top->o_xseq;
+			const uint64_t xk = idx0 + (uint64_t)xseq_prev - 1;
+			if (arm_for < 0 && int_after.count(xk)) {
+				arm_for = (long long)xk; arm_bit = int_after[xk];
+				// bit 7 is the timer interrupt: internal to the RTL (tick is tied off in tb_e1), forced through timer_pend
+				if (arm_bit == 7) top->rootp->tb_e1__DOT__cpu__DOT__timer_pend = 1;
+				else { irq_pending = 1u << arm_bit; top->irq_in = irq_pending; }
+				irq_raised = true;
+			}
 		}
 		if (int_retired && int_ack_seen && top->o_wq == 0 && top->o_state != 11) {
 			compare_state(ip_nx, ip_exp);

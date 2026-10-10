@@ -48,6 +48,8 @@ int main(int argc, char **argv) {
 	int flip = atoi(arg(argc, argv, "+flip=", "0").c_str());
 	int lat = atoi(arg(argc, argv, "+lat=", "6").c_str());
 	int nframes = atoi(arg(argc, argv, "+frames=", "3").c_str());
+	int aoh = atoi(arg(argc, argv, "+aoh=", "0").c_str());   // aoh's timing and sprite format: 384 x 224
+	const int vw = aoh ? 384 : 320, vh = aoh ? 224 : 236;
 
 	std::vector<uint8_t> spr = slurp(dir + "/f" + frame + "_spriteram.bin");
 	std::vector<uint8_t> pal = slurp(dir + "/f" + frame + "_palette.bin");
@@ -56,7 +58,7 @@ int main(int argc, char **argv) {
 	Vtb_video *t = new Vtb_video;
 	auto tick = [&]() { t->clk = 0; t->eval(); t->clk = 1; t->eval(); };
 	t->clk = 0; t->rst = 1; t->spr_we = 0; t->pal_we = 0; t->gfx_dv = 0; t->gfx_rdy = 1; t->flip = flip; t->code_mask = 0xffff;
-	t->palshift = 0;
+	t->palshift = 0; t->aoh = aoh;
 	for (int i = 0; i < 4; i++) tick();
 	t->rst = 0;
 
@@ -107,11 +109,11 @@ int main(int argc, char **argv) {
 		clocks++;
 		if (t->frame_start) {
 			frames_seen++;
-			if (frames_seen == nframes) { cur.assign(320 * 236 * 3, 0); cur_pix = 0; in_frame_capture = true; }
+			if (frames_seen == nframes) { cur.assign(vw * vh * 3, 0); cur_pix = 0; in_frame_capture = true; }
 			else if (frames_seen == nframes + 1) { img = cur; in_frame_capture = false; }
 		}
 		if (t->ce_pix && in_frame_capture && !t->hblank && !t->vblank) {
-			if (cur_pix < 320 * 236) {
+			if (cur_pix < vw * vh) {
 				cur[3 * cur_pix] = t->vid_r; cur[3 * cur_pix + 1] = t->vid_g; cur[3 * cur_pix + 2] = t->vid_b;
 			}
 			cur_pix++;
@@ -120,7 +122,7 @@ int main(int argc, char **argv) {
 	(void)lineno_prev; (void)cur_rows;
 	if (img.empty()) { fprintf(stderr, "no frame captured\n"); return 3; }
 	FILE *f = fopen(outp.c_str(), "wb");
-	fprintf(f, "P6\n320 236\n255\n");
+	fprintf(f, "P6\n%d %d\n255\n", vw, vh);
 	fwrite(img.data(), 1, img.size(), f);
 	fclose(f);
 	printf("frame %s flip %d: %d pixel slots captured, engine overruns %d, longest pass %d of 3584 clocks, %llu clocks\n", frame.c_str(), flip, cur_pix, (int)t->dbg_overrun, (int)t->dbg_maxbusy, (unsigned long long)clocks);

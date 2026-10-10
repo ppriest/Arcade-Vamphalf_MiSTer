@@ -6,7 +6,7 @@
 // +img is the download image (scripts/build_mra.py --image <set> <file>); it is written into the
 // chip model's array before the clock starts, and a Mission Craft image's EEPROM default (SD_EEPROM)
 // goes in through the 93C46 model's load port, as the core's download does. +snap lists frames whose
-// visible 320 x 236 pixels are written as <out>/f<N>.ppm. +pctrace compares the CPU's retired PCs with
+// visible 320 x 236 pixels (aoh 384 x 224) are written as <out>/f<N>.ppm. +pctrace compares the CPU's retired PCs with
 // a MAME instruction trace (docs/E1_TRACE_FORMAT.md) and reports the first difference: up to the first
 // interrupt the two must agree, after it timing differs. +coin / +start press COIN1 / START1 at frame F
 // for +hold frames (default 6). +dl=N sends the image's first N bytes through the real download path
@@ -31,6 +31,7 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <map>
 #include <set>
 #include <fcntl.h>
 
@@ -103,7 +104,7 @@ int main(int argc, char **argv) {
 	Vtb_sys *top = new Vtb_sys;
 	auto &mem = top->rootp->tb_sys__DOT__u_chip__DOT__mem;
 	size_t dl_n = (size_t)strtoul(arg(argc, argv, "+dl=", "0").c_str(), nullptr, 0);
-	for (size_t i = 0; i + 1 < img.size() && i < (64u << 20); i += 2)
+	for (size_t i = 0; i + 1 < img.size() && i < (128u << 20); i += 2)   // the 128 MB module
 		mem[i >> 1] = i < dl_n ? 0x5a5a : (uint16_t)(img[i] | (img[i + 1] << 8));
 	top->ioctl_download = 0; top->ioctl_wr = 0; top->snd_dl_we = 0;
 
@@ -180,19 +181,23 @@ int main(int argc, char **argv) {
 	int frame = 0;
 	size_t pci = 0;
 	bool pc_ok = true;
-	std::vector<uint8_t> pix(320 * 236 * 3);
+	const int vw = family == 14 ? 384 : 320, vh = family == 14 ? 224 : 236;   // aoh's visible area
+	std::vector<uint8_t> pix(vw * vh * 3);
 	int npix = 0;
 	bool cap = false;
 	int latches = 0;
-	// +misslog=<file>: every cache miss, "<n> <I|D> <line> <instructions retired before it>" (the board's
-	// probe instance T keeps the last 256 of the same list)
+	// +misslog=<file>: every cache miss, "<n> <I|D> <line> <instructions retired before it> <PC in execute>" (the board's
+	// probe instance T keeps the last 256 of the same list), from frame +missframe=F on
 	std::string misslog = arg(argc, argv, "+misslog=");
+	int missframe = atoi(arg(argc, argv, "+missframe=", "0").c_str());
 	FILE *mlog = misslog.empty() ? nullptr : fopen(misslog.c_str(), "w");
 	int nmiss = 0;
 	// +pcfrom=N: print "<k> <npc> <sr>" after instructions N..N+255 (the board's probe instance P)
 	long pcfrom = atol(arg(argc, argv, "+pcfrom=", "-1").c_str());
-	// +rfslot=N: print "RFW <instructions> <data>" for the first 256 writes to local register slot N
+	// +rfslot=N: print "RFW <instructions> <data>" for the first 256 writes to local register slot N (from
+	// instruction +rffrom=K on)
 	int rfslot = atoi(arg(argc, argv, "+rfslot=", "-1").c_str());
+	long rffrom = atol(arg(argc, argv, "+rffrom=", "0").c_str());
 	int rfw_n = 0;
 	// +trace=<file> [+trstart=N]: the 4096 trace records from instruction N (rtl/debug/vh_trace.sv), as
 	// "TR <47 hex digits>", the format scripts/read_trace.py dumps from the board
@@ -215,6 +220,24 @@ int main(int argc, char **argv) {
 	// +prof=1: clocks by memory-unit state while the CPU is outside the idle loop (needs +idle)
 	int prof = atoi(arg(argc, argv, "+prof=", "0").c_str());
 	uint64_t cst[16] = {0}, pst[16] = {0}, pidle_req = 0, pnoreq = 0, pfetch = 0, pdata = 0, pwr = 0, pmiss_i = 0, pmiss_d = 0, pwbwait = 0;
+	// and with it, clocks per retired instruction by class: the clocks since the previous retirement go to the
+	// instruction retiring (its opcode recorded by PC while it was in ST_EXEC)
+	std::map<uint32_t, uint32_t> op_at;
+	static const char *icn[] = {"alu reg", "alu imm", "shift", "mov/movi", "movd", "ret", "load", "store", "load io",
+		"store io", "br taken", "br not", "db taken", "db not", "call", "frame", "trap", "mul/div", "ext", "other"};
+	const int NIC = 20;
+	uint64_t icy[NIC] = {0}, icnt[NIC] = {0};
+	// and the clocks of each line fill (S_FILL): port 2 writing the buffer or prefetching before it, the fill issued
+	// but the SDRAM serving another port or refreshing, the SDRAM on the fill
+	uint64_t f_n[2] = {0}, f_wb = 0, f_pf = 0, f_other = 0, f_sd = 0, f_idle = 0;
+	int mst_prev = 0;
+	// +profpc=lo:hi: busy clocks with the instruction in execute (ipc) in [lo, hi]
+	uint32_t ppc_lo = 1, ppc_hi = 0;
+	{
+		std::string s = arg(argc, argv, "+profpc=");
+		if (!s.empty()) sscanf(s.c_str(), "%x:%x", &ppc_lo, &ppc_hi);
+	}
+	uint64_t ppc_clk = 0;
 
 	// +rerst=F: hold the core in reset for 2000 clocks at frame F (as probe D's hold bit does on the
 	// board) and start the trace over from the release
@@ -228,6 +251,15 @@ int main(int argc, char **argv) {
 	std::string iologp = arg(argc, argv, "+iolog=");
 	FILE *iof = iologp.empty() ? nullptr : fopen(iologp.c_str(), "w");
 	int late_port = -1;
+	// +swlog=1: per vertical blank, the line (after vblank start) of its last sprite-RAM write, and whether a write
+	// came after the snapshot copy began (the copy then holds a part-written list)
+	const bool swlog = arg(argc, argv, "+swlog=", "0") != "0";
+	const int sw_vb = family == 14 ? 240 : 252;
+	int sw_last = -1, sw_n = 0, sw_epochs = 0, sw_torn = 0, sw_vprev = -1, sw_ahead = 0;
+	// and whether a write landed ahead of the copy while it ran (the copy then holds part of the new list)
+	bool sw_copied = false, sw_cp_prev = false, sw_is_torn = false, sw_is_ahead = false;
+	std::map<int, int> sw_hist, sw_gaps;          // and the longest gap between two writes of a pass, in clocks / 256
+	uint64_t sw_tlast = 0, sw_gap = 0;
 	std::vector<int16_t> pcm;
 	uint64_t snd_ticks = 0, snd_mixes = 0, snd_writes = 0;
 	int64_t acc_l = 0, acc_r = 0;
@@ -258,8 +290,9 @@ int main(int argc, char **argv) {
 
 		tick();
 		clocks++;
-		if (mlog && top->dbg_miss && nmiss < 200000) {
-			fprintf(mlog, "%d %c %06x %u\n", nmiss, top->dbg_miss_ic ? 'I' : 'D', (unsigned)top->dbg_miss_line << 4, ni13);
+		if (mlog && top->dbg_miss && nmiss < 200000 && frame >= missframe) {
+			fprintf(mlog, "%d %c %06x %u %08x\n", nmiss, top->dbg_miss_ic ? 'I' : 'D', (unsigned)top->dbg_miss_line << 4, ni13,
+				top->rootp->tb_sys__DOT__u_main__DOT__u_cpu__DOT__ipc);
 			nmiss++;
 		}
 		if (trf && top->trace_valid && tr_n < 4096) {
@@ -271,7 +304,7 @@ int main(int argc, char **argv) {
 			fprintf(trf, "\n");
 			tr_n++;
 		}
-		if (rfslot >= 0 && top->dbg_rf_we && top->dbg_rf_wa == rfslot && rfw_n < 256) {
+		if (rfslot >= 0 && top->dbg_rf_we && top->dbg_rf_wa == rfslot && rfw_n < 256 && (long)ni13 >= rffrom) {
 			printf("RFW %u %08x\n", ni13, top->dbg_rf_wd);
 			rfw_n++;
 		}
@@ -292,6 +325,51 @@ int main(int argc, char **argv) {
 				else pdata++;
 			}
 			if (r->tb_sys__DOT__u_main__DOT__u_mem__DOT__if_req) pfetch++;
+			if (st == 5) {
+				int who = r->tb_sys__DOT__u_main__DOT__u_mem__DOT__m_who;
+				bool sd2 = (r->tb_sys__DOT__u_sdram__DOT__ram_req & 4) && r->tb_sys__DOT__u_sdram__DOT__state != 0;
+				if (mst_prev != 5) f_n[r->tb_sys__DOT__u_main__DOT__u_mem__DOT__f_ic & 1]++;
+				if (who == 2) f_wb++;
+				else if (who == 5) f_pf++;
+				else if (who == 4) { if (sd2) f_sd++; else f_other++; }
+				else f_idle++;
+			}
+			mst_prev = st;
+			uint32_t xpc = r->tb_sys__DOT__u_main__DOT__u_cpu__DOT__ipc;
+			if (xpc >= ppc_lo && xpc <= ppc_hi) ppc_clk++;
+		}
+		if (prof) {
+			auto *r = top->rootp;
+			if ((r->tb_sys__DOT__u_main__DOT__u_cpu__DOT__state & 31) == 4)
+				op_at[r->tb_sys__DOT__u_main__DOT__u_cpu__DOT__ipc] =
+					(uint32_t)r->tb_sys__DOT__u_main__DOT__u_cpu__DOT__op << 16 | r->tb_sys__DOT__u_main__DOT__u_cpu__DOT__e1;
+		}
+		if (top->retire && prof && frame > 100 &&
+		    !(idle_hi && top->retire_pc >= idle_lo && top->retire_pc <= idle_hi)) {
+			auto it = op_at.find(top->retire_pc);
+			int k = NIC - 1;
+			if (it != op_at.end()) {
+				uint32_t op = it->second >> 16, e1 = it->second & 0xffff, c = op >> 8;
+				bool taken = top->retire_npc != top->retire_pc + ((op & 0x80) ? 4 : 2);
+				bool dpc = !(op & 0x200) && ((op >> 4) & 15) == 0;   // global destination PC
+				if (c >= 0x04 && c <= 0x07) k = dpc ? 5 : 4;
+				else if ((c >= 0x24 && c <= 0x27) || (c >= 0x64 && c <= 0x67)) k = 3;
+				else if ((c >= 0x14 && c <= 0x1f) || (c >= 0x60 && c <= 0x7f)) k = 1;
+				else if ((c >= 0x20 && c <= 0x5f) || c <= 0x03 || (c >= 0x10 && c <= 0x13) || (c >= 0xb8 && c <= 0xbb)) k = 0;
+				else if ((c >= 0x80 && c <= 0x8f) || (c >= 0xa0 && c <= 0xab)) k = 2;
+				else if ((c >= 0x90 && c <= 0x9f) || (c >= 0xd0 && c <= 0xdf)) {
+					bool st = c & 8, io = c < 0xd0 && ((e1 >> 12) & 3) == 3 && (e1 & 3) >= 2 && !(c & 4);
+					k = io ? (st ? 9 : 8) : (st ? 7 : 6);
+				}
+				else if (c >= 0xf0 && c <= 0xfc) k = taken ? 10 : 11;
+				else if (c >= 0xe0 && c <= 0xec) k = taken ? 12 : 13;
+				else if (c == 0xee || c == 0xef) k = 14;
+				else if (c == 0xed) k = 15;
+				else if (c >= 0xfd) k = 16;
+				else if ((c >= 0x08 && c <= 0x0f) || (c >= 0xb0 && c <= 0xb7) || (c >= 0xbc && c <= 0xbf)) k = 17;
+				else if (c == 0xce) k = 18;
+			}
+			icy[k] += clocks - last_ret; icnt[k]++;
 		}
 		if (top->retire) {
 			retired++;
@@ -309,6 +387,26 @@ int main(int argc, char **argv) {
 				pci++;
 				if (pc_ok && pci + 1 == mame_pc.size())
 					printf("pctrace: all %zu instructions agree\n", pci + 1);
+			}
+		}
+		if (swlog) {
+			auto *rv = top->rootp;
+			const int v = rv->tb_sys__DOT__u_video__DOT__vcnt;
+			if (v == sw_vb && sw_vprev != sw_vb) {        // a new vertical blank: close the previous one
+				if (sw_n) { sw_epochs++; sw_hist[sw_last]++; sw_torn += sw_is_torn; sw_ahead += sw_is_ahead; sw_gaps[(int)(sw_gap >> 8)]++; }
+				sw_n = 0; sw_last = -1; sw_copied = false; sw_is_torn = false; sw_is_ahead = false; sw_gap = 0;
+			}
+			sw_vprev = v;
+			const bool cp = rv->tb_sys__DOT__u_video__DOT__cp_run;
+			if (cp && !sw_cp_prev) sw_copied = true;
+			sw_cp_prev = cp;
+			if (rv->tb_sys__DOT__u_video__DOT__spr_we) {
+				sw_last = (v - sw_vb + 264) % 264;
+				if (sw_n && clocks - sw_tlast > sw_gap) sw_gap = clocks - sw_tlast;
+				sw_tlast = clocks;
+				sw_n++;
+				if (sw_copied) sw_is_torn = true;
+				if (cp && rv->tb_sys__DOT__u_video__DOT__spr_addr > rv->tb_sys__DOT__u_video__DOT__cp_addr) sw_is_ahead = true;
 			}
 		}
 		if (iof) {
@@ -350,7 +448,7 @@ int main(int argc, char **argv) {
 			latches++;
 		}
 		if (cap && top->ce_pix && !top->hblank && !top->vblank) {
-			if (npix < 320 * 236) {
+			if (npix < vw * vh) {
 				pix[3 * npix] = top->vid_r; pix[3 * npix + 1] = top->vid_g; pix[3 * npix + 2] = top->vid_b;
 			}
 			npix++;
@@ -360,7 +458,7 @@ int main(int argc, char **argv) {
 				char fn[512];
 				snprintf(fn, sizeof fn, "%s/f%d.ppm", outd.c_str(), frame - 1);
 				FILE *o = fopen(fn, "wb");
-				if (o) { fprintf(o, "P6\n320 236\n255\n"); fwrite(pix.data(), 1, pix.size(), o); fclose(o); }
+				if (o) { fprintf(o, "P6\n%d %d\n255\n", vw, vh); fwrite(pix.data(), 1, pix.size(), o); fclose(o); }
 				cap = false;
 			}
 			if (idle_hi && frame > 100) {
@@ -392,9 +490,9 @@ int main(int argc, char **argv) {
 	if (prof) {
 		uint64_t t = 0;
 		for (int i = 0; i < 16; i++) t += pst[i];
-		static const char *nm[] = {"INIT", "IDLE", "LOOK", "WLOOK", "MISS", "FILL", "FILL2", "ACK"};
+		static const char *nm[] = {"INIT", "IDLE", "LOOK", "WLOOK", "MISS", "FILL", "FILL2", "ACK", "IOW", "PFW"};
 		printf("profile, %llu busy clocks:", (unsigned long long)t);
-		for (int i = 0; i < 8; i++) printf(" %s %.1f%%", nm[i], 100.0 * pst[i] / t);
+		for (int i = 0; i < 10; i++) printf(" %s %.1f%%", nm[i], 100.0 * pst[i] / t);
 		printf("; store waiting for the write buffer %.1f%%", 100.0 * pwbwait / t);
 		printf("; no data request %.1f%%; fetch port requesting %.1f%%; data bus held by read %.1f%% write %.1f%%\n",
 			100.0 * pnoreq / t, 100.0 * pfetch / t, 100.0 * pdata / t, 100.0 * pwr / t);
@@ -403,6 +501,18 @@ int main(int argc, char **argv) {
 		printf("CPU states:");
 		for (int i = 0; i < 16; i++) if (cst[i]) printf(" %s %.1f%%", cn[i], 100.0 * cst[i] / t);
 		printf("\n");
+		if (ppc_hi) printf("clocks with %08x-%08x in execute: %.1f%% of busy clocks\n", ppc_lo, ppc_hi, 100.0 * ppc_clk / t);
+		uint64_t fn = f_n[0] + f_n[1];
+		if (fn) printf("line fills: %llu data, %llu instruction; clocks each %.1f: behind a buffer write %.1f, behind a prefetch %.1f, "
+			"the SDRAM on another port or refreshing %.1f, on the fill %.1f, other %.1f\n",
+			(unsigned long long)f_n[0], (unsigned long long)f_n[1], (double)(f_wb + f_pf + f_other + f_sd + f_idle) / fn,
+			(double)f_wb / fn, (double)f_pf / fn, (double)f_other / fn, (double)f_sd / fn, (double)f_idle / fn);
+		uint64_t ty = 0, tn = 0;
+		for (int i = 0; i < NIC; i++) { ty += icy[i]; tn += icnt[i]; }
+		printf("by class, %llu instructions, %.2f clocks each:\n", (unsigned long long)tn, (double)ty / tn);
+		for (int i = 0; i < NIC; i++) if (icnt[i])
+			printf("  %-9s %5.1f%% of instructions, %5.2f clocks each, %5.1f%% of clocks\n", icn[i],
+				100.0 * icnt[i] / tn, (double)icy[i] / icnt[i], 100.0 * icy[i] / ty);
 	}
 	if (ptf) fclose(ptf);
 	if (iof) fclose(iof);
@@ -425,6 +535,14 @@ int main(int argc, char **argv) {
 		(unsigned long long)snd_ticks, (unsigned long long)snd_mixes, (unsigned long long)snd_writes,
 		top->snd_drops, top->snd_stalls);
 	if (idle_hi) printf("idle loop: busiest frame %.1f%% busy, %d frames (after 100) never reached it\n", 100 * max_busy, lost);
+	if (swlog) {
+		printf("sprite list: %d vertical blanks with writes, %d with a write after the copy began, %d with a write ahead of the "
+			"copy while it ran; last write, lines after vblank start:", sw_epochs, sw_torn, sw_ahead);
+		for (auto &kv : sw_hist) printf(" %d:%d", kv.first, kv.second);
+		printf("\nsprite list: the longest gap between two writes of a pass, in 256-clock units:");
+		for (auto &kv : sw_gaps) printf(" %d:%d", kv.first, kv.second);
+		printf("\n");
+	}
 	printf("done: %d frames, %llu clocks, %llu instructions (%.2f clocks each), %d sound latch writes\n",
 		frame, (unsigned long long)clocks, (unsigned long long)retired,
 		retired ? (double)clocks / retired : 0.0, latches);

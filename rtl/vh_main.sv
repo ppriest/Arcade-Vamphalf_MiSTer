@@ -28,6 +28,8 @@
 //                            0x1a0 W EEPROM; no flip
 //     family 9 worldadv_io:  0x060 W EEPROM, 0x0a0 R P1_P2, 0x0d0 R SYSTEM, 0x160 RW protection (vh_prot_wa),
 //                            0x190 OKI, 0x1c0/0x1c1 YM, 0x1e0 R EEPROM; flip at program 0xe0000000, bit 15
+//   family 14 aoh_io (E1-32XN, 32-bit): 0x0120 W EEPROM, 0x0188 OKI 2, 0x0190/0x0191 YM, 0x0198 OKI 1, 0x01a0 W
+//     OKI 2 bank (bits 1:0), the sound chips on bits 15:8; SYSTEM and P1_P2 are in program space (vh_cpumem)
 //   The OKI and YM entries are umask16(0x00ff): data in bits 7:0. The E1-16 maps decode all 9 bits of the
 //   word address; Wivern Wings' 32-bit map ignores the two below its dwords.
 //
@@ -42,7 +44,8 @@ module vh_main (
 	input      [4:0]  family,         // the I/O map: 0 misncrft_io, 1 wyvernwg_io, 2.. the YM2151 + M6295 maps
 	input             prg2,           // a 2 MB program, from 0xffe00000 (yorijori)
 	input             pause,
-	input             cpu_tick,       // the CPU's 50 MHz clock as an enable: drives its timer
+	input             cpu_tick,       // the CPU's clock as an enable: drives its timer
+	input             cpu_tick2,      // a second CPU clock in the same clk (aoh's 80 MHz)
 
 	input             vblank_irq,     // one clock at the start of the vertical blank
 	input      [15:0] p1p2,           // active low, as MAME's P1_P2
@@ -58,6 +61,8 @@ module vh_main (
 	output reg        oki_wr,
 	output reg [7:0]  snd_wd,
 	output reg [2:0]  oki_bank,
+	output reg        oki2_wr,        // aoh's second M6295 (oki2, banked by oki_bank)
+	input      [7:0]  oki2_dout,
 	input      [7:0]  ym_dout,
 	input      [7:0]  oki_dout,
 
@@ -122,7 +127,7 @@ module vh_main (
 	output     [63:0] dbg_fill_d,
 	output            dbg_miss,
 	output            dbg_miss_ic,
-	output     [22:4] dbg_miss_line,
+	output     [23:4] dbg_miss_line,
 	output            dbg_rf_we,
 	output     [5:0]  dbg_rf_wa,
 	output     [31:0] dbg_rf_wd,
@@ -149,13 +154,25 @@ wire [3:0]  bus_be;
 wire [6:0]  irq_ack;
 reg         int2;                  // vblank: INT2 (irq1_line_hold), on yorijori INT3 (irq2_line_hold)
 wire        vbl3 = family == 5'd11;
+wire        f_ao = family == 5'd14;   // aoh
+wire [31:0] ao_sys, ao_p12;
 
+// E1_PIPE: the pipelined CPU (rtl/e1/e1_pipe.sv, ROADMAP Phase 7)
+wire        la_req;                // e1_pipe: the load being issued, a clock before bus_req
+wire [31:0] la_addr;
+`ifdef E1_PIPE
+e1_pipe u_cpu (
+	.la_req(la_req), .la_addr(la_addr),
+`else
+assign la_req = 1'b0;
+assign la_addr = 32'd0;
 e1_cpu u_cpu (
+`endif
 	.clk(clk), .reset(rst), .cen(1'b1),
 	.bus_req(bus_req), .bus_wr(bus_wr), .bus_io(bus_io), .bus_addr(bus_addr),
 	.bus_be(bus_be), .bus_wdata(bus_wdata), .bus_ack(bus_ack), .bus_rdata(bus_rdata),
 	.if_req(if_req), .if_addr(if_addr), .if_ack(if_ack), .if_data(if_data),
-	.irq_in({4'd0, vbl3 && int2, !vbl3 && int2, 1'b0}), .irq_ack(irq_ack), .pause(pause), .tick(cpu_tick),
+	.irq_in({4'd0, vbl3 && int2, !vbl3 && int2, 1'b0}), .irq_ack(irq_ack), .pause(pause), .tick(cpu_tick), .tick2(cpu_tick2),
 	.retire(retire), .retire_pc(retire_pc), .retire_npc(retire_npc), .retire_sr(retire_sr),
 	.dbg_rf_we(dbg_rf_we), .dbg_rf_wa(dbg_rf_wa), .dbg_rf_wd(dbg_rf_wd)
 );
@@ -182,10 +199,10 @@ wire [31:0] io_wd;
 reg  [31:0] io_rdata;
 wire        g_bram;                       // finalgdr's backup RAM window (decoded below)
 
-vh_cpumem #(.ROM_BASE(SD_MAINCPU), .WRAM_BASE(SD_WRAM), .SPRHI_BASE(SD_SPRHI), .PRGLO_BASE(SD_PRGLO)) u_mem (
-	.clk(clk), .prst(prst), .rst(rst), .prg2(prg2),
+vh_cpumem #(.ROM_BASE(SD_MAINCPU), .WRAM_BASE(SD_WRAM), .SPRHI_BASE(SD_SPRHI), .PRGLO_BASE(SD_PRGLO), .AOHPRG_BASE(SD_AOHPRG)) u_mem (
+	.clk(clk), .prst(prst), .rst(rst), .prg2(prg2), .aoh(f_ao), .aoh_sys(ao_sys), .aoh_p12(ao_p12),
 	.bus_req(bus_req), .bus_wr(bus_wr), .bus_io(bus_io), .bus_addr(bus_addr),
-	.bus_be(bus_be), .bus_wdata(bus_wdata), .bus_ack(bus_ack), .bus_rdata(bus_rdata),
+	.bus_be(bus_be), .bus_wdata(bus_wdata), .bus_ack(bus_ack), .bus_rdata(bus_rdata), .la_req(la_req), .la_addr(la_addr),
 	.if_req(if_req), .if_addr(if_addr), .if_ack(if_ack), .if_data(if_data),
 	.spr_we(spr_we), .spr_be(spr_be), .spr_addr(spr_addr), .spr_wd(spr_wd), .spr_rd(spr_rd),
 	.pal_we(pal_we), .pal_be(pal_be), .pal_addr(pal_addr), .pal_wd(pal_wd), .pal_rd(pal_rd),
@@ -256,6 +273,12 @@ wire k_sys   =  f_ka && pk == 13'h1f00 || f_fg && pk == 13'h0f00;
 // finalgdr's backup RAM (finalgdr_backupram_r/w): 256 banks of 128 bytes, the byte on bits 31:24; the bank
 // register is bits 31:24 at 0x0a00, 1 from init_finalgdr
 wire g_bank  =  f_fg && pk == 13'h0a00;
+// aoh_io (vamphalf.cpp:658-665)
+wire a_eew   =  f_ao && pk == 13'h0120;  // eeprom_w: DI bit 0, CLK 1, CS 2
+wire a_oki2  =  f_ao && pk == 13'h0188;
+wire a_ym    =  f_ao && pk[12:1] == 12'h0c8;   // 0x0190 address, 0x0191 data
+wire a_oki   =  f_ao && pk == 13'h0198;
+wire a_okib  =  f_ao && pk == 13'h01a0;  // mrkicker_oki_bank_w: bits 1:0
 assign g_bram = f_fg && pk[12:7] == 6'h16;   // 0x0b00-0x0b7f
 // yorijori_io (vamphalf.cpp:683-693): the QS1000's latch on bits 15:8
 wire y_strr  =  f_yj && pk == 13'h0900;  // prot_r<0x8000>
@@ -269,14 +292,18 @@ wire y_strw  =  f_yj && pk == 13'h1810;  // finalgdr_prot_w
 // (yorijori's: per player U D L R, buttons 1-4, as the common port's; SYSTEM as finalgdr's)
 wire [15:0] ka_p1p2 = {system[7], p1p2[14:8], system[6], p1p2[6:0]};
 wire [7:0]  ka_sys  = {system[4], system[1], 4'hf, system[2], system[0]};
+// aoh (vamphalf.cpp:990-1030): P1_P2 player 2 on bits 7:0, player 1 on 23:16; SYSTEM bits 0 COIN2, 1 START2,
+// 4 EEPROM DO (active high), 5 SERVICE1, 16 COIN1, 17 START1, 20 the service mode switch
+assign ao_p12 = {8'hff, p1p2[7:0], 8'hff, p1p2[15:8]};
+assign ao_sys = {11'h7ff, system[4], 2'b11, system[6], system[0], 8'hff, 2'b11, system[1], ee_do, 2'b11, system[7], system[2]};
 // solitaire (vamphalf.cpp:1102-1131): P1_P2 bits 6:0 columns 1-7 (buttons 1-4, then xbtn 2:0), bits 11:8 Turn Up
 // Card, Select Turned Up Card, Register, Gift (xbtn 6:3); SYSTEM is the common port's
 wire [15:0] so_p1p2 = {4'hf, xbtn[6:3], 1'b1, xbtn[2:0], p1p2[7:4]};
 // boonggab (vamphalf.cpp:1032-1060): P1_P2 bit 0 START1, bits 2/3 left/right, bits 13:11 the photo sensors'
-// strength code (boonggab_photo_sensors_r's 7 none .. 0 strongest, read inverted as the field is active low:
-// MAME reads 0xc7ff idle, 0xcfff with the weakest; buttons 1-4 here give MAME's 1st, 3rd, 5th and 7th
-// strengths, HACKS.md), bits 10:8 sensors 1-3 idle; SYSTEM bits 7:6 unused
-wire [2:0]  bg_hit  = !p1p2[7] ? 3'd7 : !p1p2[6] ? 3'd5 : !p1p2[5] ? 3'd3 : !p1p2[4] ? 3'd1 : 3'd0;
+// strength code, boonggab_photo_sensors_r's 7 none .. 0 strongest as the callback gives it (MAME's active-low
+// field inverts it, which the game takes as a hit at rest: MAME_KLUDGES.md); buttons 1-4 give MAME's 1st, 3rd,
+// 5th and 7th strengths (HACKS.md); bits 10:8 sensors 1-3 idle; SYSTEM bits 7:6 unused
+wire [2:0]  bg_hit  = !p1p2[7] ? 3'd0 : !p1p2[6] ? 3'd2 : !p1p2[5] ? 3'd4 : !p1p2[4] ? 3'd6 : 3'd7;
 wire [15:0] bg_p1p2 = {2'b11, bg_hit, 3'b111, 4'hf, p1p2[3], p1p2[2], 1'b1, system[6]};
 
 // EEPROM
@@ -345,6 +372,9 @@ always @* begin
 	if (y_eer)            io_rdata = {31'd0, ee_do};
 	if (y_strr)           io_rdata = {16'd0, strm_bit, 15'd0};
 	if (g_bram)           io_rdata = {bk_q, 24'd0};   // a clock after io_rd (io_late)
+	if (a_ym && pk[0])    io_rdata = {16'd0, ym_dout, 8'd0};
+	if (a_oki)            io_rdata = {16'd0, oki_dout, 8'd0};
+	if (a_oki2)           io_rdata = {16'd0, oki2_dout, 8'd0};
 end
 
 always @(posedge clk) begin
@@ -352,6 +382,7 @@ always @(posedge clk) begin
 	prot_wr2 <= 1'b0;
 	ym_wr <= 1'b0;
 	oki_wr <= 1'b0;
+	oki2_wr <= 1'b0;
 	if (rst) begin
 		flip <= 1'b0;
 		oki_bank <= 3'd0;
@@ -399,6 +430,13 @@ always @(posedge clk) begin
 			if (k_oki) begin oki_wr <= 1'b1; snd_wd <= io_wd[15:8]; end
 			if (k_okib) oki_bank <= {1'b0, io_wd[9:8]};
 			if (g_bank) bk_bank <= io_wd[31:24];
+			if (a_eew) begin
+				ee_di <= io_wd[0]; ee_clk <= io_wd[1]; ee_cs <= io_wd[2];
+			end
+			if (a_ym) begin ym_wr <= 1'b1; ym_a0 <= pk[0]; snd_wd <= io_wd[15:8]; end
+			if (a_oki) begin oki_wr <= 1'b1; snd_wd <= io_wd[15:8]; end
+			if (a_oki2) begin oki2_wr <= 1'b1; snd_wd <= io_wd[15:8]; end
+			if (a_okib) oki_bank <= {1'b0, io_wd[1:0]};
 			if (w_prt) begin
 				prot_wr2 <= 1'b1;
 				prot_wd2 <= io_wd[15:0];

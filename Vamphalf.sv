@@ -103,6 +103,9 @@ wire [26:0] ioctl_addr;
 wire  [7:0] ioctl_dout;
 wire        ioctl_wait;
 wire  [7:0] ioctl_din;
+wire        f_aoh;                       // the running set is aoh (family 14, below)
+wire [8:0]  vid_vpos;                    // vh_video's line and copy flag, for probe V
+wire        vid_copy;
 wire        ioctl_upload;
 reg         nvram_save = 1'b0;
 
@@ -219,6 +222,7 @@ wire [4:0] family = mod_byte[7:3];
 wire       snd_qs = family < 5'd2 || family == 5'd11;   // the QS1000 boards; the others have the YM2151 + M6295
 wire       prg2 = mod_byte1[1];      // a 2 MB program (yorijori)
 wire       f_suplup = family == 5'd7;   // the SUPLUP board: 14.318181 MHz sound clocks, colour in word 2's high byte
+assign     f_aoh = family == 5'd14;     // aoh: its memory map, an 80 MHz CPU, its video and a second M6295
 
 ///////////////////////   INPUTS   ///////////////////////////////
 
@@ -318,7 +322,10 @@ end
 ///////////////////////   THE BOARD   ////////////////////////////
 
 reg [4:0] tk = 5'd0;                       // the CPU's timer: 25 enables in 28 clocks, 50 MHz
-wire cpu_tick = tk < 5'd25;
+reg [2:0] tk7 = 3'd0;                       // aoh's 80 MHz: 10 ticks in 7 clocks, a second in 3 of them
+always @(posedge clk_sys) tk7 <= (tk7 == 3'd6) ? 3'd0 : tk7 + 3'd1;
+wire cpu_tick  = f_aoh || tk < 5'd25;
+wire cpu_tick2 = f_aoh && (tk7 == 3'd0 || tk7 == 3'd2 || tk7 == 3'd4);
 always @(posedge clk_sys) tk <= (tk == 5'd27) ? 5'd0 : tk + 5'd1;
 
 wire        spr_we, pal_we;
@@ -331,6 +338,8 @@ wire        snd_latch_wr;
 wire        ym_wr, ym_a0, oki_wr;
 wire [7:0]  snd_wd, ym_dout, oki_dout;
 wire [2:0]  oki_bank;
+wire        oki2_wr;
+wire [7:0]  oki2_dout;
 
 wire        dl_req, dl_we16, dl_busy;
 wire [26:0] dl_addr;
@@ -373,7 +382,8 @@ wire ldr_tap = ldr_tap_addr[26:17] == SD_SNDCPU[26:17] || (ldr_tap_addr[26:7] ==
 
 vh_rom_loader u_ldr (
 	.clk(clk_sys), .reset(~pll_locked),
-	.length(mod_byte1[2] ? {1'b0, SD_GFXHI} + 28'h1000000 : {1'b0, SD_GFX} + (mod_byte1[0] ? 28'h1000000 : 28'h0800000)),
+	.length(f_aoh ? {1'b0, SD_GFXHI} + 28'h4000000 : mod_byte1[2] ? {1'b0, SD_GFXHI} + 28'h1000000 :
+	        {1'b0, SD_GFX} + (mod_byte1[0] ? 28'h1000000 : 28'h0800000)),
 	.start(ldr_start), .busy(ldr_active),
 	.ddr_req(ldr_ddr_req), .ddr_addr(ldr_ddr_addr), .ddr_busy(ldr_ddr_busy),
 	.ddr_valid(ldr_ddr_valid), .ddr_rdata(ldr_ddr_rdata),
@@ -397,7 +407,7 @@ wire [31:0] dbg_pc, dbg_npc, dbg_sr, dbg_imiss, dbg_dmiss;
 wire [26:1] dbg_fill_a;
 wire [63:0] dbg_fill_d;
 wire        dbg_miss, dbg_miss_ic;
-wire [22:4] dbg_miss_line;
+wire [23:4] dbg_miss_line;
 wire        dbg_rf_we;
 wire [5:0]  dbg_rf_wa;
 wire [31:0] dbg_rf_wd;
@@ -407,11 +417,11 @@ wire [187:0] dbg_tr_q;
 wire [12:0] dbg_tr_count;
 
 vh_main u_main (
-	.clk(clk_sys), .prst(~pll_locked), .rst(core_reset), .board(board), .family(family), .prg2(prg2), .pause(pause_cpu), .cpu_tick(cpu_tick),
+	.clk(clk_sys), .prst(~pll_locked), .rst(core_reset), .board(board), .family(family), .prg2(prg2), .pause(pause_cpu), .cpu_tick(cpu_tick), .cpu_tick2(cpu_tick2),
 	.vblank_irq(vblank_start), .p1p2(p1p2), .system(sys_in), .xbtn(xbtn),
 	.flip(game_flip), .snd_latch(snd_latch), .snd_latch_wr(snd_latch_wr),
 	.ym_wr(ym_wr), .ym_a0(ym_a0), .oki_wr(oki_wr), .snd_wd(snd_wd), .oki_bank(oki_bank),
-	.ym_dout(ym_dout), .oki_dout(oki_dout),
+	.ym_dout(ym_dout), .oki_dout(oki_dout), .oki2_wr(oki2_wr), .oki2_dout(oki2_dout),
 	.spr_we(spr_we), .spr_be(spr_be), .spr_addr(spr_addr), .spr_wd(spr_wd), .spr_rd(spr_rd),
 	.pal_we(pal_we), .pal_be(pal_be), .pal_addr(pal_addr), .pal_wd(pal_wd), .pal_rd(pal_rd),
 	.ee_blank(ee_blank), .ee_load_we(ee_we), .ee_load_addr(ee_wa), .ee_load_data(ee_wd),
@@ -470,7 +480,7 @@ always @(posedge clk_sys) begin
 	else begin
 		if (dbg_retire) dbg_log_ni <= dbg_log_ni + 1'd1;
 		if (dbg_miss) begin
-			dbg_log[dbg_log_n[7:0]] <= {dbg_miss_ic, 12'd0, dbg_miss_line, dbg_log_ni};
+			dbg_log[dbg_log_n[7:0]] <= {dbg_miss_ic, 12'd0, dbg_miss_line[22:4], dbg_log_ni};
 			if (dbg_log_n != 16'hffff) dbg_log_n <= dbg_log_n + 1'd1;
 		end
 	end
@@ -528,7 +538,8 @@ issp_probe #(.INSTANCE_ID("X"), .PROBE_W(201), .SOURCE_W(36)) u_issp_x (
 assign dbg_tr_start = dbg_tr_src[35:12];
 assign dbg_tr_idx   = dbg_tr_src[11:0];
 // Instance S: frame time. A frame runs vblank to vblank; the CPU is idle while its last retired PC is in
-// the game's vblank wait (Mission Craft 0xff46-0xff6a, Wivern Wings 0x10752-0x10778, as sim/sys_tb +idle).
+// the game's vblank wait (Mission Craft 0xff46-0xff6a, Wivern Wings 0x10752-0x10778, Age Of Heroes 0xb974-0xb9b4
+// and 0xba20-0xba60 about its speed-up PCs 0xb994 and 0xba40, as sim/sys_tb +idle).
 // Busy is the frame's clocks less its idle clocks; a frame with no idle clock is lost (the game's work for
 // it did not finish before the next vblank). Probe {frames [15:0], lost [15:0], busiest frame's busy
 // clocks [19:0], last frame's busy clocks [19:0], last frame's clocks [19:0]}, since reset or a clear.
@@ -540,11 +551,11 @@ reg  [3:0]  spd_coin_n = 0, spd_start_n = 0;
 wire [7:0]  spd_src;
 reg  [7:0]  spd_src1 = 0, spd_src2 = 0, spd_src3 = 0;
 wire [19:0] spd_busy = spd_fclk - spd_idle;
-wire [31:0] spd_lo = board ? 32'h10752 : 32'hff46;
-wire [31:0] spd_hi = board ? 32'h10778 : 32'hff6a;
+wire [31:0] spd_lo = f_aoh ? 32'hb974 : board ? 32'h10752 : 32'hff46;
+wire [31:0] spd_hi = f_aoh ? 32'hb9b4 : board ? 32'h10778 : 32'hff6a;
 always @(posedge clk_sys) begin
 	spd_src1 <= spd_src; spd_src2 <= spd_src1; spd_src3 <= spd_src2;
-	if (dbg_retire) spd_in_idle <= dbg_pc >= spd_lo && dbg_pc <= spd_hi;
+	if (dbg_retire) spd_in_idle <= (dbg_pc >= spd_lo && dbg_pc <= spd_hi) || (f_aoh && dbg_pc >= 32'hba20 && dbg_pc <= 32'hba60);
 	if (vblank_start) begin
 		spd_lastf <= spd_fclk;
 		spd_lastb <= spd_busy;
@@ -569,6 +580,50 @@ assign dbg_b1    = spd_src2[3];
 issp_probe #(.INSTANCE_ID("S"), .PROBE_W(92), .SOURCE_W(8)) u_issp_s (
 	.clk(clk_sys), .probe({spd_frames, spd_lost, spd_max, spd_lastb, spd_lastf}), .source(spd_src)
 );
+// Instance V: the sprite list against its snapshot copy (vh_video). Per vertical blank (from vblank start): the
+// line of its last sprite-RAM write, counted from vblank start, and whether a write came after the copy began
+// (the copy then holds a part-written list). Probe {vertical blanks with writes [15:0], torn [15:0], the
+// latest last write [8:0], the longest gap between two writes of one vertical blank in clocks [19:0], the
+// last writes in 16 buckets of 4 lines [11:0] each (bucket 15: line 60 on)}; source [0] clears.
+wire [8:0]  sv_vb  = f_aoh ? 9'd240 : 9'd252;
+wire [8:0]  sv_rel = (vid_vpos >= sv_vb) ? vid_vpos - sv_vb : vid_vpos + 9'd264 - sv_vb;
+reg  [8:0]  sv_last = 0, sv_latest = 0;
+reg         sv_any = 0, sv_copied = 0, sv_torn_e = 0, sv_cp_d = 0;
+reg  [19:0] sv_gap = 0, sv_gap_max = 0;
+reg  [15:0] sv_epochs = 0, sv_torn = 0;
+reg  [191:0] sv_hist = 0;
+wire [7:0]  sv_src;
+reg  [7:0]  sv_src1 = 0, sv_src2 = 0;
+wire [3:0]  sv_bucket = (sv_last >= 9'd60) ? 4'd15 : sv_last[5:2];
+wire [11:0] sv_hb = sv_hist[12 * sv_bucket +: 12];
+always @(posedge clk_sys) begin
+	sv_src1 <= sv_src; sv_src2 <= sv_src1;
+	sv_cp_d <= vid_copy;
+	if (vid_copy && !sv_cp_d) sv_copied <= 1'b1;
+	if (sv_gap != 20'hfffff) sv_gap <= sv_gap + 1'd1;
+	if (spr_we) begin
+		sv_last <= sv_rel;
+		if (sv_any && sv_gap > sv_gap_max) sv_gap_max <= sv_gap;
+		sv_gap <= 20'd0;
+		sv_any <= 1'b1;
+		if (sv_copied) sv_torn_e <= 1'b1;
+	end
+	if (vblank_start) begin
+		if (sv_any) begin
+			sv_epochs <= sv_epochs + 1'd1;
+			if (sv_torn_e) sv_torn <= sv_torn + 1'd1;
+			if (sv_last > sv_latest) sv_latest <= sv_last;
+			if (sv_hb != 12'hfff) sv_hist[12 * sv_bucket +: 12] <= sv_hb + 1'd1;
+		end
+		sv_any <= 1'b0; sv_copied <= 1'b0; sv_torn_e <= 1'b0;
+	end
+	if (sv_src2[0] || core_reset) begin
+		sv_epochs <= 0; sv_torn <= 0; sv_latest <= 0; sv_gap_max <= 0; sv_hist <= 0;
+	end
+end
+issp_probe #(.INSTANCE_ID("V"), .PROBE_W(253), .SOURCE_W(8)) u_issp_v (
+	.clk(clk_sys), .probe({sv_epochs, sv_torn, sv_latest, sv_gap_max, sv_hist}), .source(sv_src)
+);
 `else
 assign dbg_tr_start = 24'hffffff;      // the trace's outputs are unconnected here, so it is removed
 assign dbg_tr_idx   = 12'd0;
@@ -580,20 +635,20 @@ assign dbg_b1     = 1'b0;
 `endif
 
 wire        gfx_req, gfx_rdy, gfx_dv;
-wire [24:0] gfx_addr;
+wire [25:0] gfx_addr;
 wire [31:0] gfx_data;
 wire [7:0]  core_r, core_g, core_b;
 wire        core_hs, core_vs, core_hb, core_vb, core_ce;
 
 // The OSD's Flip Screen and the game's flip are one path, through the engine, for HDMI and analog.
 vh_video u_video (
-	.clk(clk_sys), .rst(~pll_locked | ioctl_download | ldr_active), .code_mask(mod_byte1[0] ? 16'hffff : 16'h7fff), .palshift(f_suplup), .code17(mod_byte1[2]),
+	.clk(clk_sys), .rst(~pll_locked | ioctl_download | ldr_active), .code_mask(mod_byte1[0] ? 16'hffff : 16'h7fff), .palshift(f_suplup), .code17(mod_byte1[2]), .aoh(f_aoh),
 	.spr_we(spr_we), .spr_be(spr_be), .spr_addr(spr_addr), .spr_wd(spr_wd), .spr_rd(spr_rd),
 	.pal_we(pal_we), .pal_be(pal_be), .pal_addr(pal_addr), .pal_wd(pal_wd), .pal_rd(pal_rd),
 	.flip(game_flip ^ status[65]),
 	.gfx_req(gfx_req), .gfx_rdy(gfx_rdy), .gfx_addr(gfx_addr), .gfx_dv(gfx_dv), .gfx_data(gfx_data),
 	.ce_pix(core_ce), .vid_r(core_r), .vid_g(core_g), .vid_b(core_b),
-	.hblank(core_hb), .vblank(core_vb), .hsync(core_hs), .vsync(core_vs), .hpos(), .vpos(),
+	.hblank(core_hb), .vblank(core_vb), .hsync(core_hs), .vsync(core_vs), .hpos(), .vpos(vid_vpos), .dbg_copy(vid_copy),
 	.frame_start(), .vblank_start(vblank_start),
 	.dbg_overrun(), .dbg_maxbusy()
 );
@@ -601,7 +656,7 @@ vh_video u_video (
 wire [26:1] m0_addr;
 wire        m0_req, m0_ack;
 
-vh_gfxport #(.GFX_BASE(SD_GFX), .GFXHI_BASE(SD_GFXHI)) u_gfx (
+vh_gfxport #(.GFX_BASE(SD_GFX), .GFXHI_BASE(SD_GFXHI)) u_gfx (.aoh(f_aoh),
 	.clk(clk_sys), .prst(~pll_locked), .gfx_req(gfx_req), .gfx_rdy(gfx_rdy), .gfx_addr(gfx_addr), .gfx_dv(gfx_dv), .gfx_data(gfx_data),
 	.mem_addr(m0_addr), .mem_req(m0_req), .mem_ack(m0_ack), .mem_dout(m_dout), .mem_doutb(m_doutb)
 );
@@ -626,7 +681,8 @@ vh_qs1000 u_snd (
 );
 
 vh_ymoki u_ymoki (
-	.clk(clk_sys), .rst(core_reset | snd_qs), .xtal14(f_suplup), .dl(ioctl_download | ldr_active),
+	.clk(clk_sys), .rst(core_reset | snd_qs), .xtal14(f_suplup), .aoh(f_aoh), .dl(ioctl_download | ldr_active),
+	.oki2_wr(oki2_wr), .oki2_dout(oki2_dout),
 	.ym_wr(ym_wr), .ym_a0(ym_a0), .ym_din(snd_wd), .ym_dout(ym_dout),
 	.oki_wr(oki_wr), .oki_din(snd_wd), .oki_dout(oki_dout), .bank(oki_bank), .banked(family == 5'd4 || family == 5'd10 || family == 5'd12 || family == 5'd13),
 	.sd_addr(yo_addr), .sd_req(yo_req), .sd_ack(m1_ack), .sd_dout(m1_dout),
@@ -652,18 +708,36 @@ wire vga_de_raw;
 wire [7:0] crt_r, crt_g, crt_b;
 wire       crt_hs, crt_vs, crt_hb, crt_vb, crt_on, crt_ce;
 
+// two CRT adjusts: one per raster (aoh's has 7 clk a dot and 512 dots)
+wire [7:0] crt0_r, crt0_g, crt0_b, crt1_r, crt1_g, crt1_b;
+wire       crt0_hs, crt0_vs, crt0_hb, crt0_vb, crt0_on, crt0_ce, crt1_hs, crt1_vs, crt1_hb, crt1_vb, crt1_on, crt1_ce;
+wire       crt_adj = status[94] & ~forced_scandoubler;
 vh_crt u_crt (
 	.clk(clk_sys), .ce(core_ce),
-	.adjust(status[94] & ~forced_scandoubler),
+	.adjust(crt_adj & ~f_aoh),
 	.hsize_idx(status[99:95]), .hpos_idx(status[106:100]), .vshift_idx(status[112:107]),
 	.r_in(core_r), .g_in(core_g), .b_in(core_b),
 	.hs_in(core_hs), .vs_in(core_vs), .hb_in(core_hb), .vb_in(core_vb),
-	.active(crt_on), .ce_out(crt_ce),
-	.r_out(crt_r), .g_out(crt_g), .b_out(crt_b),
-	.hs_out(crt_hs), .vs_out(crt_vs), .hb_out(crt_hb), .vb_out(crt_vb)
+	.active(crt0_on), .ce_out(crt0_ce),
+	.r_out(crt0_r), .g_out(crt0_g), .b_out(crt0_b),
+	.hs_out(crt0_hs), .vs_out(crt0_vs), .hb_out(crt0_hb), .vb_out(crt0_vb)
 );
+vh_crt #(.HTOTAL(512), .CLK_PIX(7)) u_crt_aoh (
+	.clk(clk_sys), .ce(core_ce),
+	.adjust(crt_adj & f_aoh),
+	.hsize_idx(status[99:95]), .hpos_idx(status[106:100]), .vshift_idx(status[112:107]),
+	.r_in(core_r), .g_in(core_g), .b_in(core_b),
+	.hs_in(core_hs), .vs_in(core_vs), .hb_in(core_hb), .vb_in(core_vb),
+	.active(crt1_on), .ce_out(crt1_ce),
+	.r_out(crt1_r), .g_out(crt1_g), .b_out(crt1_b),
+	.hs_out(crt1_hs), .vs_out(crt1_vs), .hb_out(crt1_hb), .vb_out(crt1_vb)
+);
+assign crt_on = f_aoh ? crt1_on : crt0_on;
+assign crt_ce = f_aoh ? crt1_ce : crt0_ce;
+assign {crt_r, crt_g, crt_b} = f_aoh ? {crt1_r, crt1_g, crt1_b} : {crt0_r, crt0_g, crt0_b};
+assign {crt_hs, crt_vs, crt_hb, crt_vb} = f_aoh ? {crt1_hs, crt1_vs, crt1_hb, crt1_vb} : {crt0_hs, crt0_vs, crt0_hb, crt0_vb};
 
-arcade_video #(.WIDTH(320), .DW(24), .GAMMA(1)) arcade_video
+arcade_video #(.WIDTH(384), .DW(24), .GAMMA(1)) arcade_video
 (
 	.clk_video(clk_sys),
 	.ce_pix(crt_on ? crt_ce : core_ce),

@@ -9,5 +9,5 @@ module e1_synth_top (
 	output if_req, output [31:3] if_addr, input if_ack, input [63:0] if_data,
 	output retire, output [31:0] retire_pc, output [31:0] retire_npc, output [31:0] retire_sr
 );
-e1_cpu cpu (.cen(1'b1), .*);
+e1_cpu cpu (.cen(1'b1), .tick2(1'b0), .dbg_rf_we(), .dbg_rf_wa(), .dbg_rf_wd(), .*);
 endmodule

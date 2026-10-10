@@ -2,7 +2,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Standalone Quartus synthesis + fit + timing of one block (rtl/synth_check).
 
-    python scripts/synth_check.py [--design e1|vh|qs] [--seed N] [--map-only]
+    python scripts/synth_check.py [--design e1|vh|qs] [--seed N] [--map-only] [--pipe]
+
+--pipe: the e1 design with rtl/e1/e1_pipe.sv in place of e1_cpu.sv.
 
 Works in debug/synth/synth_e1_<time> (a copy), refuses to run while a JTAG tool holds the
 marker (hwlock). Prints ALMs, registers, block RAM and the worst setup slack
@@ -34,6 +36,7 @@ def main():
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--map-only", action="store_true", help="stop after analysis and synthesis")
     ap.add_argument("--period", type=float, default=None, help="override clock period (ns)")
+    ap.add_argument("--pipe", action="store_true", help="e1: the pipelined CPU, e1_pipe")
     a = ap.parse_args()
     hwlock.require_no_jtag("synth check")
     prefix = a.design
@@ -54,6 +57,11 @@ def main():
         sdc = work / "rtl/synth_check/e1_synth.sdc"
         sdc.write_text(re.sub(r"-period [0-9.]+", f"-period {a.period}", sdc.read_text()))
     p = work / "rtl" / "synth_check"
+    if a.pipe:
+        for f, x, y in (("e1_synth.qsf", "../e1/e1_cpu.sv", "../e1/e1_pipe.sv"), ("e1_synth_top.sv", "e1_cpu cpu (", "e1_pipe cpu (.la_req(), .la_addr(), ")):
+            s = (p / f).read_text()
+            assert x in s
+            (p / f).write_text(s.replace(x, y))
     with open(p / f"{prefix}_synth.qsf", "a") as q:
         q.write(f"set_global_assignment -name SEED {a.seed}\n")
     run("quartus_map", [f"{prefix}_synth", "-c", f"{prefix}_synth"], p)

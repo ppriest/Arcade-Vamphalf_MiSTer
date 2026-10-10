@@ -45,7 +45,7 @@ Steps for a release:
    two builds of one commit at different seeds have differed in which games ran.
 7. Update `README.md`: History, Supported table, Status, Resource usage.
 
-**Current state:** `Arcade-Vamphalf_20261009.rbf`, release revision at `fe5d6fa` seed 7, every clock meets timing (worst setup +0.564 ns, hdmi pll; clk_sys +0.957 ns; worst hold +0.185 ns); played on the board by the user, all games working; no smoketest script yet (step 2).
+**Current state:** `Arcade-Vamphalf_20261010.rbf`, release revision at `5c4af03` seed 3, every clock meets timing (worst setup +0.099 ns, hdmi pll; clk_sys +0.649 ns; worst hold +0.183 ns); Age Of Heroes started on the board (its sprite snapshot at line 240, `HACKS.md`); Boong-Ga Boong-Ga started on `5dab2e1`, the same CPU; the other sets not played on the pipelined CPU; released at the user's request; no smoketest script yet (step 2).
 
 ## Submitting the core upstream
 

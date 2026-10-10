@@ -42,6 +42,28 @@ set fields_S {
     {lost_frames     60  75 dec}
     {frames          76  91 dec}
 }
+set fields_V {
+    {last_write_00_03    0   11 dec}
+    {last_write_04_07   12   23 dec}
+    {last_write_08_11   24   35 dec}
+    {last_write_12_15   36   47 dec}
+    {last_write_16_19   48   59 dec}
+    {last_write_20_23   60   71 dec}
+    {last_write_24_27   72   83 dec}
+    {last_write_28_31   84   95 dec}
+    {last_write_32_35   96  107 dec}
+    {last_write_36_39  108  119 dec}
+    {last_write_40_43  120  131 dec}
+    {last_write_44_47  132  143 dec}
+    {last_write_48_51  144  155 dec}
+    {last_write_52_55  156  167 dec}
+    {last_write_56_59  168  179 dec}
+    {last_write_60_on   180  191 dec}
+    {longest_gap_clk  192  211 dec}
+    {latest_last_line 212  220 dec}
+    {torn_vblanks     221  236 dec}
+    {vblanks_written  237  252 dec}
+}
 set fields_D {
     {fill_bytes_hi   32  63 hex}
     {fill_bytes_lo    0  31 hex}
@@ -116,6 +138,7 @@ switch -- $inst_id {
     D       { set fields $fields_D }
     T       { set fields $fields_T }
     S       { set fields $fields_S }
+    V       { set fields $fields_V }
     default {
         puts "instance id '$inst_id' has no field table -- add one before reading it"
         exit 1

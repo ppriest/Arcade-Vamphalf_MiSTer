@@ -31,6 +31,15 @@ Y_UNFLIPPED = (16, 251)           # VBEND .. VBSTART-1
 Y_FLIPPED = (20, 255)             # handle_flipped_visible_area
 BAND_BYTES = 0x800
 FLIP_X = 366                      # x = 366 - x when flipped
+AOH = False                       # aoh: set_raw(8 MHz, 512, 64, 448, 264, 16, 240), draw_sprites_aoh
+
+
+def set_aoh(on):
+    """aoh's raster (512 x 264, visible 64..447 x 16..239, no flipped area) and sprite format."""
+    global AOH, W_TOTAL, X_MIN, X_MAX, Y_UNFLIPPED, Y_FLIPPED
+    AOH = on
+    if on:
+        W_TOTAL, X_MIN, X_MAX, Y_UNFLIPPED, Y_FLIPPED = 512, 64, 447, (16, 239), (16, 239)
 
 
 def visarea(flip):
@@ -79,13 +88,15 @@ class Model:
             for cnt in range(0, 0x800, 8):
                 o = (band + cnt) // 2
                 w0 = int(spr[o])
-                if w0 & 0x100:
+                if w0 & 0x100 and not AOH:
                     continue
                 code = int(spr[o + 1])
+                if AOH:
+                    code |= (w0 & 0x300) << 8          # draw_sprites_aoh: 18-bit codes
                 color = int(spr[o + 2]) & 0x7f
                 x = int(spr[o + 3]) & 0x1ff
                 y = 256 - (w0 & 0xff)
-                fx, fy = bool(w0 & 0x8000), bool(w0 & 0x4000)
+                fx, fy = (bool(w0 & 0x400), False) if AOH else (bool(w0 & 0x8000), bool(w0 & 0x4000))
                 if flip:
                     fx, fy = not fx, not fy
                     x = FLIP_X - x
@@ -175,6 +186,8 @@ def detect_orientation(model, d, frames):
 
 def cmd_compare(a):
     dirs = [Path(d) for d in a.dirs]
+    first = read_manifest(dirs[0])[0]["frame"]
+    set_aoh(Image.open(dirs[0] / f"f{first}.png").size[0] == 384)
     model = Model(np.fromfile(find_gfx(dirs), dtype=np.uint8))
     tot_f = tot_ok = 0
     orient, oscore = detect_orientation(model, dirs[0], read_manifest(dirs[0]))

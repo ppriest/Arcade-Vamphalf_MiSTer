@@ -41,21 +41,22 @@ module sdram_chip_model_wide (
 
 	wire [2:0] cmd = {SDRAM_nRAS, SDRAM_nCAS, SDRAM_nWE};
 
-	// [VH] a 64 MB chip: {col[9], bank[1:0], row[12:0], col[8:0]} = 25 bits, ordered so the index is the
-	// word address (sdram.sv drives byte address bit 25 on A9 as column bit 9).
+	// [VH] the 128 MB module: two 64 MB chips, nCS picking one per command as sdram.sv drives it (byte
+	// address bit 26), each {col[9], bank[1:0], row[12:0], col[8:0]} = 25 bits (sdram.sv drives byte address
+	// bit 25 on A9 as column bit 9); the index {chip, ...} is the word address.
 	// Full real width: {bank[1:0], row[12:0], col[8:0]} = 24 bits = 16.7M
 	// words (32MB) -- matches the real MT48LC16M16 chip's actual capacity.
-	logic [15:0] mem [0:33554431];
+	logic [15:0] mem [0:67108863];
 
-	function automatic int unsigned addr_of(input logic [1:0] bank, input logic [12:0] row, input logic [9:0] col);
-		addr_of = {col[9], bank, row, col[8:0]};
+	function automatic int unsigned addr_of(input logic chip, input logic [1:0] bank, input logic [12:0] row, input logic [9:0] col);
+		addr_of = {chip, col[9], bank, row, col[8:0]};
 	endfunction
 
 	// [GX] four banks, as the chip has and as {bank, row, col} above says: with two,
 	// an access above 16 MB (bank 2 or 3) indexed past the array -- ModelSim read
 	// the open row as X, so the whole bank collapsed onto one row, while Verilator
 	// wrapped the index and agreed with itself.
-	logic [12:0] open_row [0:3];
+	logic [12:0] open_row [0:7];   // [VH] {chip, bank}
 	logic [12:0] mode_reg;
 	wire  [2:0] cas_latency_field  = mode_reg[6:4];
 	wire  [2:0] burst_length_field = mode_reg[2:0];
@@ -66,6 +67,7 @@ module sdram_chip_model_wide (
 	int          rcount;
 	logic [9:0] rcol;
 	logic [1:0] rbank;
+	logic       rchip;
 	int          rburst_left;
 	// [VH] burst write (mode register bit 9 clear): beats after the first, one per clock at the next
 	// column, wrapping within the burst, each masked by the DQM it is given with (A[12:11] here, as
@@ -73,6 +75,7 @@ module sdram_chip_model_wide (
 	int          wburst_left = 0;
 	logic [9:0] wcol;
 	logic [1:0] wbank;
+	logic       wchip;
 
 	logic         driving;
 	logic [15:0] drive_word;
@@ -90,7 +93,7 @@ module sdram_chip_model_wide (
 				if (rcount <= 0) begin
 					rstate      <= R_DRIVE;
 					driving     <= 1'b1;
-					widx        = addr_of(rbank, open_row[rbank], rcol);
+					widx        = addr_of(rchip, rbank, open_row[{rchip, rbank}], rcol);
 					drive_word  <= mem[widx];
 					rburst_left <= rburst_left - 1;
 					rcol        <= {rcol[9], rcol[8:0] + 9'd1};
@@ -101,7 +104,7 @@ module sdram_chip_model_wide (
 			R_DRIVE: begin
 				if (rburst_left > 0) begin
 					driving     <= 1'b1;
-					widx        = addr_of(rbank, open_row[rbank], rcol);
+					widx        = addr_of(rchip, rbank, open_row[{rchip, rbank}], rcol);
 					drive_word  <= mem[widx];
 					rburst_left <= rburst_left - 1;
 					rcol        <= {rcol[9], rcol[8:0] + 9'd1};
@@ -112,7 +115,7 @@ module sdram_chip_model_wide (
 		endcase
 
 		if (wburst_left > 0) begin   // [VH]
-			widx = addr_of(wbank, open_row[wbank], wcol);
+			widx = addr_of(wchip, wbank, open_row[{wchip, wbank}], wcol);
 			if (!SDRAM_A[11]) mem[widx][7:0]  <= SDRAM_DQ[7:0];
 			if (!SDRAM_A[12]) mem[widx][15:8] <= SDRAM_DQ[15:8];
 			wburst_left <= wburst_left - 1;
@@ -123,15 +126,16 @@ module sdram_chip_model_wide (
 		// (a read-to-read at the burst's end, sdram.sv's double read, runs on
 		// without a gap), so its column and length must win
 		unique case (cmd)
-			CMD_ACTIVE:    open_row[SDRAM_BA] <= SDRAM_A;
+			CMD_ACTIVE:    open_row[{SDRAM_nCS, SDRAM_BA}] <= SDRAM_A;
 			CMD_LOAD_MODE: mode_reg <= SDRAM_A;
 			CMD_WRITE: begin
-				widx = addr_of(SDRAM_BA, open_row[SDRAM_BA], SDRAM_A[9:0]);
+				widx = addr_of(SDRAM_nCS, SDRAM_BA, open_row[{SDRAM_nCS, SDRAM_BA}], SDRAM_A[9:0]);
 				if (!SDRAM_A[11]) mem[widx][7:0]  <= SDRAM_DQ[7:0];
 				if (!SDRAM_A[12]) mem[widx][15:8] <= SDRAM_DQ[15:8];
 				if (!mode_reg[9] && burst_words > 1) begin   // [VH]
 					wburst_left <= int'(burst_words) - 1;
 					wbank <= SDRAM_BA;
+					wchip <= SDRAM_nCS;
 					wcol <= {SDRAM_A[9], (SDRAM_A[8:0] & ~(9'(burst_words) - 9'd1)) | ((SDRAM_A[8:0] + 9'd1) & (9'(burst_words) - 9'd1))};
 				end
 			end
@@ -140,18 +144,19 @@ module sdram_chip_model_wide (
 				rcount      <= int'(cas_latency_field) - 2;
 				rcol        <= SDRAM_A[9:0];
 				rbank       <= SDRAM_BA;
+				rchip       <= SDRAM_nCS;
 				rburst_left <= int'(burst_words);
 			end
 			default: ; // NOP / PRECHARGE / AUTO_REFRESH: nothing to model
 		endcase
 	end
 
-	function automatic void poke_word(input logic [1:0] bank, input logic [12:0] row, input logic [9:0] col, input logic [15:0] data);
-		mem[addr_of(bank, row, col)] = data;
+	function automatic void poke_word(input logic chip, input logic [1:0] bank, input logic [12:0] row, input logic [9:0] col, input logic [15:0] data);
+		mem[addr_of(chip, bank, row, col)] = data;
 	endfunction
 
-	function automatic logic [15:0] peek_word(input logic [1:0] bank, input logic [12:0] row, input logic [9:0] col);
-		return mem[addr_of(bank, row, col)];
+	function automatic logic [15:0] peek_word(input logic chip, input logic [1:0] bank, input logic [12:0] row, input logic [9:0] col);
+		return mem[addr_of(chip, bank, row, col)];
 	endfunction
 
 	// Mirrors sdram.sv's own address decomposition exactly, same bit
@@ -159,12 +164,12 @@ module sdram_chip_model_wide (
 	// (word_addr[i] == addr0[i+1]; addr0's row=addr0[22:10] => here
 	// word_addr[21:9]): bank=word_addr[23:22], row=word_addr[21:9] (now the
 	// FULL 13 bits, not folded to [16:9]), col=word_addr[8:0].
-	function automatic void poke_word_addr(input logic [24:0] word_addr, input logic [15:0] data);
-		poke_word(word_addr[23:22], word_addr[21:9], {word_addr[24], word_addr[8:0]}, data);
+	function automatic void poke_word_addr(input logic [25:0] word_addr, input logic [15:0] data);
+		poke_word(word_addr[25], word_addr[23:22], word_addr[21:9], {word_addr[24], word_addr[8:0]}, data);
 	endfunction
 
-	function automatic logic [15:0] peek_word_addr(input logic [24:0] word_addr);
-		return peek_word(word_addr[23:22], word_addr[21:9], {word_addr[24], word_addr[8:0]});
+	function automatic logic [15:0] peek_word_addr(input logic [25:0] word_addr);
+		return peek_word(word_addr[25], word_addr[23:22], word_addr[21:9], {word_addr[24], word_addr[8:0]});
 	endfunction
 
 endmodule

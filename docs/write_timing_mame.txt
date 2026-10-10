@@ -112,3 +112,11 @@ What it means for the sprite-list latch (references/video_write_sweep.md section
   It is not safe if the RTL CPU's pass runs into line 16.
 - The RTL's pass duration is the number to measure before choosing: it decides between fixed line, done
   write, and a double-buffered list.
+
+--- aoh (MAME 0.289; vblank start line 240, 24 lines of vblank) ---
+  attract: python scripts/write_timing.py aoh --skip 600 --frames 1800 --order spr_used --extra last15:40007ffc:40007fff
+  play:    python scripts/write_timing.py aoh --coin 600 --skip 1500 --frames 1800 --tag _play --order spr_used --extra last15:40007ffc:40007fff
+  attract: palette 183.9 writes/frame, spr_used 1763.3, all in vblank; spr_used first line 240 (1800 of 1800 frames), last
+           line 240..244. play: palette 110.6, spr_used 3344.6, all in vblank; first line 240, last line 240..247.
+  The last dword of band 15 (0x40007ffc) is never written (last15: no writes); the last address written varies per frame
+  (0x40001024 .. 0x40007c34), so part of the list is left as it was. The copy for aoh starts at line 250 (vh_video).

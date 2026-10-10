@@ -4,14 +4,18 @@
 //   sprite RAM   64 KB at 0x40000000, 16384 dwords. Only bands 1..15 (0x0800..0x7fff) are drawn.
 //   palette RAM  64 KB at 0x80000000, 16384 dwords, two xRGB555 entries per dword, [31:16] the even one.
 // The CPU writes the whole list once per frame in the vertical blanking interval (docs/write_timing_mame.txt).
-// The renderer reads a snapshot of bands 1..15 taken after the last write of that pass; the palette is read live.
+// The renderer reads a snapshot of bands 1..15 taken after the last write of that pass (aoh: before it, at the
+// start of the vertical blank, docs/HACKS.md); the palette is read live.
 //
 // The graphics ROM is read 16 bytes per sprite row through gfx_*: gfx_req pulses one clock with the byte
 // address of the row (code*256 + row*16); gfx_dv then marks four consecutive 32-bit beats, bytes 0-3 first
 // (byte 0 in [31:24]).
 //
 // Timing: ce_pix is one pulse in eight clk. 448 x 264 pixel clocks per frame, visible 320 x 236 at
-// x 31..350, y 16..251 (y 20..255 when flipped).
+// x 31..350, y 16..251 (y 20..255 when flipped). aoh (screen_update_aoh, set_raw(32 MHz / 4, 512, 64, 448,
+// 264, 16, 240)): one pulse in seven, 512 x 264, visible 384 x 224 at x 64..447, y 16..239; its sprites
+// (draw_sprites_aoh) have an 18-bit code (word 0 bits 9:8 above word 1), flip X on word 0 bit 10, no flip Y
+// and no hide bit. The game has no flip register; the OSD's flip turns the 384 x 224 window by 180 degrees.
 
 module vh_video (
 	input             clk,
@@ -19,6 +23,7 @@ module vh_video (
 	input      [15:0] code_mask,       // 16'h7fff for the 8 MB graphics ROM (MAME wraps codes by the element count)
 	input             palshift,        // colour from word 2 bits 14:8 instead of 6:0 (m_palshift 8: suplup)
 	input             code17,          // code bit 16 from word 2 bit 8 (m_has_extra_gfx: boonggab)
+	input             aoh,             // aoh's timing and sprite format
 
 	// CPU side, 32-bit words
 	input             spr_we,
@@ -37,7 +42,7 @@ module vh_video (
 	// graphics ROM
 	output reg        gfx_req,
 	input             gfx_rdy,         // the memory takes a request in this clock
-	output reg [24:0] gfx_addr,
+	output reg [25:0] gfx_addr,
 	input             gfx_dv,
 	input      [31:0] gfx_data,
 
@@ -53,8 +58,9 @@ module vh_video (
 	output reg [8:0]  hpos,            // position of the pixel on the outputs, 0..447
 	output reg [8:0]  vpos,
 	output            frame_start,
-	output            vblank_start,    // one clock at the start of line 252 (MAME's vblank callback)
+	output            vblank_start,    // one clock at the start of line 252, 240 on aoh (MAME's vblank callback)
 
+	output            dbg_copy,        // the sprite list is being copied to the snapshot
 	output reg [15:0] dbg_overrun,     // lines whose engine was still running at the next line start
 	output reg [12:0] dbg_maxbusy      // longest engine pass, in clk cycles of a 3584-cycle line
 );
@@ -64,18 +70,23 @@ module vh_video (
 //------------------------------------------------------------------
 reg [2:0] pcnt;
 reg [8:0] hcnt, vcnt;
+wire [8:0] vb_line = aoh ? 9'd240 : 9'd252;     // the first line of the vertical blank
+wire [8:0] x0      = aoh ? 9'd64  : 9'd31;      // the first visible dot
+wire [8:0] x_w     = aoh ? 9'd384 : 9'd320;
+wire [8:0] y_h     = aoh ? 9'd224 : 9'd236;
+wire       p_last  = aoh ? pcnt == 3'd6 : pcnt == 3'd7;
 assign ce_pix = (pcnt == 3'd0);
 wire line_start = (pcnt == 3'd0) && (hcnt == 9'd0);
 assign frame_start = line_start && (vcnt == 9'd0);
-assign vblank_start = line_start && (vcnt == 9'd252);
+assign vblank_start = line_start && (vcnt == vb_line);
 
 always @(posedge clk) begin
 	if (rst) begin
 		pcnt <= 3'd0; hcnt <= 9'd0; vcnt <= 9'd0;
 	end else begin
-		pcnt <= pcnt + 3'd1;
-		if (pcnt == 3'd7) begin
-			if (hcnt == 9'd447) begin
+		pcnt <= p_last ? 3'd0 : pcnt + 3'd1;
+		if (p_last) begin
+			if (hcnt == (aoh ? 9'd511 : 9'd447)) begin
 				hcnt <= 9'd0;
 				vcnt <= (vcnt == 9'd263) ? 9'd0 : vcnt + 9'd1;
 			end else hcnt <= hcnt + 9'd1;
@@ -87,9 +98,10 @@ end
 reg flip_l;
 always @(posedge clk) begin
 	if (rst) flip_l <= 1'b0;
-	else if (pcnt == 3'd0 && hcnt == 9'd0 && vcnt == 9'd252) flip_l <= flip;
+	else if (pcnt == 3'd0 && hcnt == 9'd0 && vcnt == vb_line) flip_l <= flip;
 end
-wire [8:0] vstart = flip_l ? 9'd20 : 9'd16;
+// flipped: MAME's visible area moves to 20..255; aoh's 180-degree turn of 16..239 puts it at 32
+wire [8:0] vstart = flip_l ? (aoh ? 9'd32 : 9'd20) : 9'd16;
 
 //------------------------------------------------------------------
 // sprite RAM (live), snapshot, palette
@@ -103,7 +115,9 @@ vh_ram_be #(.AW(14)) u_spr (
 );
 assign cp_d1 = cp_d0;
 
-// the last dword of band 15 is the last write of the CPU's list pass
+// the last dword of band 15 is the last write of the CPU's list pass. aoh never writes it and rewrites only part of
+// the list, in lines 240..247 in MAME (docs/write_timing_mame.txt); its copy is taken at line 240, before that
+// pass, so a pass the CPU has not finished cannot tear it: a frame later than MAME draws it (docs/HACKS.md)
 reg        list_ready;
 reg        cp_run;
 reg [12:0] cp_a;             // dwords issued, 0..7679 (bands 1..15 start at dword 512)
@@ -114,7 +128,7 @@ reg        sn_we;
 reg [11:0] sn_wa;
 reg [63:0] sn_wd;
 
-wire in_copy_window = (vcnt >= 9'd252) || (vcnt <= 9'd8);
+wire in_copy_window = (vcnt >= vb_line) || (vcnt <= 9'd8);
 
 always @(posedge clk) begin
 	sn_we <= 1'b0;
@@ -124,6 +138,7 @@ always @(posedge clk) begin
 		list_ready <= 1'b0; cp_run <= 1'b0; cp_a <= 13'd0; cp_r <= 13'd0; cp_v2 <= 1'b0;
 	end else begin
 		if (spr_we && spr_addr == 14'h1fff) list_ready <= 1'b1;
+		if (aoh && line_start && vcnt == vb_line) list_ready <= 1'b1;
 		if (!cp_run) begin
 			if (list_ready && in_copy_window) begin
 				cp_run <= 1'b1; cp_a <= 13'd0; cp_r <= 13'd0; list_ready <= 1'b0;
@@ -147,6 +162,8 @@ always @(posedge clk) begin
 	end
 end
 
+assign dbg_copy = cp_run;
+
 reg  [11:0] sn_ra;
 wire [63:0] sn_rd;
 vh_sdp #(.AW(12), .DW(64)) u_snap (
@@ -165,7 +182,7 @@ vh_ram_be #(.AW(14)) u_pal (
 // line engine: renders target line T = vcnt + 1 during line vcnt
 //------------------------------------------------------------------
 wire [8:0] tline = (vcnt == 9'd263) ? 9'd0 : vcnt + 9'd1;
-wire       t_active = (tline >= vstart) && (tline < vstart + 9'd236);
+wire       t_active = (tline >= vstart) && (tline < vstart + y_h);
 // band 1..15 for the strip of the target line
 wire [3:0] t_strip = tline[7:4];
 wire [3:0] t_band  = flip_l ? t_strip : (4'd16 - t_strip);
@@ -179,7 +196,7 @@ reg [8:0]  eng_t;            // target line of the running pass
 
 // FIFO of sprites that hit the line
 localparam FD = 16;
-(* ramstyle = "logic" *) reg [39:0] fifo [0:FD-1];
+(* ramstyle = "logic" *) reg [40:0] fifo [0:FD-1];
 reg [4:0]  f_wr, f_rd;
 wire [4:0] f_cnt = f_wr - f_rd;
 wire       f_full  = (f_cnt >= FD - 3);
@@ -187,25 +204,26 @@ wire       f_empty = (f_cnt == 5'd0);
 
 // decode of the entry that arrives (registered snapshot output)
 wire [15:0] w0 = sn_rd[63:48], w1 = sn_rd[47:32], w2 = sn_rd[31:16], w3 = sn_rd[15:0];
-wire        hide  = w0[8];
+wire        hide  = !aoh && w0[8];
 wire [10:0] y_top = flip_l ? {3'b0, w0[7:0]} : (11'd256 - {3'b0, w0[7:0]});
 wire [10:0] rrow  = {2'b0, eng_t} - y_top;
 wire        hit   = sc_v && !hide && (rrow[10:4] == 7'd0);
-wire        fy_e  = w0[14] ^ flip_l;
-wire        fx_e  = w0[15] ^ flip_l;
+wire        fy_e  = (!aoh && w0[14]) ^ flip_l;
+wire        fx_e  = (aoh ? w0[10] : w0[15]) ^ flip_l;
 wire [3:0]  srow  = fy_e ? ~rrow[3:0] : rrow[3:0];
 wire [10:0] xs    = {2'b0, w3[8:0]};
-wire [10:0] x_pos = flip_l ? (11'd366 - xs) : xs;
-wire [39:0] f_in  = {code17 && w2[8], w1 & code_mask, palshift ? w2[14:8] : w2[6:0], x_pos, fx_e, srow};   // code 17, colour 7, x 11, fx 1, row 4
+wire [10:0] x_pos = flip_l ? ((aoh ? 11'd496 : 11'd366) - xs) : xs;
+wire [17:0] code  = aoh ? {w0[9:8], w1} : {1'b0, code17 && w2[8], w1 & code_mask};
+wire [40:0] f_in  = {code, palshift ? w2[14:8] : w2[6:0], x_pos, fx_e, srow};   // code 18, colour 7, x 11, fx 1, row 4
 
 // fetch: requests go out back to back (up to four in flight), rows come back in order
-(* ramstyle = "logic" *) reg [39:0]  mf [0:3];                 // meta of the requests in flight
+(* ramstyle = "logic" *) reg [40:0]  mf [0:3];                 // meta of the requests in flight
 reg [2:0]   mf_wr, mf_rd;
 wire [2:0]  mf_cnt = mf_wr - mf_rd;
 reg [1:0]   f_beat;
 reg [95:0]  f_acc;
 (* ramstyle = "logic" *) reg [127:0] rf_row [0:3];             // rows waiting for the draw stage
-reg [39:0]  rf_meta [0:3];
+reg [40:0]  rf_meta [0:3];
 reg [2:0]   rf_wr, rf_rd;
 wire [2:0]  rf_cnt = rf_wr - rf_rd;
 wire        f_idle = (mf_cnt == 3'd0) && (rf_cnt == 3'd0);
@@ -240,7 +258,7 @@ vh_tdp #(.AW(9), .DW(15)) u_lb1 (
 );
 
 // draw: pixel c of the row
-wire [10:0] d_col_s = d_x + {6'b0, d_c[3:0]} - 11'd31;
+wire [10:0] d_col_s = d_x + {6'b0, d_c[3:0]} - {2'b0, x0};
 wire [3:0]  d_src   = d_fx ? ~d_c[3:0] : d_c[3:0];
 wire [7:0]  d_pen   = d_row[127 - 8*d_src -: 8];
 
@@ -280,7 +298,7 @@ always @(posedge clk) begin
 				mf_wr <= mf_wr + 3'd1;
 				f_rd <= f_rd + 5'd1;
 				gfx_req <= 1'b1;
-				gfx_addr <= {fifo[f_rd[3:0]][39:23], fifo[f_rd[3:0]][3:0], 4'b0000};
+				gfx_addr <= {fifo[f_rd[3:0]][40:23], fifo[f_rd[3:0]][3:0], 4'b0000};
 			end
 			// fetch: collect four beats into a row
 			if (gfx_dv) begin
@@ -306,7 +324,7 @@ always @(posedge clk) begin
 				lb_a_buf <= eng_t0;
 				lb_a_addr <= d_col_s[8:0];
 				lb_a_wd <= {d_color, d_pen};
-				lb_a_we <= (d_pen != 8'd0) && (d_col_s[10:9] == 2'b00) && (d_col_s[8:0] < 9'd320);
+				lb_a_we <= (d_pen != 8'd0) && (d_col_s[10:9] == 2'b00) && (d_col_s[8:0] < x_w);
 				d_c <= d_c + 5'd1;
 				if (d_c == 5'd15) d_busy <= 1'b0;
 			end
@@ -326,10 +344,10 @@ end
 //   4: palette data                     5: output registers loaded (stable until the next pixel's 5)
 // Pixel x of line y comes from line buffer y[0].
 //------------------------------------------------------------------
-wire        y_active = (vcnt >= vstart) && (vcnt < vstart + 9'd236);
-wire        x_active = (hcnt >= 9'd31) && (hcnt <= 9'd350);
-wire        hs_w = (hcnt >= 9'd376) && (hcnt < 9'd408);
-wire        vs_w = (vcnt >= 9'd256) && (vcnt < 9'd259);
+wire        y_active = (vcnt >= vstart) && (vcnt < vstart + y_h);
+wire        x_active = (hcnt >= x0) && (hcnt < x0 + x_w);
+wire        hs_w = aoh ? (hcnt >= 9'd464) && (hcnt < 9'd500) : (hcnt >= 9'd376) && (hcnt < 9'd408);
+wire        vs_w = aoh ? (vcnt >= 9'd244) && (vcnt < 9'd247) : (vcnt >= 9'd256) && (vcnt < 9'd259);
 
 reg         so_buf;
 reg  [8:0]  so_addr;
@@ -345,9 +363,9 @@ always @(posedge clk) begin
 	lb_b_we <= 1'b0;
 	if (pcnt == 3'd0) begin
 		so_buf <= vcnt[0];
-		so_addr <= hcnt - 9'd31;
+		so_addr <= hcnt - x0;
 		lb_b_buf <= vcnt[0];
-		lb_b_addr <= hcnt - 9'd31;
+		lb_b_addr <= hcnt - x0;
 	end
 	if (pcnt == 3'd2) begin
 		// the entry is read; clear it for the next time this buffer is written

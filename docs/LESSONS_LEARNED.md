@@ -509,6 +509,16 @@ Every region was indexed by low address bits, right only when the base's low bit
 palette at `0x?00400` put entry 0 at index 0x200: black sprites, right art wrong colours, on every
 board with that base and in no simulation (benches wrote the palette RAM directly).
 
+### [Vamphalf] A kill flag checked when a read completes misses a kill raised in the completion clock
+
+`vh_cpumem`'s D-side prefetch read the next line into a buffer; a store to that line set `pf_kill`,
+and the completion took the data only if `!pf_kill`. A store in the clock the read completed set the
+flag after the completion had read it, so the buffer kept the line's old data and the next load miss
+on it filled from there: `mrkickera` stored 0 and loaded back `0x0007ee50` (a bus display of the two
+accesses, then `STORE ... m_who=5 done=1 fl=07edc`). The race is in the released core; `e1_cpu`'s
+timing did not meet it in the benches, `e1_pipe`'s did. Invalidate the result in the clock it arrives
+as well as the request in flight, and test a cache against a CPU of different timing.
+
 ## Sprite lists, line buffers and snapshots
 
 ### A swap is not a copy
@@ -1298,12 +1308,12 @@ the PC MAME's speed-up handler names, waiting for a flag the vblank handler sets
   conclusion ("no sound commands during play") was an artefact. A tap the frame callback refers to (to
   remove it at the end) survived. Hold taps in globals, and check that a capture has accesses up to its
   last frame.
-- **[Vamphalf] A `PORT_CUSTOM_MEMBER` field declared `IP_ACTIVE_LOW` reaches the bus inverted.**
-  `ioport_port::read()` merges the callbacks' values and then XORs the whole port with its default
-  (`src/emu/ioport.cpp:1595`), custom fields included, so a callback's "7 = no hit" reads as 0. `boonggab`'s
-  photo-sensor field was transcribed from the callback's table and idled at the strongest hit; the I/O log
-  settled it (P1_P2 0xc7ff idle, 0xcfff with the weakest). Take a custom field's encoding from a tap of the
-  port, not from the callback.
+- **[Vamphalf] A `PORT_CUSTOM_MEMBER` field declared `IP_ACTIVE_LOW` reaches the bus inverted, and that
+  can be MAME's bug.** `ioport_port::read()` merges the callbacks' values and then XORs the whole port with
+  its default (`src/emu/ioport.cpp:1595`), custom fields included, so `boonggab`'s "7 = no hit" reads as 0.
+  Copying MAME's bus value (P1_P2 0xc7ff at rest) made the core match MAME, and with it MAME's fault: the
+  game takes 0 as a hit, and its Setup main menu selected its first item every frame. Holding the field at 7
+  in MAME made the menus work. Check such a field against what the game does with it, not only against a tap.
 
 ## Hardware bring-up (MiSTer / DE10-nano)
 

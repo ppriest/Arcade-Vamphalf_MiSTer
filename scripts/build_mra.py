@@ -66,11 +66,12 @@ SETS = {
     "worldadv":   (None,       9, 0),
     "solitaire":  (None,       8, 0),
     "finalgdr":   (None,       13, 0),
+    "aoh":        (None,       14, 0),
     "yorijori":   (None,       11, 0),
     "boonggab":   (None,       12, 270),
 }
 # the families on the E1-32 board (mod byte bit 0)
-BUS32 = {1, 10, 11, 13}
+BUS32 = {1, 10, 11, 13, 14}
 CATEGORY = {"misncrft": "Shooter", "wivernwg": "Shooter", "vamphalf": "Platform"}
 # Each parent's button names, in the order the core's J1 line reads them (bits 4..7); "-" leaves a
 # button unused. MAME's "common" port names none. Wivern Wings: history.xml ("[A] Basic Shot,
@@ -87,14 +88,15 @@ BUTTONS = {"misncrft": ["Button 1", "Button 2", "Button 3", "Button 4"],
            # MAME's finalgdr port: three buttons, Start where button 4 is
            "finalgdr": ["Button 1", "Button 2", "Button 3", "-"]}
 for _p in ("coolmini", "dquizgo2", "toyland", "mrkicker", "dtfamily", "jmpbreak", "poosho", "newxpang", "mrdig", "suplup",
-           "worldadv", "yorijori"):
+           "worldadv", "yorijori", "aoh"):
     BUTTONS[_p] = ["Button 1", "Button 2", "Button 3", "Button 4"]
 
 
 def sdram_map():
     text = (REPO / "rtl" / "vh_sdram_map.svh").read_text(encoding="utf-8")
     m = dict((k, int(v, 16)) for k, v in re.findall(r"localparam \[26:0\] (SD_\w+)\s*=\s*27'h([0-9a-fA-F]+);", text))
-    for k in ("SD_MAINCPU", "SD_SNDCPU", "SD_EEPROM", "SD_SAMPLES", "SD_PRGLO", "SD_GFX", "SD_WRAM", "SD_GFXHI"):
+    for k in ("SD_MAINCPU", "SD_SNDCPU", "SD_EEPROM", "SD_SAMPLES", "SD_SAMPLES2", "SD_AOHPRG", "SD_PRGLO", "SD_GFX",
+              "SD_WRAM", "SD_GFXHI"):
         if k not in m:
             sys.exit(f"{k} missing from rtl/vh_sdram_map.svh")
     return m
@@ -134,6 +136,13 @@ def load_region(zs, records, size):
             data = read_part(zs, name, crc)
             assert len(data) == length, (name, len(data), length)
             out[dest:dest + length] = data
+            last = data
+        elif kind == "load16_wswap":
+            data = read_part(zs, name, crc)
+            assert len(data) == length, (name, len(data), length)
+            sw = bytearray(length)
+            sw[0::2], sw[1::2] = data[1::2], data[0::2]
+            out[dest:dest + length] = sw
             last = data
         elif kind in ("load32_word", "load32_word_swap"):
             data = read_part(zs, name, crc)
@@ -177,7 +186,7 @@ def build(setname, sm, write=True):
         return False
     zs = [zipfile.ZipFile(p) for p in paths]
 
-    rec = {r: ers.region_records(body, r)[0] for r in ("maincpu", "qs1000:cpu", "qs1000", "oki1", "gfx", "eeprom")}
+    rec = {r: ers.region_records(body, r)[0] for r in ("maincpu", "qs1000:cpu", "qs1000", "oki1", "oki2", "gfx", "eeprom")}
     for r, (recs, unknown) in ((r, ers.region_records(body, r)) for r in rec):
         if unknown:
             sys.exit(f"{setname}: region {r}: unparsed {unknown}")
@@ -185,9 +194,13 @@ def build(setname, sm, write=True):
     # the image this script expects, region by region
     # graphics from 16 MB up (boonggab) go at SD_GFXHI, above the 32 MB line
     gsize = region_size(body, "gfx")
-    gfx_hi = gsize > 0x1000000
+    # aoh (family 14): a 4 MB program at SD_AOHPRG, "oki2" at SD_SAMPLES2, the whole 64 MB "gfx" at SD_GFXHI
+    aoh = family == 14
+    gfx_hi = gsize > 0x1000000 and not aoh
 
     def gfx_at(off):
+        if aoh:
+            return sm["SD_GFXHI"] + off
         return sm["SD_GFX"] + off if off < 0x1000000 else sm["SD_GFXHI"] + off - 0x1000000
 
     img = bytearray(gfx_at(gsize - 1) + 1)
@@ -195,8 +208,12 @@ def build(setname, sm, write=True):
     # a 2 MB program (yorijori, at 0xffe00000): its second MB at SD_MAINCPU, as the 1 MB programs', its first
     # at SD_PRGLO
     prg2 = len(maincpu) == 0x200000
-    assert len(maincpu) in (0x100000, 0x200000)
-    img[sm["SD_MAINCPU"]:sm["SD_MAINCPU"] + 0x100000] = maincpu[-0x100000:]
+    if aoh:
+        assert len(maincpu) == 0x400000
+        img[sm["SD_AOHPRG"]:sm["SD_AOHPRG"] + 0x400000] = maincpu
+    else:
+        assert len(maincpu) in (0x100000, 0x200000)
+        img[sm["SD_MAINCPU"]:sm["SD_MAINCPU"] + 0x100000] = maincpu[-0x100000:]
     if prg2:
         img[sm["SD_PRGLO"]:sm["SD_PRGLO"] + 0x100000] = maincpu[:0x100000]
     snd = load_region(zs, rec["qs1000:cpu"], region_size(body, "qs1000:cpu"))[:0x20000]
@@ -210,17 +227,24 @@ def build(setname, sm, write=True):
         img[sm["SD_EEPROM"]:sm["SD_EEPROM"] + 128] = bytes([0xff]) * 128
     smp_region = "qs1000" if rec["qs1000"] else "oki1"
     samples = load_region(zs, rec[smp_region], region_size(body, smp_region))
-    smp_len = sm["SD_PRGLO"] - sm["SD_SAMPLES"]
+    smp_len = (sm["SD_SAMPLES2"] if aoh else sm["SD_PRGLO"]) - sm["SD_SAMPLES"]
     assert not any(samples[smp_len:]), "sample data beyond the space SD_SAMPLES leaves"
     smp = samples[:smp_len]
     img[sm["SD_SAMPLES"]:sm["SD_SAMPLES"] + len(smp)] = smp
+    if aoh:
+        oki2 = load_region(zs, rec["oki2"], region_size(body, "oki2"))
+        assert len(oki2) <= sm["SD_AOHPRG"] - sm["SD_SAMPLES2"]
+        img[sm["SD_SAMPLES2"]:sm["SD_SAMPLES2"] + len(oki2)] = oki2
     gfx = load_region(zs, rec["gfx"], gsize)
     # A ROM_REGION32_BE "gfx" (solitaire) is drawn by gfx_16x16x8_raw from host memory, which on a
     # little-endian host is each dword of the big-endian layout reversed: render_model.py with this
     # order matches MAME's frame to the pixel, with ROM_START's order it does not (LESSONS_LEARNED)
     if region_be32(body, "gfx"):
         gfx = dword_reverse(gfx)
-    img[sm["SD_GFX"]:sm["SD_GFX"] + min(gsize, 0x1000000)] = gfx[:0x1000000]
+    if aoh:
+        img[sm["SD_GFXHI"]:] = gfx
+    else:
+        img[sm["SD_GFX"]:sm["SD_GFX"] + min(gsize, 0x1000000)] = gfx[:0x1000000]
     if gfx_hi:
         img[sm["SD_GFXHI"]:] = gfx[0x1000000:]
     img = bytes(img)
@@ -261,8 +285,10 @@ def build(setname, sm, write=True):
             pad_to(base + dest, f"{region} 0x{dest:x}")
             part(name, crc, length)
 
-    L.append("        <!-- maincpu -->")
-    if prg2:
+    if aoh:
+        pass                                       # its program is at SD_AOHPRG, after the samples
+    elif prg2:
+        L.append("        <!-- maincpu -->")
         (kind, pname, dest, length, crc, *rest), = rec["maincpu"]
         assert kind == "load" and dest == 0 and length == 0x200000, rec["maincpu"]
         pad_to(sm["SD_MAINCPU"], "maincpu")
@@ -270,6 +296,7 @@ def build(setname, sm, write=True):
                  '  <!-- its second MB: 0xfff00000 -->')
         pos += 0x100000
     else:
+        L.append("        <!-- maincpu -->")
         loads("maincpu", sm["SD_MAINCPU"])
     pad_to(sm["SD_SNDCPU"], "maincpu end")
     if rec["qs1000:cpu"]:
@@ -285,14 +312,33 @@ def build(setname, sm, write=True):
     pad_to(sm["SD_SAMPLES"], "samples")
     L.append(f"        <!-- {smp_region} samples -->")
     loads(smp_region, sm["SD_SAMPLES"])
+    if aoh:
+        pad_to(sm["SD_SAMPLES2"], "oki2")
+        L.append("        <!-- oki2 samples -->")
+        loads("oki2", sm["SD_SAMPLES2"])
+        pad_to(sm["SD_AOHPRG"], "maincpu")
+        L.append("        <!-- maincpu: ROM_LOAD16_WORD_SWAP, 0xffc00000 on -->")
+        for kind, pname, dest, length, crc, *rest in sorted(rec["maincpu"], key=lambda r: r[2]):
+            assert kind == "load16_wswap", rec["maincpu"]
+            pad_to(sm["SD_AOHPRG"] + dest, f"maincpu 0x{dest:x}")
+            data = read_part(zs, pname, crc)
+            want = maincpu[dest:dest + length]
+            m = next((m for m in ("21", "12") if mra_lib.interleave([(data, m)], 16) == want), None)
+            if not m:
+                sys.exit(f"{setname}: no 16-bit map reproduces maincpu 0x{dest:x}")
+            L.append('        <interleave output="16">')
+            L.append(f'            <part name="{escape(pname)}" crc="{crc:08x}" map="{m}"/>')
+            L.append('        </interleave>')
+            pos += length
     if prg2:
         pad_to(sm["SD_PRGLO"], "maincpu's first MB")
         L.append(f'        <part name="{escape(pname)}" crc="{crc:08x}" offset="0" length="0x100000"/>'
                  '  <!-- maincpu\'s first MB: 0xffe00000 -->')
         pos += 0x100000
-    pad_to(sm["SD_GFX"], "gfx")
+    if not aoh:
+        pad_to(sm["SD_GFX"], "gfx")
     L.append(f"        <!-- gfx: ROM_LOAD32_{'WORD_SWAP' if rec['gfx'][0][0] == 'load32_word_swap' else 'WORD'} pairs -->")
-    gl = rec["gfx"]
+    gl = sorted(rec["gfx"], key=lambda r: r[2])
     for i in range(0, len(gl), 2):
         lo, hi = gl[i], gl[i + 1]
         assert lo[0] == hi[0] in ("load32_word", "load32_word_swap") and hi[2] == lo[2] + 2 and lo[3] == hi[3], (lo, hi)
@@ -317,7 +363,7 @@ def build(setname, sm, write=True):
     rot = {0: "horizontal", 90: "vertical (cw)", 270: "vertical (ccw)"}[info["rot"]]
     gfx16 = len(gfx) > 0x800000
     mod0 = (1 if family in BUS32 else 0) | ({0: 0, 90: 1, 270: 2}[info["rot"]] << 1) | (family << 3)
-    mod1 = (1 if gfx16 else 0) | (2 if prg2 else 0) | (4 if gfx_hi else 0)
+    mod1 = 0 if aoh else (1 if gfx16 else 0) | (2 if prg2 else 0) | (4 if gfx_hi else 0)   # aoh: from the family
     zipattr = "|".join(names)
     game = BUTTONS[SETS[setname][0] or setname]
     named = [n for n in game if n != "-"]

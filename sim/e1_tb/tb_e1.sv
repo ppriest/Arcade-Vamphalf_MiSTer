@@ -1,4 +1,4 @@
-// Bench top for e1_cpu: exposes the architectural state flat.
+// Bench top for e1_cpu, or e1_pipe with +define+E1_PIPE: exposes the architectural state flat.
 module tb_e1 (
 	input             clk,
 	input             reset,
@@ -26,23 +26,37 @@ module tb_e1 (
 	output [4:0]      o_state,
 	output [2:0]      o_wq,
 	output [31:0]     o_npc,
-	output [31:0]     o_nsr
+	output [31:0]     o_nsr,
+	output [31:0]     o_xseq          // instructions that have entered ST_EXEC, counting the one in it
 );
 
+`ifdef E1_PIPE
+e1_pipe cpu (
+`else
 e1_cpu cpu (
+`endif
 	.clk(clk), .reset(reset), .cen(1'b1),
 	.bus_req(bus_req), .bus_wr(bus_wr), .bus_io(bus_io),
 	.bus_addr(bus_addr), .bus_be(bus_be), .bus_wdata(bus_wdata),
 	.bus_ack(bus_ack), .bus_rdata(bus_rdata),
 	.if_req(if_req), .if_addr(if_addr), .if_ack(if_ack), .if_data(if_data),
-	.irq_in(irq_in), .irq_ack(irq_ack), .pause(pause), .tick(1'b0),
+	.irq_in(irq_in), .irq_ack(irq_ack), .pause(pause), .tick(1'b0), .tick2(1'b0),
 	.retire(retire), .retire_pc(retire_pc)
 );
+
+`ifdef E1_PIPE
+assign o_xseq = cpu.x_seq;
+`else
+// e1_cpu spends one clock in ST_EXEC per instruction
+reg [31:0] xdone = 32'd0;
+always @(posedge clk) if (reset) xdone <= 32'd0; else if (cpu.state == 5'd4) xdone <= xdone + 32'd1;
+assign o_xseq = xdone + {31'b0, cpu.state == 5'd4};
+`endif
 
 assign o_pc = cpu.pc;
 assign o_sr = cpu.sr;
 assign o_state = cpu.state;
-assign o_wq = cpu.wq_cnt;
+assign o_wq = cpu.wq_cnt - cpu.wq_rd;
 assign o_npc = cpu.retire_npc;
 assign o_nsr = cpu.retire_sr;
 genvar gi;

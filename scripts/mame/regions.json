@@ -36,6 +36,7 @@
   },
   "sets": {
     "mrkickera": {"bus_bytes": 4},
+    "aoh": {"bus_bytes": 4, "sweep_regions": {"spr_bands": ["0x40000000", "0x400087ff"], "spr_used": ["0x40000800", "0x40007fff"], "spr_rest": ["0x40008800", "0x4003ffff"]}},
     "yorijori": {"bus_bytes": 4},
     "wivernwg": {"bus_bytes": 4, "video": {"flip_port": "0x800"},
                  "_sweep_regions_comment": "Extra named ranges for write_timing.py. Sprite RAM split: spr_bands = the 17 bands of 0x800 bytes (0x8800); spr_used = bands 1..15, the only bytes draw_sprites reads; spr_rest = past the 17 bands. io_flip taps the I/O space (name prefix io_).",

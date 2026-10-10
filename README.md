@@ -4,11 +4,12 @@ A MiSTer FPGA core for the Hyperstone E1-based arcade boards of MAME's `vamphalf
 F2 System, SemiCom, Sun, Omega System, Logic), built with Quartus Prime 17.0.2 Lite for the DE10-nano.
 
 **Status: work in progress. Some games lose a small number of frames that do not complete in time.
-Boong-Ga Boong-Ga needs the 128 MB SDRAM module.**
+Boong-Ga Boong-Ga and Age Of Heroes need the 128 MB SDRAM module.**
 
 ## Contents
 
 - [History](#history)
+- [Status](#status)
 - [Games](#games)
   - [Supported](#supported)
   - [Not yet](#not-yet)
@@ -28,11 +29,16 @@ Boong-Ga Boong-Ga needs the 128 MB SDRAM module.**
 
 ## History
 
+* **20261010** (`releases/Arcade-Vamphalf_20261010.rbf`)
+  * New set: Age Of Heroes - Silkroad 2 (128 MB SDRAM)
+  * Pipelined E1 CPU: About 35% faster per-clock
+  * Boong-Ga Boong-Ga: the Test menu's items can be used (Start to move, Right to select) (unlike MAME)
+
 * **20261009** (`releases/Arcade-Vamphalf_20261009.rbf`)
   * New sets: Mr. Kicker (SEMICOM-003b PCB), Boong-Ga Boong-Ga (128 MB SDRAM), Solitaire, Final Godori,
     Yori Jori Kuk Kuk
-  * CPU: SETADR fix, which stops Mr. Kicker (SEMICOM-003b PCB) hanging when it rewrites its EEPROM
-  * Service Mode is a held pad input, as on the board
+  * CPU: SETADR fix, which stops Mr. Kicker (SEMICOM-003b PCB) hanging when it rewrites its EEPROM and Yori Jori Kuk Kuk from booting without a CPU fix (PR for MAME too)
+
 * **20261008** (`releases/Arcade-Vamphalf_20261008.rbf`)
   * Initial release
   * QS1000 sound: the level of the effects against the music set from a PCB recording, not MAME's
@@ -42,12 +48,21 @@ Boong-Ga Boong-Ga needs the 128 MB SDRAM module.**
   * Flip screen, HDMI rotation
   * MAME's default keyboard mapping
 
+## Status
+
+**Status**: All listed games run and are playable with sound.
+
+Age of Heroes needs an _80MHz_ CPU core. It does all of it's screen drawing in the vblank period in a few scanlines.
+As the CPU isn't fast enough yet, it results in some screen tearing when scrolling vertically (luckily it's a side-scroller...).
+To avoid this, I'm delaying the screen drawing until much later (read hack), resulting in one screen of lag.
+
 ## Games
 
-The supported sets run on four boards: the E1-16 (GMS30C2116 / E1-16T) board with a QS1000 sound board
+The supported sets run on five boards: the E1-16 (GMS30C2116 / E1-16T) board with a QS1000 sound board
 (Mission Craft), the E1-32 board with a QS1000 (Wivern Wings, Yori Jori Kuk Kuk), the E1-16 board with a YM2151 and an
 OKI M6295 (24 sets, in nine I/O map families), and the E1-32 board with the YM2151 and a banked M6295
-(Mr. Kicker, SEMICOM-003b PCB; Final Godori, with a 32 KB backup RAM). All four have the same video: one layer of
+(Mr. Kicker, SEMICOM-003b PCB; Final Godori, with a 32 KB backup RAM), and Unico's E1-32XN board at 80 MHz with a
+YM2151 and two M6295s (Age Of Heroes: a 384 x 224 screen and 18-bit sprite codes). All five have the same video: one layer of
 16x16 sprites from a list in sprite RAM, and a 15-bit palette.
 
 ### Supported
@@ -85,13 +100,8 @@ OKI M6295 (24 sets, in nine I/O map families), and the E1-32 board with the YM21
 | World Adventure | 1999 | Logic / F2 System | `worldadv` | E1-16, YM2151 + M6295 | 1,000,000 of 1,000,000 | Protection: MAME's seven checks replayed, 0 differ |
 | Solitaire (version 2.5) | 1999 | F2 System | `solitaire` | E1-16, YM2151 + M6295 | 869,671, then a YM2151 status read differs (busy in MAME) | Eleven buttons (Controls) |
 | Final Godori (Korea, version 2.20.5915) | 2001 | SemiCom | `finalgdr` | E1-32, YM2151 + banked M6295 | 1,000,000 of 1,000,000 | 32 KB backup RAM, saved in the `.nvm` after the EEPROM |
+| Age Of Heroes - Silkroad 2 (v0.63 - 2001/02/07) | 2001 | Unico | `aoh` | E1-32XN, YM2151 + two M6295 | 1,000,000 of 1,000,000 | Needs the 128 MB SDRAM module (64 MB of graphics) |
 | Boong-Ga Boong-Ga (Spank'em!) | 2001 | Taff System | `boonggab` | E1-16, YM2151 + banked M6295 | 1,000,000 of 1,000,000 | Needs the 128 MB SDRAM module (28 MB of graphics). Four buttons give four of the photo sensors' seven hit strengths (`docs/HACKS.md`) |
-
-### Not yet
-
-| Name | Why |
-|-|-|
-| Age Of Heroes - Silkroad 2 | An E1-32XN CPU at 80 MHz, its own sprite format and screen, 64 MB of graphics |
 
 ## Hardware
 
@@ -123,7 +133,7 @@ Revision `Vamphalf`, fitted 08 Oct 2026:
 ## Installation
 
 A 32 MB SDRAM module is required (the images are up to 24 MB; work RAM sits above them). Boong-Ga
-Boong-Ga needs the 128 MB module: its graphics from 16 MB up are stored above the 32 MB line.
+Boong-Ga and Age Of Heroes need the 128 MB module: their graphics are stored above the 32 MB line.
 
 * Take the latest `*.rbf` from `releases/` and put it in `_Arcade/cores`, renamed to drop the
   `Arcade-` prefix (`Arcade-Vamphalf_YYYYMMDD.rbf` becomes `Vamphalf_YYYYMMDD.rbf`)
@@ -151,33 +161,39 @@ the columns, A S D F for the other four.
 
 Known issues:
 
-* **The CPU is slower than the original**: some games lose a small number of frames that do not
-  complete in time. On the bench (900 frames, coin then play, after commit `ff38ff1`), frames in which
-  the game never reached its idle loop: New Cross Pang 30, Toy Land 10, Jumping Break 3, Mission Craft 0.
-  The other sets have not been measured since that change.
+* **The CPU is still slower than the original in the heaviest frames**: on the bench (1300 frames, coin then
+  play, commit `5dab2e1`), frames in which the game never reached its idle loop: New Cross Pang 3, Toy Land 4,
+  Jumping Break 0 (the unpipelined CPU at `8585cd4`: 39, 8, 3). The other sets have not been measured.
+* **Age Of Heroes shows its sprites one frame later than MAME**: the core takes the sprite list at the start
+  of the vertical blank, before the game rewrites it, because the CPU, slower than the original, does not
+  finish the rewrite in time for a later copy; a later copy tore when the screen scrolled vertically
+  (`docs/HACKS.md`).
 * The QS1000 follows MAME's model, which has no envelopes, filter or looping.
 * The SUPLUP board's games run 2.2% slow (Video timing).
-* Not yet checked on the board: flip screen, the `.nvm` save and restore.
+* Not yet checked on the board: flip screen, the `.nvm` save and restore. This release was started on the
+  board with Boong-Ga Boong-Ga and Age Of Heroes; the other sets ran on the unpipelined CPU in the
+  previous release.
 
 `docs/ROADMAP.md` is the plan and its progress.
 
 ### Todo
 
-- [ ] CPU speed (`docs/ROADMAP.md`, CPU throughput)
+- [ ] CPU speed (`docs/ROADMAP.md`, Phase 7)
+- [ ] Age Of Heroes tearing
 - [ ] Video frames against MAME for the sets other than Mission Craft and Wivern Wings
 - [ ] Flip screen and `.nvm` on the board
 
 ### Resource usage
 
-The release revision (`Vamphalf`, commit `fe5d6fa`, seed 7) on the DE10-nano's Cyclone V 5CSEBA6, speed
-grade 7, every clock meeting timing (clk_sys +0.957 ns):
+The release revision (`Vamphalf`, commit `5c4af03`, seed 3) on the DE10-nano's Cyclone V 5CSEBA6, speed
+grade 7, every clock meeting timing (clk_sys +0.649 ns, hdmi pll +0.099 ns):
 
 | resource | used | available |
 | --- | --- | --- |
-| Logic (ALMs) | 30,225 | 41,910 |
-| Block memory bits | 3,310,189 | 5,662,720 |
-| RAM blocks | 457 | 553 |
-| DSP blocks | 47 | 112 |
+| Logic (ALMs) | 34,988 | 41,910 |
+| Block memory bits | 3,393,113 | 5,662,720 |
+| RAM blocks | 467 | 553 |
+| DSP blocks | 48 | 112 |
 | PLLs | 3 | 6 |
 
 ## AI Attestation

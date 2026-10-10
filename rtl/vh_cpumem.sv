@@ -12,19 +12,26 @@
 //   0xffe00000-0xffefffff  program ROM's first MB on a 2 MB program (prg2: yorijori_32bit_map), SDRAM
 //                          PRGLO_BASE, through the caches
 //   anything else reads 0, writes are dropped (0xe000xxxx also pulses xflip_we)
+// aoh (aoh_map, an E1-32XN): work RAM 4 MB, program ROM 4 MB from 0xffc00000 (SDRAM AOHPRG_BASE), internal
+// RAM 8 KB (iram_8k_map), SYSTEM at 0x8021xxxx and P1_P2 at 0x8022xxxx (aoh_sys, aoh_p12)
 //
 // Caches: I 16 KB, D 4 KB, direct-mapped, 16-byte lines filled by one double read. Instruction fetches
 // have their own port (if_*, 8 bytes) so fetch-ahead does not wait behind loads and stores. Stores to
 // work RAM and the upper sprite RAM are written through: they update whichever cache holds the line and
 // enter a four-entry write buffer (wq_*), each entry written as one burst. A miss waits for the buffer
-// to drain.
+// only while it holds a store to the missed line; otherwise its fill goes to SDRAM before the buffer.
 // After every D-cache fill the next line is read into a 16-byte prefetch buffer when port 2 is idle; a D
-// miss on that line fills from it in two clocks. A store to the buffered line, or to the line in flight,
-// discards it. Port 2 serves the write buffer first, so the prefetch never holds data older than a store.
+// miss on that line fills from it in two clocks, waiting for it if it is on its way (S_PFW). A store to the
+// buffered line, or to the line in flight (including in the clock it arrives), discards it. Port 2 serves
+// the write buffer before the prefetch, so the prefetch never holds data older than a store.
 //
-// CPU bus timing (e1_cpu: req held until ack): I/O and internal/video RAM ack from a register, one clock
-// after the request; a cache hit (S_LOOK), a store (S_WLOOK) and a data fill (S_FILL2) ack
-// combinationally, so a hit costs two clocks, not three.
+// CPU bus timing (e1_cpu: req held until ack): a write is acked in its request clock, combinationally: one
+// that takes effect in that clock (I/O, internal and video RAM), or a store the write buffer can take, whose
+// cache and buffer update follows in S_WLOOK (the CPU holds bus_addr, bus_be and bus_wdata for that clock:
+// it sets them at the end of a clock that issues a request). Reads of I/O and internal/video RAM ack from a
+// register one clock after the request; a cache hit (S_LOOK) and a data fill (S_FILL2) ack combinationally.
+// A read the CPU announced on la_* in the clock before its request, while the D-cache was free, was looked
+// up then: a hit acks in the request clock.
 // Instruction port: if_addr is looked up in every clock in which the data side, a fill or the sweep does
 // not hold the RAM it needs (i_free); if_ack comes in the clock after a lookup of the address still
 // requested, so a lookup of an address the CPU has since changed is dropped. An I-cache miss is filled by
@@ -33,8 +40,8 @@
 // A store updates the I-cache in S_WLOOK, the clock it is acked in; the CPU drops any fetched 8 bytes the
 // store hits, and every later lookup reads the new data.
 //
-// SDRAM port 2 (sdram.sv's toggle protocol, burst writes), in priority order: download writes (dl_*), the
-// write buffer, line fills, the prefetch. It is reset only by prst (the PLL's lock), never by the core
+// SDRAM port 2 (sdram.sv's toggle protocol, burst writes), in priority order: download writes (dl_*), line
+// fills, the write buffer, the prefetch. It is reset only by prst (the PLL's lock), never by the core
 // reset: MiSTer holds the core reset for the whole download (LESSONS_LEARNED, "Never hold the memory path
 // in the core reset").
 // SDRAM words hold the even byte in [7:0]; the CPU is big-endian, so data is byte-swapped at this seam.
@@ -43,12 +50,16 @@ module vh_cpumem #(
 	parameter [26:0] ROM_BASE  = 27'h0000000,
 	parameter [26:0] WRAM_BASE = 27'h1800000,
 	parameter [26:0] SPRHI_BASE = 27'h1a00000,
-	parameter [26:0] PRGLO_BASE = 27'h0700000
+	parameter [26:0] PRGLO_BASE = 27'h0700000,
+	parameter [26:0] AOHPRG_BASE = 27'h0300000
 ) (
 	input             clk,
 	input             prst,            // power-up only: the port-2 side
 	input             rst,
 	input             prg2,            // a 2 MB program: ROM from 0xffe00000
+	input             aoh,             // aoh_map
+	input      [31:0] aoh_sys,         // aoh's SYSTEM and P1_P2 ports, read at 0x8021xxxx and 0x8022xxxx
+	input      [31:0] aoh_p12,
 
 	// CPU
 	input             bus_req,
@@ -59,6 +70,8 @@ module vh_cpumem #(
 	input      [31:0] bus_wdata,
 	output            bus_ack,
 	output     [31:0] bus_rdata,
+	input             la_req,          // the read the CPU is issuing in this clock, at la_addr (e1_pipe)
+	input      [31:0] la_addr,
 
 	// CPU instruction port: 8 bytes, byte 0 in [63:56]
 	input             if_req,
@@ -115,37 +128,42 @@ module vh_cpumem #(
 	output reg [63:0] dbg_fill_d,      // and its second granule
 	output            dbg_miss,        // one clock per cache miss: dbg_miss_ic, the line in the cached space
 	output            dbg_miss_ic,
-	output     [22:4] dbg_miss_line,
+	output     [23:4] dbg_miss_line,
 	output            xflip_we         // a write to 0xe000xxxx (jmpbreak_flipscreen_w): bus_wdata, bus_be
 );
 
 // ---------------------------------------------------------------- decode
-wire r_wram = bus_addr[31:21] == 11'd0;
-wire r_rom  = bus_addr[31:20] == 12'hfff;
-wire r_rom2 = prg2 && bus_addr[31:20] == 12'hffe;
+// program ROM: the top 1 MB (0xfff00000), 2 MB with prg2 (from 0xffe00000), 4 MB on aoh (from 0xffc00000)
+function rom_at(input [31:0] a);
+	rom_at = a[31:22] == 10'h3ff && (aoh || a[21:20] == 2'b11 || prg2 && a[21:20] == 2'b10);
+endfunction
+wire r_wram = aoh ? bus_addr[31:22] == 10'd0 : bus_addr[31:21] == 11'd0;
+wire r_rom  = rom_at(bus_addr);
 wire r_iram = bus_addr[31:29] == 3'b110;
 wire r_spr  = bus_addr[31:16] == 16'h4000;
 wire r_sprh = bus_addr[31:18] == 14'h1000 && bus_addr[17:16] != 2'd0;
 wire r_pal  = bus_addr[31:16] == 16'h8000;
-wire r_sd   = r_wram || r_rom || r_rom2 || r_sprh;  // through the caches
-wire [22:0] caddr = r_wram ? {2'b00, bus_addr[20:0]} : r_rom ? {3'b010, bus_addr[19:0]} :
-                    r_rom2 ? {3'b011, bus_addr[19:0]} : {5'b10000, bus_addr[17:0]};
+wire r_inp  = aoh && (bus_addr[31:16] == 16'h8021 || bus_addr[31:16] == 16'h8022);
+wire r_sd   = r_wram || r_rom || r_sprh;  // through the caches
+wire [23:0] caddr = r_wram ? {2'b00, bus_addr[21:0]} : r_rom ? {2'b01, bus_addr[21:0]} : {6'b100000, bus_addr[17:0]};
+wire        la_wram = aoh ? la_addr[31:22] == 10'd0 : la_addr[31:21] == 11'd0;
+wire        la_rom  = rom_at(la_addr);
+wire        la_sprh = la_addr[31:18] == 14'h1000 && la_addr[17:16] != 2'd0;
+wire [23:0] la_ca   = la_wram ? {2'b00, la_addr[21:0]} : la_rom ? {2'b01, la_addr[21:0]} : {6'b100000, la_addr[17:0]};
 
 wire [31:0] ifa    = {if_addr, 3'b000};
-wire        i_wram = ifa[31:21] == 11'd0;
-wire        i_rom  = ifa[31:20] == 12'hfff;
-wire        i_rom2 = prg2 && ifa[31:20] == 12'hffe;
+wire        i_wram = aoh ? ifa[31:22] == 10'd0 : ifa[31:21] == 11'd0;
+wire        i_rom  = rom_at(ifa);
 wire        i_iram = ifa[31:29] == 3'b110;
 wire        i_sprh = ifa[31:18] == 14'h1000 && ifa[17:16] != 2'd0;
-wire        i_sd   = i_wram || i_rom || i_rom2 || i_sprh;
-wire [22:0] i_caddr = i_wram ? {2'b00, ifa[20:0]} : i_rom ? {3'b010, ifa[19:0]} :
-                      i_rom2 ? {3'b011, ifa[19:0]} : {5'b10000, ifa[17:0]};
+wire        i_sd   = i_wram || i_rom || i_sprh;
+wire [23:0] i_caddr = i_wram ? {2'b00, ifa[21:0]} : i_rom ? {2'b01, ifa[21:0]} : {6'b100000, ifa[17:0]};
 
-// the cached space: 0x000000 work RAM, 0x200000 program ROM, 0x300000 its first MB on a 2 MB program,
-// 0x400000 sprite RAM above 64 KB
-function [26:0] sdram_of(input [22:0] ca);
-	sdram_of = ca[22] ? SPRHI_BASE + {9'd0, ca[17:0]} : !ca[21] ? WRAM_BASE + {6'd0, ca[20:0]} :
-	           !ca[20] ? ROM_BASE + {7'd0, ca[19:0]} : PRGLO_BASE + {7'd0, ca[19:0]};
+// the cached space: 0x000000 work RAM, 0x400000 program ROM (its top 1 MB at 0x700000), 0x800000 sprite RAM
+// above 64 KB. SDRAM: the top MB at ROM_BASE, a 2 MB program's first at PRGLO_BASE, aoh's 4 MB at AOHPRG_BASE.
+function [26:0] sdram_of(input [23:0] ca);
+	sdram_of = ca[23] ? SPRHI_BASE + {9'd0, ca[17:0]} : !ca[22] ? WRAM_BASE + {5'd0, ca[21:0]} :
+	           aoh ? AOHPRG_BASE + {5'd0, ca[21:0]} : ca[20] ? ROM_BASE + {7'd0, ca[19:0]} : PRGLO_BASE + {7'd0, ca[19:0]};
 endfunction
 
 // SDRAM granule (4 little-endian-lane words, lowest address in [15:0]) -> 8 bytes, byte 0 in [63:56]
@@ -155,7 +173,7 @@ endfunction
 
 // ---------------------------------------------------------------- state
 localparam [3:0] S_INIT = 0, S_IDLE = 1, S_LOOK = 2, S_WLOOK = 3, S_MISS = 4, S_FILL = 5,
-                 S_FILL2 = 6, S_ACK = 7, S_IOW = 8;
+                 S_FILL2 = 6, S_ACK = 7, S_IOW = 8, S_PFW = 9;
 localparam [1:0] SRC_REG = 0, SRC_IRAM = 1, SRC_SPR = 2, SRC_PAL = 3;
 
 reg  [3:0]  st;
@@ -163,7 +181,7 @@ reg  [10:0] swc;
 reg         ack_r;
 reg  [1:0]  rsrc;
 reg  [31:0] rdata_r;
-reg  [22:0] fa;
+reg  [23:0] fa;
 reg         f_ic;               // the fill is for the I-cache
 reg  [63:0] lg0, lg1;           // the line, swapped
 reg         line_req, line_done;
@@ -171,22 +189,26 @@ reg         dbg_filled = 1'b0;
 
 // D-side next-line prefetch
 reg         pf_want, pf_valid, pf_kill, pf_use;
-reg  [22:4] pf_want_line, pf_fl_line, pf_line;
+reg  [23:4] pf_want_line, pf_fl_line, pf_line;
 reg  [63:0] pf0, pf1;
 
 // write buffer: four 8-byte blocks (byte 0 in [63:56], be[7] its enable), drained in order
-(* ramstyle = "logic" *) reg  [22:3] wq_ca [0:3];   // registers: read combinationally; as RAM, reading an entry written in the same clock would depend on bypass logic Quartus may not add
+(* ramstyle = "logic" *) reg  [23:3] wq_ca [0:3];   // registers: read combinationally; as RAM, reading an entry written in the same clock would depend on bypass logic Quartus may not add
 (* ramstyle = "logic" *) reg  [7:0]  wq_be [0:3];
 (* ramstyle = "logic" *) reg  [63:0] wq_d  [0:3];
 reg  [2:0]  wq_w = 3'd0, wq_r = 3'd0;
 wire        wb_valid = wq_w != wq_r;
 wire        wb_full  = (wq_w - wq_r) == 3'd4;
-wire [22:3] wb_ca = wq_ca[wq_r[1:0]];
+wire [23:3] wb_ca = wq_ca[wq_r[1:0]];
 wire [7:0]  wb_be = wq_be[wq_r[1:0]];
 wire [63:0] wb_d  = wq_d[wq_r[1:0]];
 wire [1:0]  wq_t  = wq_w[1:0] - 2'd1;       // the newest entry
 
 wire idle_go = st == S_IDLE && bus_req;
+// the CPU's announced read, looked up in this clock (lk_*: in the last)
+wire        la_take = st == S_IDLE && !bus_req && la_req && (la_wram || la_rom || la_sprh);
+reg         lk_v = 1'b0;
+reg  [23:0] lk_ca;
 
 // ---------------------------------------------------------------- caches
 wire        ic_hit, dc_hit;
@@ -199,20 +221,21 @@ wire [63:0] fill_d = st == S_FILL2 ? lg1 : lg0;
 
 // the data side has the I-cache's port for a store: the lookup in the request clock, the update in WLOOK
 wire        ic_by_d = (idle_go && bus_wr && !bus_io && (r_wram || r_sprh)) || st == S_WLOOK;
-vh_cache #(.AW(23), .LW(10)) u_ic (.clk(clk), .sweep(sweep), .sw_idx(swc[9:0]),
+vh_cache #(.AW(24), .LW(10)) u_ic (.clk(clk), .sweep(sweep), .sw_idx(swc[9:0]),
 	.la(ic_by_d ? caddr : i_caddr), .hit(ic_hit), .q(ic_q),
 	.fill_we(fill_we && f_ic), .fill_tag(fill_half), .fa(fa), .fill_half(fill_half), .fill_d(fill_d),
 	.st_we(st == S_WLOOK && ic_hit), .st_be(st_be8), .st_d({bus_wdata, bus_wdata}));
-vh_cache #(.AW(23), .LW(8)) u_dc (.clk(clk), .sweep(sweep), .sw_idx(swc[7:0]),
-	.la(caddr), .hit(dc_hit), .q(dc_q),
+vh_cache #(.AW(24), .LW(8)) u_dc (.clk(clk), .sweep(sweep), .sw_idx(swc[7:0]),
+	.la(la_take ? la_ca : caddr), .hit(dc_hit), .q(dc_q),
 	.fill_we(fill_we && !f_ic), .fill_tag(fill_half), .fa(fa), .fill_half(fill_half), .fill_d(fill_d),
 	.st_we(st == S_WLOOK && dc_hit), .st_be(st_be8), .st_d({bus_wdata, bus_wdata}));
 
 // ---------------------------------------------------------------- internal RAM
-// 8 bytes wide for the instruction port; the data side has it in its request clock
+// 8 bytes wide for the instruction port; the data side has it in its request clock. 4 KB mirrored, 8 KB on aoh.
 wire [63:0] iram_q;
 wire        ir_by_d = idle_go && !bus_io && r_iram;
-vh_cache_ram #(.AW(9), .DW(64), .NB(8)) u_iram (.clk(clk), .addr(ir_by_d ? bus_addr[11:3] : if_addr[11:3]),
+wire [12:3] ir_da = {aoh && bus_addr[12], bus_addr[11:3]}, ir_ia = {aoh && if_addr[12], if_addr[11:3]};
+vh_cache_ram #(.AW(10), .DW(64), .NB(8)) u_iram (.clk(clk), .addr(ir_by_d ? ir_da : ir_ia),
 	.we(ir_by_d && bus_wr), .be(st_be8), .wd({bus_wdata, bus_wdata}), .q(iram_q));
 
 // ---------------------------------------------------------------- instruction port
@@ -220,7 +243,7 @@ wire        i_free = i_sd ? !(sweep || (fill_we && f_ic) || ic_by_d) : i_iram ? 
 reg         i_look = 1'b0;      // if_addr was looked up in the previous clock, as i_la
 reg  [31:3] i_la;
 reg         i_sd_r, i_iram_r;
-reg  [22:0] i_ca_r;
+reg  [23:0] i_ca_r;
 always @(posedge clk) begin
 	i_look <= if_req && i_free;
 	i_la <= if_addr; i_sd_r <= i_sd; i_iram_r <= i_iram; i_ca_r <= i_caddr;
@@ -247,11 +270,15 @@ assign io_port  = bus_addr[31:13];
 assign io_wd    = bus_wdata;
 
 wire        look_hit = st == S_LOOK && dc_hit;
-assign dbg_miss      = (st == S_LOOK && !look_hit) || i_take;
+wire        lk_read = idle_go && !bus_wr && !bus_io && r_sd && lk_v && lk_ca == caddr;
+wire        lk_hit = lk_read && dc_hit;
+assign dbg_miss      = (st == S_LOOK && !look_hit) || (lk_read && !dc_hit) || i_take;
 assign dbg_miss_ic   = i_take;
-assign dbg_miss_line = i_take ? i_ca_r[22:4] : caddr[22:4];
-assign bus_ack   = ack_r || look_hit || st == S_WLOOK || (st == S_FILL2 && !f_ic);
-assign bus_rdata = st == S_LOOK ? (bus_addr[2] ? dc_q[31:0] : dc_q[63:32]) :
+assign dbg_miss_line = i_take ? i_ca_r[23:4] : caddr[23:4];
+wire        w_fast  = idle_go && bus_wr && (bus_io || r_iram || r_spr || r_pal);
+wire        w_store = idle_go && bus_wr && !bus_io && (r_wram || r_sprh) && (wb_merge || !wb_full);
+assign bus_ack   = ack_r || look_hit || lk_hit || w_fast || w_store || (st == S_FILL2 && !f_ic);
+assign bus_rdata = (st == S_LOOK || lk_hit) ? (bus_addr[2] ? dc_q[31:0] : dc_q[63:32]) :
                    rsrc == SRC_IRAM ? (bus_addr[2] ? iram_q[31:0] : iram_q[63:32]) :
                    rsrc == SRC_SPR ? spr_rd : rsrc == SRC_PAL ? pal_rd : rdata_r;
 
@@ -262,11 +289,39 @@ wire        m_free = m_who == W_NONE;
 wire [26:0] wb_sa = sdram_of({wb_ca, 3'd0});
 // a store merges into the newest entry if that holds its block and is not being written, or about to be
 // (port 2 takes the head in any clock it is free and no download write waits)
-wire        wb_head_out = m_who == W_WB || (m_free && !dl_req);
-wire        wb_merge = wb_valid && wq_ca[wq_t] == caddr[22:3] && !(wq_t == wq_r[1:0] && wb_head_out);
+wire        wb_head_out = m_who == W_WB || (m_free && !dl_req && !line_req);
+wire        wb_merge = wb_valid && wq_ca[wq_t] == caddr[23:3] && !(wq_t == wq_r[1:0] && wb_head_out);
 wire [26:0] fa_sa = sdram_of(fa);
+// a store to the line being filled is in the write buffer: the fill waits for it
+reg         wb_conf;
+integer     ci;
+always @(*) begin
+	wb_conf = 1'b0;
+	for (ci = 0; ci < 4; ci = ci + 1)
+		if (((ci[2:0] - wq_r) & 3'd3) < wq_w - wq_r && wq_ca[ci][23:4] == fa[23:4]) wb_conf = 1'b1;
+end
 wire [26:0] pf_sa = sdram_of({pf_want_line, 4'd0});
-wire        pf_match = pf_valid && pf_line == caddr[22:4];
+wire        pf_match = pf_valid && pf_line == caddr[23:4];
+
+// a D-cache miss on caddr: from the prefetch buffer, or waiting for the prefetch of the line, or a fill
+task d_miss;
+	begin
+		fa <= caddr;
+		f_ic <= 1'b0;
+		st_dmiss <= st_dmiss + 1'd1;
+		if (pf_match) begin
+			lg0 <= pf0; lg1 <= pf1;
+			pf_use <= 1'b1;
+			pf_valid <= 1'b0;
+			st <= S_FILL;
+		end else if (m_who == W_PF && pf_fl_line == caddr[23:4] && !pf_kill) begin
+			st <= S_PFW;              // the prefetch of this line is on its way
+		end else begin
+			if (pf_want && pf_want_line == caddr[23:4]) pf_want <= 1'b0;   // the fill reads it
+			st <= S_MISS;
+		end
+	end
+endtask
 
 integer bi;
 always @(posedge clk) begin
@@ -291,6 +346,15 @@ always @(posedge clk) begin
 			mem_req  <= ~mem_req;
 			dl_busy  <= 1'b1;
 			m_who    <= W_DL;
+		end else if (line_req) begin
+			mem_addr <= {fa_sa[26:4], 3'd0};
+			mem_wrl  <= 1'b0;
+			mem_wrh  <= 1'b0;
+			mem_wrx  <= 6'd0;
+			mem_dbl  <= 1'b1;
+			mem_req  <= ~mem_req;
+			line_req <= 1'b0;
+			m_who    <= W_LINE;
 		end else if (wb_valid) begin
 			// SDRAM word k of the block: byte 2k in [7:0], byte 2k+1 in [15:8]
 			mem_addr <= {wb_sa[26:3], 2'd0};
@@ -302,15 +366,6 @@ always @(posedge clk) begin
 			mem_dbl  <= 1'b0;
 			mem_req  <= ~mem_req;
 			m_who    <= W_WB;
-		end else if (line_req) begin
-			mem_addr <= {fa_sa[26:4], 3'd0};
-			mem_wrl  <= 1'b0;
-			mem_wrh  <= 1'b0;
-			mem_wrx  <= 6'd0;
-			mem_dbl  <= 1'b1;
-			mem_req  <= ~mem_req;
-			line_req <= 1'b0;
-			m_who    <= W_LINE;
 		end else if (pf_want) begin
 			mem_addr <= {pf_sa[26:4], 3'd0};
 			mem_wrl  <= 1'b0;
@@ -341,6 +396,8 @@ always @(posedge clk) begin
 
 	// CPU side
 	ack_r <= 1'b0;
+	lk_v <= la_take && !rst;
+	lk_ca <= la_ca;
 	if (rst) begin
 		st  <= S_INIT;
 		swc <= 11'd0;
@@ -360,24 +417,36 @@ always @(posedge clk) begin
 			if (bus_io && io_late && !bus_wr) begin
 				st <= S_IOW;
 			end else if (bus_io) begin
-				rdata_r <= io_rdata;
+				if (!bus_wr) begin                // a write was acked in this clock (w_fast)
+					rdata_r <= io_rdata;
+					ack_r <= 1'b1; st <= S_ACK;
+				end
+			end else if (r_inp) begin
+				rdata_r <= bus_addr[17] ? aoh_p12 : aoh_sys;
 				ack_r <= 1'b1; st <= S_ACK;
 			end else if (r_iram || r_spr || r_pal) begin
-				rsrc <= bus_wr ? SRC_REG : r_iram ? SRC_IRAM : r_spr ? SRC_SPR : SRC_PAL;
-				ack_r <= 1'b1; st <= S_ACK;
+				if (!bus_wr) begin                // a write was acked in this clock (w_fast)
+					rsrc <= r_iram ? SRC_IRAM : r_spr ? SRC_SPR : SRC_PAL;
+					ack_r <= 1'b1; st <= S_ACK;
+				end
 			end else if (r_sd && !bus_wr) begin
-				st <= S_LOOK;
+				// looked up in the last clock: a hit is acked in this one, a miss starts now
+				if (lk_read) begin
+					if (!dc_hit) d_miss;
+				end else st <= S_LOOK;
 			end else if ((r_wram || r_sprh) && bus_wr) begin
 				if (wb_merge || !wb_full) begin
 					if (pf_match) pf_valid <= 1'b0;
-					if (m_who == W_PF && pf_fl_line == caddr[22:4]) pf_kill <= 1'b1;
-					if (pf_want && pf_want_line == caddr[22:4]) pf_kill <= 1'b1;   // issued in this clock
+					if (m_who == W_PF && pf_fl_line == caddr[23:4]) pf_kill <= 1'b1;
+					// that prefetch completing in this clock has already taken the line's old data
+					if (m_who == W_PF && mem_ack == mem_req && pf_fl_line == caddr[23:4]) pf_valid <= 1'b0;
+					if (pf_want && pf_want_line == caddr[23:4]) pf_kill <= 1'b1;   // issued in this clock
 					if (wb_merge) begin
 						wq_be[wq_t] <= wq_be[wq_t] | st_be8;
 						for (bi = 0; bi < 8; bi = bi + 1)
 							if (st_be8[bi]) wq_d[wq_t][8*bi +: 8] <= bus_wdata[8*(bi & 3) +: 8];
 					end else begin
-						wq_ca[wq_w[1:0]] <= caddr[22:3];
+						wq_ca[wq_w[1:0]] <= caddr[23:3];
 						wq_be[wq_w[1:0]] <= st_be8;
 						wq_d[wq_w[1:0]]  <= {bus_wdata, bus_wdata};
 						wq_w <= wq_w + 3'd1;
@@ -395,24 +464,21 @@ always @(posedge clk) begin
 			st <= S_MISS;
 		end
 		S_LOOK: begin
-			if (look_hit) begin
-				st <= S_IDLE;                 // acked in this clock
-			end else begin
-				fa <= caddr;
-				f_ic <= 1'b0;
-				st_dmiss <= st_dmiss + 1'd1;
-				if (pf_match) begin
-					lg0 <= pf0; lg1 <= pf1;
-					pf_use <= 1'b1;
-					pf_valid <= 1'b0;
-					st <= S_FILL;
-				end else st <= S_MISS;
-			end
+			if (look_hit) st <= S_IDLE;      // acked in this clock
+			else d_miss;
 		end
-		S_WLOOK: begin                    // the caches update on a hit in this clock; acked in it
+		S_PFW: if (m_who != W_PF) begin   // the prefetch has arrived
+			if (pf_valid && pf_line == fa[23:4]) begin
+				lg0 <= pf0; lg1 <= pf1;
+				pf_use <= 1'b1;
+				pf_valid <= 1'b0;
+				st <= S_FILL;
+			end else st <= S_MISS;
+		end
+		S_WLOOK: begin                    // the caches update on a hit in this clock (acked in S_IDLE)
 			st <= S_IDLE;
 		end
-		S_MISS: if (!wb_valid) begin
+		S_MISS: if (!wb_conf) begin
 			line_req <= 1'b1;
 			st <= S_FILL;
 		end
@@ -421,7 +487,7 @@ always @(posedge clk) begin
 			pf_use <= 1'b0;
 			if (!f_ic) begin              // the next line, behind anything else on port 2
 				pf_want <= 1'b1;
-				pf_want_line <= fa[22:4] + 19'd1;
+				pf_want_line <= fa[23:4] + 20'd1;
 			end
 			st <= S_FILL2;
 		end

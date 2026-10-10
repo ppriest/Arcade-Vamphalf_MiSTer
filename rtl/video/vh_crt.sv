@@ -1,14 +1,17 @@
 // CRT adjust (crt_adjust.sv, vendored) with the Arcade-Raiden_MiSTer glue:
 // moves and stretches the picture through a line buffer with native syncs.
 // H-Position is an index into 0, +1..+48, -48..-1 (wraps at 97).
-// From Arcade-Seta_MiSTer rtl/video/seta_crt.sv at c83010a; here 8 clk per
-// pixel and a 448 x 264 raster.
+// From Arcade-Seta_MiSTer rtl/video/seta_crt.sv at c83010a; here CLK_PIX clk per
+// pixel and an HTOTAL x 264 raster (8 and 448; aoh 7 and 512).
 
 `default_nettype none
 
-module vh_crt (
+module vh_crt #(
+	parameter HTOTAL  = 448,
+	parameter CLK_PIX = 8
+) (
 	input  wire       clk,            // 56 MHz
-	input  wire       ce,             // core pixel, one per 8 clk
+	input  wire       ce,             // core pixel, one per CLK_PIX clk
 	input  wire       adjust,         // CRT adjust On
 	input  wire [4:0] hsize_idx,
 	input  wire [6:0] hpos_idx,
@@ -36,12 +39,12 @@ module vh_crt (
 		: $signed({2'b00, hpos}) - 9'sd97;
 	wire signed [5:0] voffset = adjust ? $signed(vshift_idx) : 6'sd0;
 
-	// read enable in twentieths of a cycle: 160 per pixel, +5 per H-Size step
-	// (a quarter cycle); restarted on hs_ref.
+	// read enable in twentieths of a cycle: 20 * CLK_PIX per pixel, +5 per H-Size
+	// step; restarted on hs_ref.
 	wire       hs_ref;
 	reg        hs_ref_d = 1'b0;
 	reg  [8:0] acc = 9'd0;
-	wire [8:0] period = 9'd160
+	wire [8:0] period = 9'(20 * CLK_PIX)
 	                  + {{2{hsize[4]}}, hsize, 2'b00} + {{4{hsize[4]}}, hsize};
 	wire       tick = (acc + 9'd20) >= period;
 	always @(posedge clk) begin
@@ -56,7 +59,7 @@ module vh_crt (
 	always @(posedge clk) pxl2_cen_d <= pxl2_cen;
 	assign ce_out = pxl2_cen | pxl2_cen_d;
 
-	crt_adjust #(.VTOTAL(264), .HTOTAL(448), .HPOS_MODE(1)) u_crt_adjust (
+	crt_adjust #(.VTOTAL(264), .HTOTAL(HTOTAL), .HPOS_MODE(1)) u_crt_adjust (
 		.clk(clk), .pxl_cen(ce), .pxl2_cen(pxl2_cen),
 		.active(active), .hsize(hsize),
 		.hoffset(hoffset), .voffset(voffset),

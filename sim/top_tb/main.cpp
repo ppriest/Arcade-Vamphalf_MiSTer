@@ -88,7 +88,7 @@ int main(int argc, char **argv) {
 			dm[g] = v;
 		}
 		uint32_t x = 12345;
-		for (size_t i = 0; i < (size_t)1 << 25; i++) { x = x * 1103515245u + 12345u; mem[i] = (uint16_t)(x >> 16); }
+		for (size_t i = 0; i < (size_t)1 << 26; i++) { x = x * 1103515245u + 12345u; mem[i] = (uint16_t)(x >> 16); }
 	} else {
 		// the part not downloaded: as left by a previous load (here the image itself); the rest is random
 		for (size_t i = dln; i + 1 < img.size(); i += 2) mem[i >> 1] = (uint16_t)(img[i] | (img[i + 1] << 8));
@@ -149,7 +149,7 @@ int main(int argc, char **argv) {
 		uint64_t c0 = 0, c = 0;
 		while (!r->tb_top__DOT__u_emu__DOT__ldr_active && c0 < 100000) { tick(); c0++; }
 		while (r->tb_top__DOT__u_emu__DOT__ldr_active) { tick(); c++; }
-		size_t len = 0x800000 + ((mod1 & 1) ? 0x1000000 : 0x800000), bad = 0, n = 0;
+		size_t len = img.size(), bad = 0, n = 0;   // the loader copies the whole image (Vamphalf.sv .length)
 		for (size_t i = 0; i + 1 < len && i + 1 < img.size(); i += 2, n++)
 			if (mem[i >> 1] != (uint16_t)(img[i] | (img[i + 1] << 8))) bad++;
 		printf("fast load: started %llu clocks after the release, copied in %llu clocks; %zu of %zu SDRAM words differ from the image\n",

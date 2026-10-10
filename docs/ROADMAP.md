@@ -224,12 +224,16 @@ Order: b first (22 sets on one new sound board), then c and d, then e; f and g o
 
 **Phase 5 progress.** In the core, each against MAME's trace from reset (`sim/sys_tb +pctrace`, `sim/ref/<set>`):
 vamphalf (893,119 instructions, then the YM2151's busy flag is polled a different number of times: MAME_KLUDGES),
-coolmini, mrkicker, mrkickera, jmpbreak, mrdig, suplup, worldadv, boonggab and finalgdr (1,000,000 of 1,000,000 each),
+coolmini, mrkicker, mrkickera, jmpbreak, mrdig, suplup, worldadv, boonggab, finalgdr and aoh (1,000,000 of 1,000,000 each),
 solitaire (869,671, then a YM2151 status read differs, as vamphalf's); their clones and siblings share the families (vamphalfr1, vamphalfk, coolminii, dquizgo2, toyland, dtfamily, jmpbreaka, poosho,
 newxpang, newxpanga, luplup, luplup29, luplup10, puzlbang, puzlbanga). 31 sets with misncrft and wivernwg's five. The YM2151 + M6295 board
 against MAME's audio: correlation 0.971, RMS ratio 1.008 (vamphalf). World Adventure's protection replays MAME's seven
 checks of a 2-hour run, 0 differ. Not done: video frames against MAME per set (the engine is the one checked on misncrft
-and wivernwg; suplup's colour shift is new and unchecked), and aoh (group g). yorijori agrees with MAME (SETADR fix, no ROM patch) for 439,730 instructions, then the timer
+and wivernwg; suplup's colour shift is new and unchecked). aoh (group g): its own video mode, checked frame by frame
+(render_model.py equals MAME on 6 of 6 frames, the RTL equals the model on 6 of 6, flip equals the unflipped frame
+turned 180 degrees on 5 of 5). It plays on the board (the user), with occasional tearing when the screen scrolls
+vertically, from the CPU's speed. In MAME its CPU is busy for a median 0.068 of
+an 80 MHz frame, 0.224 at the 99th percentile (scripts/mame_busy.py). yorijori agrees with MAME (SETADR fix, no ROM patch) for 439,730 instructions, then the timer
 interrupt's timing differs; it plays on the board (the user).
 
 **CPU throughput** (`ff38ff1`, asked for by the user after Phase 5). `sim/sys_tb +prof` split the busy clocks by
@@ -250,7 +254,62 @@ What is left, by the same profile: data reads (D-cache misses are 15-18% of busy
 barely fall with cache size and halve with line size, `scripts/cpu_mem_model.py`, so they are streaming reads) and
 the two clocks every instruction spends in ST_RD and ST_EXEC.
 
+Writes acked in their request clock and the timer's TCR match taken a clock later (`dbdb9ec`), 1300 frames:
+busy clocks -3.0% (newxpang), -4.2% (toyland), -5.6% (jmpbreak); frames that never reached the idle loop
+43 -> 39, 10 -> 8, 4 -> 3. A 16 KB D-cache cut busy clocks 1-2% and was not kept. In play (newxpang) ST_RD is
+27% and ST_EXEC 24% of busy clocks; a fast path skipping ST_RD after a one-clock instruction applies to 22% of
+instructions (a MAME trace of 30 frames of play), about 5% of busy clocks. Larger gains need a pipeline.
+
 **Phase 6: Savestates and cheats.** Optional. Design for state capture from the first RTL.
+
+**Phase 7: A pipelined E1.** Asked for by the user, for this core's heavy frames (New Cross Pang, Toy Land, Age
+Of Heroes' tearing) and for the Eolith core, which runs the same CPU. Goal: two clocks an instruction or fewer
+in play at 56 MHz, from 3.5-4.4 now. Approved by the user; under way.
+
+- `rtl/e1/e1_pipe.sv` beside `e1_cpu.sv`, which stays as the reference and the fallback (one of the two in a build).
+- Stages: fetch (8-byte blocks into an instruction queue, lengths predecoded); decode and register read (the
+  window index from the frame pointer of the instruction being decoded; operands forwarded from execute and
+  memory); execute (ALU, flags, branch resolution, effective address); memory (the D-cache; a hit returns in
+  this stage); write-back (register file, SR).
+- Hazards: registers and flags forwarded; a stall on load-use; frame-pointer changes (FRAME, CALL, RET, writes to
+  SR) and delayed branches drain the pipe; traps and interrupts at instruction boundaries.
+- A slow path for what the pipe does not take at first (MUL/DIV, the DSP extensions, the frame spill and fill
+  loops, LDD/STD, traps): the pipe drains and the instruction runs as `e1_cpu.sv` runs it.
+- `vh_cpumem`: a hit in one clock from an address registered in execute; 32-byte lines for the streaming reads
+  (misses per instruction halve with line size, `scripts/cpu_mem_model.py`).
+- Verification before hardware: the conformance suite (52 seeds, 255 primary opcodes, 0 and 3 wait states,
+  `scripts/e1_regress.py`) and every set's MAME trace (`sim/sys_tb +pctrace`); timing at 56 MHz; then the speed
+  survey and probe S on the board.
+- Steps, each verified before the next: (1) the pipe for ALU and immediate instructions, everything else on the
+  slow path; (2) loads and stores; (3) branches, delayed ones included; (4) the memory side; (5) hardware.
+- Risks: timing closure with forwarding on the execute path (+1.2 ns of slack today without the timer chain);
+  every MAME quirk marked "MAME:" in `e1_cpu.sv` has to carry over.
+
+Status: steps 1-4 in simulation, built in with `E1_PIPE` (`files.qip`). As built, `e1_pipe.sv` keeps e1_cpu's
+execute and its multi-clock states whole and puts fetch (F, a whole instruction a clock into D) and operand read
+(R, every clock) ahead of it; the next instruction goes into execute beside the last clock of an ALU instruction,
+a load or store (LDD's two results included), or a BR going as predicted (F predicts BR taken), and R takes that
+clock's writes into the operands it reads, so execute reads only registers. `vh_cpumem`: a miss no longer waits
+for an unrelated write buffer, waits for the line's prefetch when it is in flight, and a load announced in
+execute (`la_req`) hits in one clock; a two-access job issues its second access as the first is acked.
+Conformance 104 of 104 runs; MAME PC traces as `e1_cpu` on all 14 sets (three differ from MAME at the same
+instruction with either CPU). Release builds, seed 3: `4f1ed2e` +0.778 ns, `5dab2e1` +0.053 ns at `clk_sys`, 467 of
+553 RAM blocks (seed 1 of `4f1ed2e` missed the HDMI clock by 11 ps). Not yet on the board. In play (`sim/sys_tb
++prof`, 1300 frames, coin at 300), clocks per instruction while busy:
+
+| | e1_cpu | step 1 | 2 | 3 | 4 | `5dab2e1` | frames without idle, e1_cpu -> `5dab2e1` |
+|---|---|---|---|---|---|---|---|
+| New Cross Pang | 4.23 | 3.74 | 3.53 | 3.35 | 3.10 | 2.83 | 39 -> 3 |
+| Toy Land | 4.04 | 3.64 | 3.39 | 3.27 | 2.97 | 2.64 | 8 -> 4 |
+| Jumping Break | 3.44 | 2.93 | 2.68 | 2.57 | 2.41 | 2.23 | 3 -> 0 |
+
+What is left is memory. Every set measured copies 32 KB of work RAM to sprite RAM a frame from internal RAM
+(`0xc0000006`, LDD.P/STD.P), 16-28% of busy clocks, and reads it once a frame in order: a 16 KB D-cache would catch
+8% of those misses, 32 KB 25% (`+misslog`, New Cross Pang). Line fills are 22% of New Cross Pang's busy clocks at
+13 clocks each, about 7 of them waiting for port 2. Tried and dropped: looking up LDD's second access during its
+first (the clock moved into waiting for the prefetch), two prefetch buffers (demand misses waited behind them:
+slower on all three sets). Next: step 5 on the board (the probe revision needs timing: -0.222 ns at `700d599`);
+faster port-2 fills would need `sdram.sv`.
 
 ## Verification strategy
 

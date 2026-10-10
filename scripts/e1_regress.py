@@ -4,6 +4,10 @@
 
     python scripts/e1_regress.py --seeds 1 2 3 [--irq-seeds 101 102] [--n 4000] [--waits 0 3]
                                  [--out debug/e1] [-v]
+    python scripts/e1_regress.py --replay [--pipe] [--jobs 8] [--waits 0 3]
+
+--replay runs the bench again on every trace already under <out> (no generation, no MAME), in parallel;
+--pipe builds the bench with rtl/e1/e1_pipe.sv instead of e1_cpu.sv (bench output bench_pipe_wait<k>.txt).
 
 Per seed: scripts/e1_gen_test.py writes <out>/<name>/ (prg-rom2.bin, misncrft.zip), MAME
 (-nodrc, scripts/mame_e1_trace.py --rompath) writes <out>/<name>/ref/, then
@@ -125,6 +129,30 @@ def one(name, seed, irq, n, waits, out, mame_n, verbose, extra):
     return res, str(instr)
 
 
+def replay(d, waits, exe, tag):
+    """The bench on <d>'s stored trace, up to the program's end loop."""
+    info = (d / "info.txt").read_text().split("\n")[0]
+    end = int(re.search(r"end ([0-9a-f]+)", info).group(1), 16)
+    instr, bus = d / "ref" / "misncrft_instr.trace", d / "ref" / "misncrft_bus.trace"
+    li = loop_index(instr, end) if instr.exists() else None
+    if li is None:
+        return [(d.name, "NO-TRACE", "")]
+    res = []
+    for w in waits:
+        r = subprocess.run([str(exe), "+instr=" + str(instr), "+bus=" + str(bus), "+n=%d" % (li + 2), "+wait=%d" % w,
+                            "+cont=1"], cwd=REPO, capture_output=True, text=True)
+        txt = r.stdout + r.stderr
+        (d / ("bench_%swait%d.txt" % (tag, w))).write_text(txt, encoding="utf-8")
+        m = re.search(r"(PASS|FAIL): (\d+) instructions, \d+ cycles \(([\d.]+) clk", txt)
+        ints = re.search(r"interrupts taken: (\d+)", txt)
+        fl = parse_failures(txt)
+        ALLFAIL.extend((d.name, w) + f for f in fl)
+        res.append((d.name + " wait=%d" % w, m.group(1) if m else "ERROR",
+                    "%s clk/instr, irqs=%s failing=%d" % (m.group(3) if m else "?", ints.group(1) if ints else "?", len(fl))
+                    + ("\n" + txt[-1500:] if not m else "")))
+    return res
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--seeds", type=int, nargs="*", default=[1])
@@ -137,13 +165,35 @@ def main():
     ap.add_argument("--gen-args", default="", help="extra arguments for e1_gen_test.py, e.g. '--dsp'")
     ap.add_argument("--detail", type=int, default=2, help="failures shown per mnemonic")
     ap.add_argument("-v", action="store_true")
+    ap.add_argument("--replay", action="store_true", help="the bench on the traces already under --out")
+    ap.add_argument("--pipe", action="store_true", help="bench e1_pipe instead of e1_cpu")
+    ap.add_argument("--jobs", type=int, default=8)
     a = ap.parse_args()
     out = REPO / a.out
     out.mkdir(parents=True, exist_ok=True)
     fails = 0
     traces = []
+    if a.replay:
+        defs = ["+define+E1_PIPE"] if a.pipe else []
+        r = sh(["scripts/run_verilator.sh", "e1_tb"] + defs + ["+n=0"])
+        exe = REPO / "obj_verilator" / ("e1_tb_define_E1_PIPE_CFLAGS_DE1_PIPE" if a.pipe else "e1_tb") / "Vtb_e1"
+        if not exe.exists() and not exe.with_suffix(".exe").exists():
+            print(r.stdout + r.stderr)
+            return 1
+        dirs = sorted(d for d in out.iterdir() if (d / "info.txt").exists())
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(a.jobs) as ex:
+            allres = list(ex.map(lambda d: replay(d, a.waits, exe, "pipe_" if a.pipe else ""), dirs))
+        for res in allres:
+            for nm, st, txt in res:
+                print("%-16s %-9s %s" % (nm, st, txt))
+                fails += st != "PASS"
+        jobs = []
     extra = a.gen_args.split()
-    jobs = [("s%d" % s, s, False, a.n) for s in a.seeds] + [("i%d" % s, s, True, a.irq_n or a.n) for s in a.irq_seeds]
+    if not a.replay:
+        jobs = [("s%d" % s, s, False, a.n) for s in a.seeds] + [("i%d" % s, s, True, a.irq_n or a.n) for s in a.irq_seeds]
+    else:
+        traces = [str(d / "ref" / "misncrft_instr.trace") for d in dirs if (d / "ref" / "misncrft_instr.trace").exists()]
     for name, seed, irq, n in jobs:
         res, tr = one(name, seed, irq, n, a.waits, out, a.mame_n, a.v, extra)
         if tr:

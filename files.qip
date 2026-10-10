@@ -2,6 +2,9 @@ set_global_assignment -name SYSTEMVERILOG_FILE rtl/debug/issp_probe.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/debug/vh_trace.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/e1/e1_regram.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/e1/e1_cpu.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/e1/e1_pipe.sv
+# the pipelined CPU (rtl/vh_main.sv, ROADMAP Phase 7)
+set_global_assignment -name VERILOG_MACRO "E1_PIPE=1"
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/vh_cache.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/vh_cpumem.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/vh_prot.sv

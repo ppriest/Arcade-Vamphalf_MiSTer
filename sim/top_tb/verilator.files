@@ -5,6 +5,7 @@
 +define+MISTER_FB=1
 rtl/e1/e1_regram.sv
 rtl/e1/e1_cpu.sv
+rtl/e1/e1_pipe.sv
 rtl/vh_cache.sv
 rtl/vh_cpumem.sv
 rtl/vh_prot.sv

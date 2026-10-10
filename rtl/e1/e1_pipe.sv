@@ -1,20 +1,31 @@
-// Hyperstone E1-16 / E1-32 CPU core, written from MAME's interpreter
+// Hyperstone E1-16 / E1-32 CPU core, pipelined, written from MAME's interpreter
 // (src/devices/cpu/e132xs/e132xs.cpp, e132xsop.hxx, e1defs.h; BSD-3-Clause,
 // copyright-holders Pierpaolo Prazzoli and the MAME team).
 //
-// One instruction at a time: fetch words, one execute cycle, then bus cycles for
-// loads, stores and the frame/return spill loops. Instructions come from their own port,
-// 8 bytes at a time, into two buffers: the block being executed and the one after it,
-// read ahead while the instruction runs. Behaviour follows the interpreter,
-// including its quirks; each is marked "MAME:" where it is not what the ISA manual says.
+// e1_cpu.sv's execute (X: ST_EXEC and the multi-clock states after it), with fetch and operand read as
+// stages that run ahead of it:
+//   F  assembles the next instruction, all its halfwords in one clock, into D, from two fetched 8-byte
+//      blocks (fc: the one holding fpc, pf: the one after) or from the instruction port in the clock its
+//      data arrives;
+//   R  reads D's operands in every clock: the register file (forwarding the write committed in that clock)
+//      and the globals (forwarding the queue head that commits at the end of it).
+// D goes into X ("go") when X is idle (ST_XW), or beside the clock in which X finishes an instruction of the
+// fast class (x_fast: one clock, no exception, at most one register written, PC, FP, the delay slot and SR's
+// H and T unchanged) or the last access of a load or store (x_mw_last: at most the load's two results written);
+// R takes those writes (fw_n, fwa_n) into the operands it reads beside it, so X reads only registers. F predicts BR taken and goes on from
+// its target; a BR that goes as predicted, or a DB not taken, lets D in beside it too. Otherwise X idles for a
+// clock, as e1_cpu's ST_RD does. A change of PC (redir) empties D and restarts F.
+// Register writes go through e1_cpu's queue. An instruction retires (the retire pulse, and the state the
+// benches compare) in order once its writes have committed, through a short FIFO.
 //
-// The bus is always 32 bits wide and big-endian. An E1-16 board puts a width adapter
+// Behaviour follows the interpreter, including its quirks; each is marked "MAME:" where it is not what the
+// ISA manual says. The bus is always 32 bits wide and big-endian. An E1-16 board puts a width adapter
 // between this port and its 16-bit memory.
 //
 // Not implemented: power-down, floating point (the FP opcodes trap to their emulation
 // code as in MAME).
 
-module e1_cpu (
+module e1_pipe (
 	input             clk,
 	input             reset,
 	input             cen,
@@ -49,6 +60,11 @@ module e1_cpu (
 	output reg [31:0] retire_npc,  // architectural PC and SR after it (the next instruction may already
 	output reg [31:0] retire_sr,   // have been fetched and its PC set when the pulse comes)
 
+	// the load ST_EXEC is issuing in this clock: the address of its first access (combinational), for the
+	// memory to look up a clock before bus_req (vh_cpumem compares it with bus_addr)
+	output            la_req,
+	output     [31:0] la_addr,
+
 	output            dbg_rf_we,   // the local register file's write port, for probes
 	output     [5:0]  dbg_rf_wa,
 	output     [31:0] dbg_rf_wd
@@ -57,10 +73,9 @@ module e1_cpu (
 localparam [5:0] TRAP_RANGE = 6'd60;
 localparam [5:0] TRAP_RESET = 6'd62;
 
+// state numbers as e1_cpu's (the benches name them by number); its fetch and operand-read states are F and R
 localparam [4:0] ST_RESET  = 0,
-                 ST_INT    = 1,
-                 ST_FETCH  = 2,
-                 ST_FWAIT  = 3,
+                 ST_XW     = 1,      // X idle, waiting for D
                  ST_EXEC   = 4,
                  ST_MEM    = 5,
                  ST_MWAIT  = 6,
@@ -69,7 +84,6 @@ localparam [4:0] ST_RESET  = 0,
                  ST_DIV    = 9,
                  ST_DIVEND = 10,
                  ST_FRM    = 11,
-                 ST_RD     = 12,
                  ST_MUL    = 13,
                  ST_MUL2   = 14;
 
@@ -79,17 +93,27 @@ reg [4:0]  state;
 reg [31:0] pc, sr, delay_pc;
 reg        delay_slot, delay_slot_taken;
 reg [31:0] G [0:31];
-// local registers live in e1_regram; a write lands one clock after commit_loc, and the
-// read ports forward it
+// local registers live in e1_regram; a write lands one clock after commit_loc, and the read ports forward it.
+// _q: R's reads for D (X's operands in ST_EXEC), _t: this clock's reads before the forwarded write, _r: the names
+// e1_cpu's execute code uses
+reg [31:0] lS_q, lS1_q, lD_q, lD1_q, gS_q, gS1_q, gD_q, gD1_q, gM_q, gMD_q;
+reg [31:0] lS_t, lS1_t, lD_t, lD1_t, gS_t, gS1_t, gD_t, gD1_t, gM_t, gMD_t;
 reg [31:0] lS_r, lS1_r, lD_r, lD1_r, gS_r, gS1_r, gD_r, gD1_r, gM_r, gMD_r;
 reg        l_we_n, l_we_r;
 reg [5:0]  l_wa_n, l_wa_r;
 reg [31:0] l_wd_n, l_wd_r;
-wire [5:0] w_didx  = {2'b0, op[7:4]} + sr[30:25];
+
+// D: the next instruction
+reg        d_valid;
+reg [15:0] d_op, d_e1, d_e2;
+reg [1:0]  d_ilen;
+reg        d_pred;          // a BR that F predicted taken: fpc went on from its target
+reg [31:0] d_ipc, d_npc;      // its address, the address after it
+
+wire [5:0] w_didx  = {2'b0, d_op[7:4]} + sr[30:25];
 wire [5:0] w_didx1 = w_didx + 6'd1;
-wire [5:0] w_sidx  = {2'b0, op[3:0]} + sr[30:25];
+wire [5:0] w_sidx  = {2'b0, d_op[3:0]} + sr[30:25];
 wire [5:0] w_sidx1 = w_sidx + 6'd1;
-wire [31:0] g_dsel = G[op[7:4]];
 wire [5:0] w_aidx;
 wire [31:0] rS_raw, rS1_raw, rD_raw, rD1_raw, rA_raw;
 e1_regram rf (.clk(clk), .we(l_we_r), .wa(l_wa_r), .wd(l_wd_r),
@@ -103,7 +127,9 @@ wire [31:0] lA  = (l_we_r && l_wa_r == w_aidx)  ? l_wd_r : rA_raw;
 assign dbg_rf_we = l_we_r;
 assign dbg_rf_wa = l_wa_r;
 assign dbg_rf_wd = l_wd_r;
-assign w_aidx = (state == ST_LOOP) ? G[18][7:2] : (op[9] ? lD_r[7:2] : gD_r[7:2]);
+// port 4: LDW.S's frame slot in ST_EXEC (from R's read: LDW.S never goes in beside a forwarded write), the
+// frame loops' slot in ST_LOOP
+assign w_aidx = (state == ST_LOOP) ? G[18][7:2] : (op[9] ? lD_q[7:2] : gD_q[7:2]);
 reg [31:0] trap_entry;
 reg [1:0]  intblock;
 reg        first_ins;
@@ -112,21 +138,24 @@ reg [4:0]  nstate;
 reg        frm_req, frm_fin, ret_pend, frm_body;
 reg [1:0]  frm_kind;
 reg [5:0]  frm_tn;
-// Registers, never RAM: one clock can push several entries (five for the FP trap).
-(* ramstyle = "logic" *) reg        wq_g [0:4];
-(* ramstyle = "logic" *) reg        wq_raw [0:4];
-(* ramstyle = "logic" *) reg [5:0]  wq_i [0:4];
-(* ramstyle = "logic" *) reg [31:0] wq_v [0:4];
-reg [2:0]  wq_cnt, wq_rd;
-reg        wq_busy0, retire_pending, wq_g0, did_commit;
+// Registers, never RAM: one clock can push several entries (five for the FP trap). A ring: X pushes and the
+// queue commits in the same clocks, so it need never be empty.
+(* ramstyle = "logic" *) reg        wq_g [0:7];
+(* ramstyle = "logic" *) reg        wq_raw [0:7];
+(* ramstyle = "logic" *) reg [5:0]  wq_i [0:7];
+(* ramstyle = "logic" *) reg [31:0] wq_v [0:7];
+reg [2:0]  wq_cnt, wq_rd;   // write and read positions
+reg [2:0]  t3;
+reg        wq_busy0, did_commit;
 reg [2:0]  wq_cnt_start;
 // queue head before this cycle's pushes
 reg        hd_valid, hd_raw;
 reg [5:0]  hd_i;
 reg [31:0] hd_v;
-reg [2:0]  wq_cnt0;
-reg [31:0] fpc;
-reg        wq_pcw, pcw_new, gw_new, late_cap;
+reg        wq_pcw, pcw_new, gw_new;
+reg [2:0]  q_pend;          // entries waiting at the start of the clock
+reg        q_hg;            // the oldest of them is a global write
+reg [4:0]  q_hi;            // to this global
 // multiplier pipeline: operands registered in ST_EXEC, products registered in ST_MUL
 reg [1:0]  mk;
 reg        msg, m_dg;
@@ -141,20 +170,57 @@ reg [8:0]  tpr_next;
 reg        timer_pend;
 reg        timer_hit = 1'b0;
 
-// current instruction
-reg [15:0] op, e1, e2;
-reg [1:0]  ilen, ilen0, ilen_x;      // halfwords in the instruction (1..3); _x: the one in execute
-reg [15:0] op_x;
-reg        fold_done, trace_will;      // fold_done: the next instruction's fetch started this cycle
-reg [1:0]  fstage;         // the halfword wanted next: 0 op, 1 e1, 2 e2; 3 the instruction is complete
-reg [15:0] e1_cur;         // e1 as of this cycle (ST_RD may take it in the cycle)
-reg [31:0] ipc;            // address of the instruction
+// X: the instruction executing
+reg [15:0] op, e1, e2, op_x;
+reg [1:0]  ilen_x;
+reg [31:0] ipc, x_npc;      // its address, the address after it
+reg        x_fast;          // of the fast class
+reg        x_brk;           // a BR or DB, not in a delay slot
+reg        x_pred;          // a BR F predicted taken
+reg [3:0]  x_ext;           // its extend (0xce) sub-opcode, decoded at go (ext_code)
+reg        b_cond, b_ok;    // its condition; it goes as predicted (BR) or not taken (DB)
+reg        x_wloc, x_wglob; // it writes L[op[7:4] + FP] / G[op[7:4]]
+reg        x_srw;           // it has queued a write to SR: it retires with the PC and SR after that write
+reg        m_lS, m_lS1, m_lD, m_lD1, m_gS, m_gS1, m_gD, m_gD1, m_gM, m_gMD;   // D's operand is X's write
+reg [31:0] fw_n, fwa_n;     // the values X's instruction queued in this clock: the last, the one before
+reg [31:0] x_seq;           // instructions gone into X, for the benches
+reg [5:0]  x_didx;
+reg        x_mw_last;       // X is in the last clock of a load or store that writes at most one register
+reg        w_l, w_g;        // X's instruction writes a local / a global in this clock (its last write)
+reg [5:0]  w_i;             // that register (a local's file index, a global's number)
+reg        wa_l, wa_g;      // and the write before it (LDD's first register)
+reg [5:0]  wa_i;
+reg        ma_lS, ma_lS1, ma_lD, ma_lD1, ma_gS, ma_gS1, ma_gD, ma_gD1, ma_gM, ma_gMD;
+reg        st_code;         // bus_addr's 8 bytes are a fetched block, D's, or the one being fetched
+reg        redir;           // X changed PC in this clock
+reg        st_hit;          // a store was acked in this clock
+reg        go, go_ovl, q_ok, d_fast, d_wr;
+reg        tt_fin;          // a trace trap's frame is built: the instruction before it retires
 
-// fetched 8-byte blocks: fc holds the instruction being fetched, pf the block after it (read ahead)
+// F
+reg [31:0] fpc;             // the halfword after D
 reg        fc_valid, pf_valid;
 reg [31:3] fc_addr, pf_addr;
 reg [63:0] fc_data, pf_data;
-reg        if_dem;         // the port's request is the one ST_FWAIT waits for, not a read-ahead
+reg        ackv, hA, hB, fh1, fh2, fn1, fn2, ftake, fcross;
+reg [31:3] b0, b1, nb, sb;
+reg [63:0] dA, dB;
+reg [2:0]  p0, p1, p2;
+reg [15:0] fw0, fw1, fw2;
+reg [1:0]  flen;
+reg        fbr;
+reg [31:0] fofs, ftgt;
+
+// retire FIFO: instructions that have finished, waiting for their queued writes to commit
+(* ramstyle = "logic" *) reg [31:0] rq_pc [0:3];
+(* ramstyle = "logic" *) reg [31:0] rq_npc [0:3];
+(* ramstyle = "logic" *) reg [31:0] rq_sr [0:3];
+(* ramstyle = "logic" *) reg [3:0]  rq_end [0:3];
+(* ramstyle = "logic" *) reg        rq_late [0:3];
+reg [1:0]  rq_rp, rq_wp;
+reg [2:0]  rq_n;
+reg [3:0]  push_seq, commit_seq;   // queue entries pushed and committed, mod 16
+reg        r_push, r_pop, r_new;
 
 // bus job engine
 reg        p_wr, p_io;
@@ -283,16 +349,22 @@ task wq_push(input wp_g, input wp_raw, input [5:0] wp_i, input [31:0] wp_v);
 	begin
 		if (wp_g && wp_i[4:0] == 5'd0) pcw_new = 1'b1;
 		if (wp_g) gw_new = 1'b1;
+		if (wp_g && !wp_raw && wp_i[4:0] == 5'd1) x_srw = 1'b1;
+		fwa_n = fw_n;
+		fw_n = wp_v;
+		push_seq = push_seq + 4'd1;
 		case (wq_cnt)
 			3'd0: begin wq_g[0] = wp_g; wq_raw[0] = wp_raw; wq_i[0] = wp_i; wq_v[0] = wp_v; end
 			3'd1: begin wq_g[1] = wp_g; wq_raw[1] = wp_raw; wq_i[1] = wp_i; wq_v[1] = wp_v; end
 			3'd2: begin wq_g[2] = wp_g; wq_raw[2] = wp_raw; wq_i[2] = wp_i; wq_v[2] = wp_v; end
 			3'd3: begin wq_g[3] = wp_g; wq_raw[3] = wp_raw; wq_i[3] = wp_i; wq_v[3] = wp_v; end
 			3'd4: begin wq_g[4] = wp_g; wq_raw[4] = wp_raw; wq_i[4] = wp_i; wq_v[4] = wp_v; end
-			default: ;
+			3'd5: begin wq_g[5] = wp_g; wq_raw[5] = wp_raw; wq_i[5] = wp_i; wq_v[5] = wp_v; end
+			3'd6: begin wq_g[6] = wp_g; wq_raw[6] = wp_raw; wq_i[6] = wp_i; wq_v[6] = wp_v; end
+			default: begin wq_g[7] = wp_g; wq_raw[7] = wp_raw; wq_i[7] = wp_i; wq_v[7] = wp_v; end
 		endcase
 `ifdef SIMULATION
-		if (wq_cnt > 3'd4) $display("WQ_OVERFLOW cnt=%0d rd=%0d op=%04x pc=%08x i=%0d g=%0d", wq_cnt, wq_rd, op, ipc, wp_i, wp_g);
+		if (wq_cnt - wq_rd == 3'd7) $display("WQ_OVERFLOW cnt=%0d rd=%0d op=%04x pc=%08x i=%0d g=%0d", wq_cnt, wq_rd, op, ipc, wp_i, wp_g);
 `endif
 		wq_cnt = wq_cnt + 3'd1;
 	end
@@ -302,7 +374,7 @@ endtask
 task write_dst(input g, input [5:0] i, input [31:0] v);
 	begin
 		// a PC write takes effect in this cycle, not through the queue
-		if (g && i[4:0] == 5'd0) pc = {v[31:1], 1'b0};
+		if (g && i[4:0] == 5'd0) begin pc = {v[31:1], 1'b0}; redir = 1'b1; end
 		else begin
 			// MAME: a user-mode write that sets L is a privilege error (checked here, applied at commit)
 			if (g && i[4:0] == 5'd1 && !sr[18] && !sr[15] && v[15]) req_exc(TRAP_RANGE);
@@ -321,10 +393,11 @@ endtask
 // queue head, local register: written into the register file at the start of the cycle
 task commit_loc;
 	begin
-		if (wq_rd < wq_cnt && !wq_g[wq_rd]) begin
+		if (wq_rd != wq_cnt && !wq_g[wq_rd]) begin
 			l_we_n = 1'b1; l_wa_n = wq_i[wq_rd]; l_wd_n = wq_v[wq_rd];
 			wq_rd = wq_rd + 3'd1;
 			did_commit = 1'b1;
+			commit_seq = commit_seq + 4'd1;
 		end
 	end
 endtask
@@ -337,6 +410,7 @@ task commit_glob;
 			if (hd_raw) G[hd_i[4:0]] = hd_v;   // raw writes never target PC or SR
 			else apply_global(hd_i[4:0], hd_v);
 			wq_rd = wq_rd + 3'd1;
+			commit_seq = commit_seq + 4'd1;
 		end
 	end
 endtask
@@ -399,6 +473,7 @@ task apply_frame;
 		sr[15] = 1'b1; sr[18] = 1'b1;
 		if (frm_kind == 2'd2) sr[7] = 1'b1;
 		pc = addr;
+		redir = 1'b1;
 	end
 endtask
 
@@ -531,7 +606,7 @@ task ret_loop_start;
 		if (lp_diff < 0) begin
 			p_loop <= 2'd2; nstate = ST_LOOP; fin_req = 1'b0;
 		end else begin
-			fin_req = 1'b1; nstate = ST_INT;
+			fin_req = 1'b1; nstate = ST_XW;
 		end
 	end
 endtask
@@ -544,107 +619,6 @@ function [15:0] hw_of(input [63:0] d, input [1:0] i);
 		default: hw_of = d[15:0];
 	endcase
 endfunction
-
-// fetch one halfword at fpc: from a fetched block in this cycle, else from the port. A request
-// for another address replaces a read-ahead in flight; one for the same address continues it.
-task fetch_word;
-	begin
-		if (fc_valid && fc_addr == fpc[31:3]) begin
-			consume_word(hw_of(fc_data, fpc[2:1]));
-		end else if (pf_valid && pf_addr == fpc[31:3]) begin
-			// the read-ahead block becomes the current one; read the one after it
-			fc_valid <= 1'b1; fc_addr <= pf_addr; fc_data <= pf_data;
-			pf_valid <= 1'b0;
-			if_req <= 1'b1; if_addr <= pf_addr + 29'd1; if_dem <= 1'b0;
-			consume_word(hw_of(pf_data, fpc[2:1]));
-		end else begin
-			if_req <= 1'b1; if_addr <= fpc[31:3]; if_dem <= 1'b1;
-			nstate = ST_FWAIT;
-		end
-	end
-endtask
-
-// start the next instruction's fetch in the cycle the instruction ends (EXEC or the last MWAIT),
-// when nothing can still redirect it. Kept in the instruction's own branch so the commit and
-// frame logic of other states are not in this cycle's fetch-address path.
-task fold_fetch;
-	begin
-		if (fin_req) begin
-			fpc = pc;
-			ipc <= pc;
-			ilen = 2'd1;
-			fstage = 2'd0;
-			fold_done = 1'b1;
-			fetch_word;
-		end
-	end
-endtask
-
-// one halfword of the instruction; ST_RD takes the extension words if the fetched blocks hold them
-task consume_word(input [15:0] w);
-	begin
-`ifdef E1_DEBUG
-		$display("consume stage=%0d fpc=%08x w=%04x", fstage, fpc, w);
-`endif
-		fpc = fpc + 32'd2;
-		nstate = ST_RD;
-		case (fstage)
-			2'd0: begin
-				op <= w;
-				if (need_e1(w)) begin fstage = 2'd1; ilen = 2'd2; end
-				else fstage = 2'd3;
-			end
-			2'd1: begin
-				e1 <= w;
-				if (need_e2(op, w)) begin fstage = 2'd2; ilen = 2'd3; end
-				else fstage = 2'd3;
-			end
-			default: begin
-				e2 <= w;
-				fstage = 2'd3;
-			end
-		endcase
-	end
-endtask
-
-// ST_RD: the extension words still wanted, from the fetched blocks; what they do not hold is left to
-// ST_FETCH. A halfword taken from the read-ahead block makes it the current one.
-task rd_ext;
-	reg        h1, h2, p1, p2;
-	reg [15:0] w1, w2;
-	reg [31:0] f2;
-	begin
-		h1 = 1'b0; p1 = 1'b0; w1 = 16'd0;
-		if (fc_valid && fc_addr == fpc[31:3]) begin h1 = 1'b1; w1 = hw_of(fc_data, fpc[2:1]); end
-		else if (pf_valid && pf_addr == fpc[31:3]) begin h1 = 1'b1; p1 = 1'b1; w1 = hw_of(pf_data, fpc[2:1]); end
-		f2 = fpc + 32'd2;
-		h2 = 1'b0; p2 = 1'b0; w2 = 16'd0;
-		if (fc_valid && fc_addr == f2[31:3]) begin h2 = 1'b1; w2 = hw_of(fc_data, f2[2:1]); end
-		else if (pf_valid && pf_addr == f2[31:3]) begin h2 = 1'b1; p2 = 1'b1; w2 = hw_of(pf_data, f2[2:1]); end
-		if (h1) begin
-			if (fstage == 2'd2) begin
-				e2 <= w1; fpc = f2; fstage = 2'd3;
-				p2 = 1'b0;
-			end else begin
-				e1 <= w1; e1_cur = w1;
-				if (!need_e2(op, w1)) begin
-					fpc = f2; fstage = 2'd3;
-					p2 = 1'b0;
-				end else if (h2) begin
-					e2 <= w2; fpc = f2 + 32'd2; ilen = 2'd3; fstage = 2'd3;
-				end else begin
-					fpc = f2; ilen = 2'd3; fstage = 2'd2;
-					p2 = 1'b0;
-				end
-			end
-			if (p1 || p2) begin
-				fc_valid <= 1'b1; fc_addr <= pf_addr; fc_data <= pf_data;
-				pf_valid <= 1'b0;
-				if_req <= 1'b1; if_addr <= pf_addr + 29'd1; if_dem <= 1'b0;
-			end
-		end
-	end
-endtask
 
 //------------------------------------------------------------------
 // interrupts: returns 1 and takes the interrupt if one is pending (check_interrupts)
@@ -673,6 +647,120 @@ task check_interrupts(output taken);
 		else taken = 1'b0;
 	end
 endtask
+
+//------------------------------------------------------------------
+// the load being issued (la_req, la_addr): exec_ldst's and exec_regind's first address, from the same
+// operands; I/O and the stack forms (e1 subtype 3, extra_s[1] set) are left out
+//------------------------------------------------------------------
+wire [31:0] la_lD = lD_q;
+wire [31:0] la_gD = gD_q;
+wire [31:0] la_xs = e1[15] ? {e1[14] ? 4'hf : 4'h0, e1[11:0], e2} : {e1[14] ? 20'hfffff : 20'h0, e1[11:0]};
+wire        la_rind = op[15:12] == 4'hd;
+wire [31:0] la_base = (la_rind || op[9]) ? la_lD : (!op[10] && op[7:4] == 4'd1) ? 32'd0 : la_gD;
+wire [31:0] la_off = (la_rind || op[10]) ? 32'd0 :
+                     (e1[13:12] == 2'd2 || (e1[13:12] == 2'd3 && la_xs[1:0] == 2'd1)) ? (la_xs & 32'hfffffffe) : la_xs;
+assign la_addr = la_base + la_off;
+assign la_req = state == ST_EXEC && !op[11] && (la_rind || (op[15:12] == 4'h9 && !(e1[13:12] == 2'd3 && la_xs[1])));
+
+//------------------------------------------------------------------
+// R
+//------------------------------------------------------------------
+// a global as D reads it: PC is the address after D (the delayed-branch target in a delay slot); a global the
+// queue head writes at the end of this clock comes from the head
+function [31:0] rgd(input [4:0] i);
+	case (i)
+		5'd0: rgd = delay_slot ? delay_pc : d_npc;
+		5'd1: rgd = sr;
+		5'd25: rgd = {25'b0, irq_in};
+		default: rgd = (hd_valid && hd_i[4:0] == i) ? hd_v : G[i];
+	endcase
+endfunction
+
+// the fast class: one clock in ST_EXEC, never an exception, at most one register written (the destination
+// field), PC, FP, the delay slot and SR's H and T unchanged. MOV and MOVI only with H clear (H makes their
+// global operands G16-G31); no destination PC or SR.
+function fast_f(input [15:0] o, input h);
+	reg [7:0] c;
+	reg       dok;
+	begin
+		c = o[15:8];
+		dok = o[9] || o[7:4] >= 4'd2;
+		casez (c)
+			8'b0010_00??, 8'b0011_00??, 8'b0110_00??, 8'b0111_00??: fast_f = 1'b1;      // cmp, cmpb, cmpi, cmpbi
+			8'b0010_01??, 8'b0110_01??: fast_f = dok && !h;                             // mov, movi
+			8'b0001_01??, 8'b0001_10??,                                                  // mask, sum
+			8'b0010_10??, 8'b0011_01??, 8'b0011_1???,                                    // add, andn, or, xor
+			8'b0100_0???, 8'b0100_10??, 8'b0101_0???, 8'b0101_10??,                      // subc, not, sub, addc, and, neg
+			8'b0110_10??, 8'b0111_01??, 8'b0111_1???,                                    // addi, andni, ori, xori
+			8'b1010_0???, 8'b1010_10??,                                                  // shri, sari, shli
+			8'b1011_10??: fast_f = dok;                                                  // set
+			8'h83, 8'h87, 8'h8b, 8'h8e, 8'h8f: fast_f = 1'b1;                            // shr, sar, shl, testlz, rol
+			default: fast_f = 1'b0;
+		endcase
+	end
+endfunction
+
+// a fast instruction writes its destination field (a local if o[9])
+function wr_f(input [15:0] o);
+	casez (o[15:8])
+		8'b0010_00??, 8'b0011_00??, 8'b0110_00??, 8'b0111_00??: wr_f = 1'b0;
+		8'b1011_10??: wr_f = o[8] ? (o[3:0] >= 4'd4 || o[3:0] == 4'd2) : (o[3:0] != 4'd1);
+		default: wr_f = 1'b1;
+	endcase
+endfunction
+
+// D may read SR through a global operand (R read it before X's instruction changed the flags)
+function rsr_f(input [15:0] o);
+	reg [7:0] c;
+	begin
+		c = o[15:8];
+		rsr_f = c < 8'he0 &&
+		        ((!o[8] && o[3:0] <= 4'd1 && !(c >= 8'h60 && c <= 8'h8f) && !(c >= 8'ha0 && c <= 8'hbb)) ||
+		         (!o[9] && o[7:4] <= 4'd1 && !(c >= 8'h80 && c <= 8'h8f) && c < 8'hd0));
+	end
+endfunction
+
+// D reads what the forwarding does not cover: LDW.S / STW.S (the frame slot through port 4; with them the
+// other e1 subtype-3 N forms), extend (G14, G15 in ST_EXEC); and MOV from TR (e1_tb loads TR with MAME's
+// value once the instruction before has retired)
+function noovl_f(input [15:0] o, input [15:0] x1, input h);
+	noovl_f = (o[15:12] == 4'h9 && o[10] && x1[13:12] == 2'd3) || o[15:8] == 8'hce ||
+	          (o[15:10] == 6'b001001 && !o[8] && h && o[3:0] == 4'd7);
+endfunction
+
+// the extend (0xce) sub-opcode in e1, as a code: execute and ST_MUL2 select on it rather than on e1
+function [3:0] ext_code(input [15:0] x1);
+	case (x1)
+		16'h0100: ext_code = 4'd0;
+		16'h0102: ext_code = 4'd1;
+		16'h0104: ext_code = 4'd2;
+		16'h0106: ext_code = 4'd3;
+		16'h010a: ext_code = 4'd4;
+		16'h010e: ext_code = 4'd5;
+		16'h011a: ext_code = 4'd6;
+		16'h011e: ext_code = 4'd7;
+		16'h002a: ext_code = 4'd8;
+		16'h002e: ext_code = 4'd9;
+		16'h0046: ext_code = 4'd10;
+		16'h004e: ext_code = 4'd11;
+		16'h0086: ext_code = 4'd12;
+		16'h0096: ext_code = 4'd13;
+		16'h0296: ext_code = 4'd14;
+		default:  ext_code = 4'd15;
+	endcase
+endfunction
+
+// check_interrupts would take an interrupt
+function int_any(input dummy);
+	reg [31:0] fcr;
+	begin
+		fcr = G[26];
+		int_any = !sr[15] &&
+		          ((irq_in[6] && (fcr & 32'h00000500) == 32'h00000400) || (timer_pend && !fcr[23]) ||
+		           (irq_in[0] && !fcr[28]) || (irq_in[1] && !fcr[29]) || (irq_in[2] && !fcr[30]) || (irq_in[3] && !fcr[31]) ||
+		           (irq_in[4] && (fcr & 32'h00000005) == 32'h00000004) || (irq_in[5] && (fcr & 32'h00000050) == 32'h00000040));
+	end
+endfunction
 
 //------------------------------------------------------------------
 // main FSM
@@ -707,44 +795,45 @@ wire [31:0] bus_rd_lane = bus_rdata;
 
 always @(posedge clk) begin
 	retire <= 1'b0;
-irq_ack <= 7'd0;
+	irq_ack <= 7'd0;
 
 	if (reset) begin
-state <= ST_RESET;
+		state <= ST_RESET;
 		bus_req <= 1'b0;
-		if_req <= 1'b0; if_dem <= 1'b0;
-		fc_valid <= 1'b0;
-		pf_valid <= 1'b0;
+		if_req <= 1'b0;
+		fc_valid <= 1'b0; pf_valid <= 1'b0; d_valid <= 1'b0;
 		// emptied here too: the queue is read before ST_RESET's code runs, and an initial value is
 		// not a power-up value in Quartus (docs/LESSONS_LEARNED.md)
-		wq_cnt = 3'd0; wq_rd = 3'd0; ret_pend = 1'b0; retire_pending = 1'b0; late_cap = 1'b0;
+		wq_cnt = 3'd0; wq_rd = 3'd0; ret_pend = 1'b0; push_seq = 4'd0; commit_seq = 4'd0; x_srw = 1'b0;
+		rq_n <= 3'd0; rq_rp <= 2'd0; rq_wp <= 2'd0;
+		x_fast <= 1'b0; x_brk <= 1'b0; x_pred <= 1'b0; x_wloc <= 1'b0; x_wglob <= 1'b0; x_seq <= 32'd0;
 		l_we_r <= 1'b0;
 	end else if (cen && !pause) begin
-nstate = state;
-fin_req = 1'b0;
-frm_req = 1'b0;
-frm_body = 1'b0;
-fold_done = 1'b0;
-ilen0 = ilen;
-pcw_new = 1'b0;
-gw_new = 1'b0;
-// a read-ahead arrives (a state below may replace the request in this cycle)
-if (if_req && if_ack && !if_dem) begin
-	pf_valid <= 1'b1; pf_addr <= if_addr; pf_data <= if_data; if_req <= 1'b0;
-end
-wq_busy0 = (wq_cnt != 3'd0);
-wq_cnt0 = wq_cnt;
-wq_g0 = (wq_rd < wq_cnt) ? wq_g[wq_rd] : 1'b0;
-l_we_n = 1'b0;
-did_commit = 1'b0;
-commit_loc;
-wq_cnt_start = wq_cnt;      // entries pushed in this cycle are committed from the next one
-if (wq_rd >= wq_cnt) begin wq_rd = 3'd0; wq_cnt = 3'd0; wq_cnt_start = 3'd0; end
-hd_valid = (wq_rd < wq_cnt_start) && wq_g[wq_rd];
-hd_raw = wq_raw[wq_rd]; hd_i = wq_i[wq_rd]; hd_v = wq_v[wq_rd];
-wq_pcw = 1'b0;
-for (t_i = 0; t_i < 5; t_i = t_i + 1)
-	if (t_i >= wq_rd && t_i < wq_cnt && wq_g[t_i] && wq_i[t_i][4:0] == 5'd0) wq_pcw = 1'b1;
+		nstate = state;
+		fin_req = 1'b0;
+		frm_req = 1'b0;
+		frm_body = 1'b0;
+		pcw_new = 1'b0;
+		gw_new = 1'b0;
+		redir = 1'b0;
+		st_hit = 1'b0;
+		tt_fin = 1'b0;
+		fw_n = 32'd0; fwa_n = 32'd0;
+		q_pend = wq_cnt - wq_rd;
+		q_hg = wq_g[wq_rd]; q_hi = wq_i[wq_rd][4:0];
+		wq_busy0 = (wq_cnt != wq_rd);
+		l_we_n = 1'b0;
+		did_commit = 1'b0;
+		commit_loc;
+		wq_cnt_start = wq_cnt;      // entries pushed in this cycle are committed from the next one
+		if (wq_rd == wq_cnt) begin wq_rd = 3'd0; wq_cnt = 3'd0; wq_cnt_start = 3'd0; end
+		hd_valid = (wq_rd != wq_cnt_start) && wq_g[wq_rd];
+		hd_raw = wq_raw[wq_rd]; hd_i = wq_i[wq_rd]; hd_v = wq_v[wq_rd];
+		wq_pcw = 1'b0;
+		for (t_i = 0; t_i < 8; t_i = t_i + 1) begin
+			t3 = t_i[2:0] - wq_rd;
+			if (t3 < wq_cnt - wq_rd && wq_g[t_i] && wq_i[t_i][4:0] == 5'd0) wq_pcw = 1'b1;
+		end
 		// TR reaching TCR raises the timer interrupt from the next clock (timer_hit), which keeps the
 		// counter chain out of this clock's interrupt check
 		if (timer_hit) timer_pend = 1'b1;
@@ -758,11 +847,104 @@ for (t_i = 0; t_i < 5; t_i = t_i + 1)
 					if (tr_val == G[22] && !G[26][23]) timer_hit <= 1'b1;
 				end else tr_cnt = tr_cnt + 9'd1;
 			end
+
+		//--------------------------------------------------------------
+		// R, before X's code changes SR and the delay slot in this clock: D's operands, in every clock (into _q at
+		// the end of the clock, with X's write of this clock if D goes in beside it)
+		lS_t  = (l_we_n && l_wa_n == w_sidx)  ? l_wd_n : lS;
+		lS1_t = (l_we_n && l_wa_n == w_sidx1) ? l_wd_n : lS1;
+		lD_t  = (l_we_n && l_wa_n == w_didx)  ? l_wd_n : lD;
+		lD1_t = (l_we_n && l_wa_n == w_didx1) ? l_wd_n : lD1;
+		gS_t  = rgd({1'b0, d_op[3:0]});
+		gS1_t = rgd({1'b0, d_op[3:0]} + 5'd1);
+		gD_t  = rgd({1'b0, d_op[7:4]});
+		gD1_t = rgd({1'b0, d_op[7:4]} + 5'd1);
+		gM_t  = rgd({1'b0, d_op[3:0]} + (sr[5] ? 5'd16 : 5'd0));
+		gMD_t = rgd({1'b0, d_op[7:4]} + (sr[5] ? 5'd16 : 5'd0));
+		// X in the last clock of a bus job: no exception, no frame loop, at most the load's results written (not to
+		// PC or SR), and not a store into code F holds
+		sb = bus_addr[31:3];
+		st_code = (fc_valid && sb == fc_addr) || (pf_valid && sb == pf_addr) || sb == fpc[31:3] || sb == fpc[31:3] + 29'd1 ||
+		          (d_valid && (sb == d_ipc[31:3] || sb == d_ipc[31:3] + 29'd1)) || (if_req && sb == if_addr);
+		x_mw_last = state == ST_MWAIT && bus_req && bus_ack && p_loop == 2'd0 && p_k + 2'd1 >= p_n && !p_exc &&
+		            (!p_w0_en || !p_w0_g || (p_w0_i[4:0] >= 5'd2 && p_w0_i[4:0] <= 5'd15)) &&
+		            (!p_w1_en || !p_w1_g || (p_w1_i[4:0] >= 5'd2 && p_w1_i[4:0] <= 5'd15)) && !(p_wr && !p_io && st_code);
+		// the register X's instruction writes in this clock, and which of D's operands it is (used if D goes in
+		// beside it)
+		wa_l = 1'b0; wa_g = 1'b0; wa_i = p_w0_i;
+		if (state == ST_MWAIT && p_w1_en) begin
+			wa_l = p_w0_en && !p_w0_g; wa_g = p_w0_en && p_w0_g;
+			w_l = !p_w1_g; w_g = p_w1_g; w_i = p_w1_i;
+		end else if (state == ST_MWAIT) begin
+			w_l = p_w0_en && !p_w0_g; w_g = p_w0_en && p_w0_g; w_i = p_w0_i;
+		end else begin
+			x_didx = {2'b0, op[7:4]} + sr[30:25];
+			w_l = x_wloc; w_g = x_wglob; w_i = x_wglob ? {2'b0, op[7:4]} : x_didx;
+		end
+		m_lS  = w_l && w_i == w_sidx;
+		m_lS1 = w_l && w_i == w_sidx1;
+		m_lD  = w_l && w_i == w_didx;
+		m_lD1 = w_l && w_i == w_didx1;
+		m_gS  = w_g && w_i == {2'b0, d_op[3:0]};
+		m_gS1 = w_g && w_i == {2'b0, d_op[3:0]} + 6'd1;
+		m_gD  = w_g && w_i == {2'b0, d_op[7:4]};
+		m_gD1 = w_g && w_i == {2'b0, d_op[7:4]} + 6'd1;
+		m_gM  = w_g && !sr[5] && w_i == {2'b0, d_op[3:0]};
+		m_gMD = w_g && !sr[5] && w_i == {2'b0, d_op[7:4]};
+		ma_lS  = wa_l && wa_i == w_sidx;
+		ma_lS1 = wa_l && wa_i == w_sidx1;
+		ma_lD  = wa_l && wa_i == w_didx;
+		ma_lD1 = wa_l && wa_i == w_didx1;
+		ma_gS  = wa_g && wa_i == {2'b0, d_op[3:0]};
+		ma_gS1 = wa_g && wa_i == {2'b0, d_op[3:0]} + 6'd1;
+		ma_gD  = wa_g && wa_i == {2'b0, d_op[7:4]};
+		ma_gD1 = wa_g && wa_i == {2'b0, d_op[7:4]} + 6'd1;
+		ma_gM  = wa_g && !sr[5] && wa_i == {2'b0, d_op[3:0]};
+		ma_gMD = wa_g && !sr[5] && wa_i == {2'b0, d_op[7:4]};
+		// D goes into X when the queue holds nothing R has not read (one local, committed in this clock, or one
+		// global G2-G15 from the head) and no PC write
+		q_ok = !wq_pcw && (q_pend == 3'd0 ||
+		       (q_pend == 3'd1 && (!q_hg || (q_hi >= 5'd2 && q_hi <= 5'd15 && d_op[15:8] != 8'hce))));
+		d_fast = fast_f(d_op, sr[5]) && !delay_slot && !sr[16];
+		d_wr = wr_f(d_op);
+		// X's BR or DB: its condition from SR as ST_EXEC sees it. A BR going as F predicted, or a DB not taken,
+		// changes nothing D depends on.
+		case (op[11:9])
+			3'd0: b_cond = sr[3];
+			3'd1: b_cond = sr[1];
+			3'd2: b_cond = sr[0];
+			3'd3: b_cond = sr[0] | sr[1];
+			3'd4: b_cond = sr[2];
+			default: b_cond = sr[2] | sr[1];
+		endcase
+		if (op[8]) b_cond = !b_cond;
+		if (op[11:8] == 4'hc) b_cond = 1'b1;
+		b_ok = x_brk && (op[12] ? b_cond == x_pred : !b_cond);
+		// beside a fast instruction's clock, such a branch's, or a bus job's last: only when no interrupt would be
+		// taken before D
+		go_ovl = d_valid && q_ok && ((state == ST_EXEC && (x_fast || b_ok)) || (x_mw_last && !sr[16])) &&
+		         intblock <= 2'd1 && !int_any(1'b0) && !rsr_f(d_op) && !noovl_f(d_op, d_e1, sr[5]);
+		go = go_ovl;
+		if (go_ovl) intblock = 2'd0;
+		if (d_valid && q_ok && state == ST_XW) begin
+			// the interrupt is sampled here, once, when the instruction goes on (e1_cpu's ST_RD)
+			if (intblock <= 2'd1) begin
+				intblock = 2'd0;
+				check_interrupts(took);
+			end else begin
+				intblock = intblock - 2'd1;
+			end
+			if (!frm_req) begin
+				go = 1'b1;
+				if (first_ins) begin sr[20:19] = first_ilc(d_op, d_e1); first_ins = 1'b0; end
+			end
+		end
+
 		case (state)
 		//----------------------------------------------------------
 		ST_RESET: begin
 			for (t_i = 0; t_i < 32; t_i = t_i + 1) G[t_i] = 32'd0;
-			wq_cnt = 3'd0; wq_rd = 3'd0; ret_pend = 1'b0; retire_pending = 1'b0; late_cap = 1'b0;
+			wq_cnt = 3'd0; wq_rd = 3'd0; ret_pend = 1'b0; push_seq = 4'd0; commit_seq = 4'd0; x_srw = 1'b0;
 			trap_entry = 32'hffffff00;
 			G[20] = 32'hffffffff;      // BCR
 			G[27] = 32'hffffffff;      // MCR
@@ -771,83 +953,27 @@ for (t_i = 0; t_i < 5; t_i = t_i + 1)
 			tr_val = 32'd0; tr_period = 9'd2; tr_cnt = 9'd0; tpr_pending = 1'b0; timer_pend = 1'b0; timer_hit <= 1'b0;
 			sr = 32'd0;
 			pc = trap_addr(TRAP_RESET);
+			redir = 1'b1;
 			set_fp(7'd0); set_fl(4'd2);
 			sr[4] = 1'b0; sr[16] = 1'b0; sr[15] = 1'b1; sr[18] = 1'b1;
 			sr[20:19] = 2'd1;
 			wq_push(1'b0, 1'b0, 6'd0, {pc[31:1], 1'b0} | {31'b0, sr[18]});
-wq_push(1'b0, 1'b0, 6'd1, sr);
+			wq_push(1'b0, 1'b0, 6'd1, sr);
 			delay_slot = 1'b0; delay_slot_taken = 1'b0; delay_pc = 32'd0;
 			intblock = 2'd0;
 			first_ins = 1'b1;
 			p_loop <= 2'd0;
-			nstate = ST_INT;
+			nstate = ST_XW;
 		end
 
-		//----------------------------------------------------------
-		// instruction fetch: stage 0 starts here (interrupts are sampled in ST_RD, so the
-		// fetch does not wait for the previous instruction's register writes)
-		ST_INT: if (wq_pcw) begin
-			nstate = ST_INT;
-		end else begin
-			fpc = pc;
-			ipc <= pc;
-			ilen = 2'd1;
-			fstage = 2'd0;
-			fetch_word;
-		end
-
-		ST_FETCH: fetch_word;
-
-		ST_FWAIT: begin
-			if (if_ack) begin
-				fc_valid <= 1'b1; fc_addr <= if_addr; fc_data <= if_data;
-				pf_valid <= 1'b0;
-				if_req <= 1'b1; if_addr <= if_addr + 29'd1; if_dem <= 1'b0;
-				consume_word(hw_of(if_data, fpc[2:1]));
-			end
-		end
-
-		//----------------------------------------------------------
-		// operand read: register file and global registers into plain registers, so the
-		// execute cycle starts from flip-flops. Earlier writes must have reached the arrays.
-		// The interrupt is sampled here, once, when the instruction goes on.
-		ST_RD: begin
-		e1_cur = e1;
-		if (fstage != 2'd3) rd_ext;
-		if (fstage != 2'd3) begin
-			nstate = ST_FETCH;
-		end else if (wq_cnt0 > 3'd1 || (wq_cnt0 == 3'd1 && wq_g0)) begin
-			// one pending local write is bypassed below; anything else waits
-			nstate = ST_RD;
-		end else begin
-			if (intblock <= 2'd1) begin
-				intblock = 2'd0;
-				check_interrupts(took);
-			end else begin
-				intblock = intblock - 2'd1;
-			end
-			if (!frm_req) begin
-				pc = fpc;
-				op_x <= op; ilen_x <= ilen;
-				if (first_ins) begin sr[20:19] = first_ilc(op, e1_cur); first_ins = 1'b0; end
-				lS_r  <= (l_we_n && l_wa_n == w_sidx)  ? l_wd_n : lS;
-				lS1_r <= (l_we_n && l_wa_n == w_sidx1) ? l_wd_n : lS1;
-				lD_r  <= (l_we_n && l_wa_n == w_didx)  ? l_wd_n : lD;
-				lD1_r <= (l_we_n && l_wa_n == w_didx1) ? l_wd_n : lD1;
-				gS_r  <= rgv({1'b0, op[3:0]});
-				gS1_r <= rgv({1'b0, op[3:0]} + 5'd1);
-				gD_r  <= rgv({1'b0, op[7:4]});
-				gD1_r <= rgv({1'b0, op[7:4]} + 5'd1);
-				gM_r  <= rgv({1'b0, op[3:0]} + (sr[5] ? 5'd16 : 5'd0));
-				gMD_r <= rgv({1'b0, op[7:4]} + (sr[5] ? 5'd16 : 5'd0));
-				nstate = ST_EXEC;
-			end
-		end
-		end
+		ST_XW: ;                   // R decides
 
 		ST_EXEC: begin
 			fin_req = 1'b1;
-nstate = ST_INT;
+			nstate = ST_XW;
+			pc = x_npc;
+			lS_r = lS_q; lS1_r = lS1_q; lD_r = lD_q; lD1_r = lD1_q;
+			gS_r = gS_q; gS1_r = gS1_q; gD_r = gD_q; gD1_r = gD1_q; gM_r = gM_q; gMD_r = gMD_q;
 			opc = op[15:8]; dc = op[7:4]; sc = op[3:0];
 			dl = opc[1]; sl = opc[0];
 			// check_delay_pc, for every instruction except the delayed branches and the
@@ -859,6 +985,7 @@ nstate = ST_INT;
 				else begin
 					tmp32 = pc; pc = delay_pc; delay_pc = tmp32;
 					delay_slot = 1'b0; delay_slot_taken = 1'b1;
+					redir = 1'b1;
 				end
 			end
 			fp = sr[31:25];
@@ -886,6 +1013,7 @@ casez (opc)
 						// MAME: RET with PC/SR source does nothing
 					end else begin
 						pc = {sreg[31:1], 1'b0};
+						redir = 1'b1;
 						tmpv = sr;
 						sr = (sregf & ~32'h001c0000) | {13'b0, sreg[0], 18'b0};
 						// privilege checks (old S/L from tmpv)
@@ -1152,7 +1280,6 @@ casez (opc)
 						default: imm = 32'hffffffff;
 					endcase
 				end else imm = {28'b0, sc};
-				dreg = dl ? lD_r : gD_r;
 				case (opc[3:2])
 				2'b00: begin // cmpi (0x60-63), cmpbi is 0x70-73 below
 					if (!opc[4]) begin
@@ -1412,28 +1539,28 @@ casez (opc)
 				sr[4] = 1'b0; sr[16] = 1'b0;
 				sr[15] = 1'b1;
 				pc = ea;
+				redir = 1'b1;
 			end
 			//------------------------------------------------ extend
 			8'hce: begin
 				sreg = lS_r; dreg = lD_r;
-				case (e1)
-					16'h0100, 16'h0102, 16'h0104, 16'h0106, 16'h010a, 16'h010e, 16'h011a, 16'h011e,
-					16'h002a, 16'h002e, 16'h0046, 16'h004e: begin
+				case (x_ext)
+					4'd0, 4'd1, 4'd2, 4'd3, 4'd4, 4'd5, 4'd6, 4'd7, 4'd8, 4'd9, 4'd10, 4'd11: begin
 						// multiplies take two more states (ST_MUL, ST_MUL2)
-						mk <= 2'd2; msg <= (e1 != 16'h0104); mA <= sreg; mB <= dreg;
+						mk <= 2'd2; msg <= (x_ext != 4'd2); mA <= sreg; mB <= dreg;
 						nstate = ST_MUL; fin_req = 1'b0;
 					end
-					16'h0086: begin
+					4'd12: begin     // 0x0086
 						tmpv = G[14]; msk = G[15];
 						wq_push(1'b1, 1'b1, 6'd14, {sreg[31:16] + tmpv[15:0], sreg[15:0] + msk[15:0]});
 						wq_push(1'b1, 1'b1, 6'd15, {sreg[31:16] - tmpv[15:0], sreg[15:0] - msk[15:0]});
 					end
-					16'h0096: begin
+					4'd13: begin     // 0x0096
 						tmpv = G[14]; msk = G[15];
 						wq_push(1'b1, 1'b1, 6'd14, {sreg[31:16] + tmpv[30:15], sreg[15:0] + msk[30:15]});
 						wq_push(1'b1, 1'b1, 6'd15, {sreg[31:16] - tmpv[30:15], sreg[15:0] - msk[30:15]});
 					end
-					16'h0296: begin
+					4'd14: begin     // 0x0296
 						tmpv = G[14]; msk = G[15];
 						hi = {16'b0, sreg[31:16]} + {15'b0, tmpv[31:15]};
 						lo = {16'b0, sreg[15:0]} + {15'b0, msk[31:15]};
@@ -1476,6 +1603,7 @@ casez (opc)
 				end else begin
 					delay_slot = 1'b0;
 					delay_slot_taken = 1'b1;
+					redir = 1'b1;
 					if (cond) begin
 						pc = delay_pc + ofs;
 						sr[4] = 1'b0;
@@ -1514,6 +1642,7 @@ casez (opc)
 				set_fl(4'd6);
 				sr[4] = 1'b0;
 				pc = {extra_s[31:1], 1'b0} + tmp32;
+				redir = 1'b1;
 				intblock = 2'd2;
 			end
 			//------------------------------------------------ branches
@@ -1533,7 +1662,8 @@ casez (opc)
 				if (cond) begin
 					pc = pc + ofs;
 					sr[4] = 1'b0;
-				end
+					if (!x_pred) redir = 1'b1;
+				end else if (x_pred) redir = 1'b1;   // F went on from the target
 			end
 			//------------------------------------------------ trap
 			8'hfd, 8'hfe, 8'hff: begin
@@ -1554,7 +1684,6 @@ casez (opc)
 			end
 			default: ; // 0xcf and anything unlisted
 			endcase
-			fold_fetch;
 		end
 
 		//----------------------------------------------------------
@@ -1572,9 +1701,8 @@ casez (opc)
 		ST_MWAIT: begin
 			if (bus_req && bus_ack) begin
 				bus_req <= 1'b0;
-				// a store into a fetched block: fetch it again (the memory has the new data from this clock)
-				if (p_wr && !p_io && bus_addr[31:3] == fc_addr) fc_valid <= 1'b0;
-				if (p_wr && !p_io && bus_addr[31:3] == pf_addr) pf_valid <= 1'b0;
+				// a store: F fetches again what it hit (the memory has the new data from this clock)
+				if (p_wr && !p_io) st_hit = 1'b1;
 				if (!p_wr) begin
 					if (p_k == 2'd0) p_r0 <= p_io ? bus_rdata : lane_ext(bus_rdata, bus_addr, p_kind);
 					else p_r1 <= p_io ? bus_rdata : lane_ext(bus_rdata, bus_addr, p_kind);
@@ -1590,7 +1718,16 @@ end
 					nstate = ST_LOOP;
 				end else if (p_k + 2'd1 < p_n) begin
 					p_k <= p_k + 2'd1;
-					nstate = ST_MEM;
+					if (p_wr && !p_io && (bus_addr[31:22] == 10'd0 || (bus_addr[31:18] == 14'h1000 && bus_addr[17:16] != 2'd0))) begin
+						nstate = ST_MEM;     // a cached store: vh_cpumem's S_WLOOK reads bus_* in the next clock
+					end else begin
+						// the second access goes out in this clock, as ST_MEM would issue it
+						bus_req <= 1'b1;
+						bus_addr <= p_a1;
+						bus_be <= p_io ? 4'b1111 : be_of(p_a1, p_kind);
+						bus_wdata <= wd_of(p_a1, p_kind, p_wd1);
+						nstate = ST_MWAIT;
+					end
 				end else begin
 					// last access: write the results back in this cycle
 					tmpv = p_io ? bus_rdata : lane_ext(bus_rdata, bus_addr, p_kind);
@@ -1599,8 +1736,7 @@ end
 					if (p_b_en) write_raw(p_b_g, p_b_i, p_b_v);
 					if (p_exc) req_exc(TRAP_RANGE);
 					fin_req = 1'b1;
-					nstate = ST_INT;
-					fold_fetch;
+					nstate = ST_XW;
 				end
 			end
 		end
@@ -1624,7 +1760,7 @@ end
 				if (p_loop == 2'd1 && lp_flag) req_exc(TRAP_RANGE);
 p_loop <= 2'd0;
 fin_req = 1'b1;
-nstate = ST_INT;
+nstate = ST_XW;
 			end
 		end
 
@@ -1634,7 +1770,7 @@ if (p_w1_en) write_dst(p_w1_g, p_w1_i, p_r1);
 if (p_b_en) write_raw(p_b_g, p_b_i, p_b_v);
 if (p_exc) req_exc(TRAP_RANGE);
 fin_req = 1'b1;
-nstate = ST_INT;
+nstate = ST_XW;
 		end
 
 		//----------------------------------------------------------
@@ -1665,7 +1801,7 @@ nstate = ST_INT;
 			write_dst(dv_dg, dv_di, dv_r[31:0]);
 write_dst(dv_dg, dv_di + 6'd1, res);
 fin_req = 1'b1;
-nstate = ST_INT;
+nstate = ST_XW;
 		end
 
 		ST_MUL: begin
@@ -1679,7 +1815,7 @@ nstate = ST_INT;
 
 		ST_MUL2: begin
 			fin_req = 1'b1;
-			nstate = ST_INT;
+			nstate = ST_XW;
 			case (mk)
 				2'd1: begin // mulsu: 64-bit product to a register pair
 					sr[2:1] = {mp[63], mp[63:0] == 64'd0};
@@ -1691,26 +1827,26 @@ nstate = ST_INT;
 					write_raw(m_dg, m_di, mp[31:0]);
 				end
 				default: begin // extend
-					case (e1)
-						16'h0100, 16'h0102: wq_push(1'b1, 1'b1, 6'd15, mp[31:0]);
-						16'h0104, 16'h0106: begin wq_push(1'b1, 1'b1, 6'd14, mp[63:32]); wq_push(1'b1, 1'b1, 6'd15, mp[31:0]); end
-						16'h010a: wq_push(1'b1, 1'b1, 6'd15, G[15] + mp[31:0]);
-						16'h010e: begin
+					case (x_ext)
+						4'd0, 4'd1: wq_push(1'b1, 1'b1, 6'd15, mp[31:0]);                  // 0x0100, 0x0102
+						4'd2, 4'd3: begin wq_push(1'b1, 1'b1, 6'd14, mp[63:32]); wq_push(1'b1, 1'b1, 6'd15, mp[31:0]); end
+						4'd4: wq_push(1'b1, 1'b1, 6'd15, G[15] + mp[31:0]);                 // 0x010a
+						4'd5: begin                                                          // 0x010e
 							dw = {G[14], G[15]} + mp[63:0];
 							wq_push(1'b1, 1'b1, 6'd14, dw[63:32]); wq_push(1'b1, 1'b1, 6'd15, dw[31:0]);
 						end
-						16'h011a: wq_push(1'b1, 1'b1, 6'd15, G[15] - mp[31:0]);
-						16'h011e: begin
+						4'd6: wq_push(1'b1, 1'b1, 6'd15, G[15] - mp[31:0]);                 // 0x011a
+						4'd7: begin                                                          // 0x011e
 							dw = {G[14], G[15]} - mp[63:0];
 							wq_push(1'b1, 1'b1, 6'd14, dw[63:32]); wq_push(1'b1, 1'b1, 6'd15, dw[31:0]);
 						end
 						// half-word DSP forms. MAME's get_lhs is the LOW half, get_rhs the HIGH half.
-						16'h002a: wq_push(1'b1, 1'b1, 6'd15, G[15] + p_ll + p_hh);
-						16'h002e: begin
+						4'd8: wq_push(1'b1, 1'b1, 6'd15, G[15] + p_ll + p_hh);              // 0x002a
+						4'd9: begin                                                          // 0x002e
 							dw = {G[14], G[15]} + {{32{p_ll[31]}}, p_ll} + {{32{p_hh[31]}}, p_hh};
 							wq_push(1'b1, 1'b1, 6'd14, dw[63:32]); wq_push(1'b1, 1'b1, 6'd15, dw[31:0]);
 						end
-						16'h0046: begin
+						4'd10: begin                                                         // 0x0046
 							wq_push(1'b1, 1'b1, 6'd14, p_ll - p_hh); wq_push(1'b1, 1'b1, 6'd15, p_lh + p_hl);
 						end
 						default: begin // 16'h004e
@@ -1721,20 +1857,21 @@ nstate = ST_INT;
 			endcase
 		end
 
-		ST_FRM: if (wq_cnt != 3'd0) begin
+		// the frame is built once the queue is empty and the instructions before have retired
+		ST_FRM: if (wq_cnt != wq_rd || rq_n != 3'd0) begin
 			nstate = ST_FRM;
 		end else begin
 			apply_frame;
 			if (frm_kind == 2'd2) begin
-				nstate = ST_INT;
+				nstate = ST_XW;
 				retire_npc <= pc; retire_sr <= sr;
 			end else if (ret_pend) begin
 				ret_pend = 1'b0;
 				ret_loop_start;
 			end else begin
 				fin_req = frm_fin;
-				nstate = ST_INT;
-				if (!frm_fin) begin retire_npc <= pc; retire_sr <= sr; end
+				nstate = ST_XW;
+				tt_fin = !frm_fin;     // a trace trap: the instruction before it retires with this PC and SR
 			end
 		end
 
@@ -1743,29 +1880,129 @@ nstate = ST_INT;
 
 		// ---- end of cycle: global register commit, register-file write pipeline, completion
 		commit_glob;
-		if (wq_rd >= wq_cnt) begin wq_rd = 3'd0; wq_cnt = 3'd0; end
+		if (wq_rd == wq_cnt) begin wq_rd = 3'd0; wq_cnt = 3'd0; end
 		l_we_r <= l_we_n; l_wa_r <= l_wa_n; l_wd_r <= l_wd_n;
+		r_new = tt_fin;
 		if (frm_req) begin
 			nstate = ST_FRM;
 		end else if (fin_req) begin
 			post_instr;
-			retire_pc <= ipc;
-			retire_npc <= pc; retire_sr <= sr;
-			late_cap = gw_new;   // a queued write to a global register lands after this point
-			retire_pending = 1'b1;
-			if (!fold_done) nstate = frm_req ? ST_FRM : ST_INT;
-			else if (frm_req) nstate = ST_FRM;
+			if (frm_req) nstate = ST_FRM;   // the trace trap: the instruction retires once the frame is built
+			else r_new = 1'b1;
 		end
-		// an exception after the next fetch was started: a request for it finishes as a read-ahead
-		if (fold_done && frm_req) if_dem <= 1'b0;
-		// the instruction completes once its writes have drained and any frame is built
-		if (retire_pending && wq_cnt == 3'd0 && nstate != ST_FRM) begin
-			retire_pending = 1'b0;
+		// retirement, in order, once the instruction's queued writes have committed
+		r_pop = rq_n != 3'd0 && ((commit_seq - rq_end[rq_rp]) & 4'h8) == 4'h0;
+		if (r_pop) begin
 			retire <= 1'b1;
-			if (late_cap) begin retire_npc <= pc; retire_sr <= sr; late_cap = 1'b0; end
+			retire_pc <= rq_pc[rq_rp];
+			retire_npc <= rq_late[rq_rp] ? pc : rq_npc[rq_rp];
+			retire_sr <= rq_late[rq_rp] ? sr : rq_sr[rq_rp];
+			rq_rp <= rq_rp + 2'd1;
 		end
+		r_push = 1'b0;
+		if (r_new) begin
+			if (rq_n == 3'd0 && commit_seq == push_seq) begin
+				retire <= 1'b1;
+				retire_pc <= ipc; retire_npc <= pc; retire_sr <= sr;
+			end else begin
+				rq_pc[rq_wp] <= ipc; rq_npc[rq_wp] <= pc; rq_sr[rq_wp] <= sr;
+				rq_end[rq_wp] <= push_seq; rq_late[rq_wp] <= x_srw;
+				rq_wp <= rq_wp + 2'd1;
+				r_push = 1'b1;
+			end
+		end
+		rq_n <= rq_n + {2'b0, r_push} - {2'b0, r_pop};
+`ifdef SIMULATION
+		if (rq_n == 3'd4 && r_push && !r_pop) $display("RQ_OVERFLOW pc=%08x", ipc);
+`endif
+		// D into X
+		if (go && !frm_req) begin
+			nstate = ST_EXEC;
+			op <= d_op; e1 <= d_e1; e2 <= d_e2; op_x <= d_op; ilen_x <= d_ilen;
+			ipc <= d_ipc; x_npc <= d_npc;
+			x_fast <= d_fast;
+			x_brk <= (d_op[15:12] == 4'he || d_op[15:12] == 4'hf) && d_op[11:8] <= 4'hc && !delay_slot && !sr[16];
+			x_pred <= d_pred;
+			x_ext <= ext_code(d_e1);
+			x_wloc <= d_fast && d_wr && d_op[9];
+			x_wglob <= d_fast && d_wr && !d_op[9];
+			x_srw = 1'b0;
+			x_seq <= x_seq + 32'd1;
+		end
+		lS_q  <= (go_ovl && m_lS)  ? fw_n : (go_ovl && ma_lS)  ? fwa_n : lS_t;
+		lS1_q <= (go_ovl && m_lS1) ? fw_n : (go_ovl && ma_lS1) ? fwa_n : lS1_t;
+		lD_q  <= (go_ovl && m_lD)  ? fw_n : (go_ovl && ma_lD)  ? fwa_n : lD_t;
+		lD1_q <= (go_ovl && m_lD1) ? fw_n : (go_ovl && ma_lD1) ? fwa_n : lD1_t;
+		gS_q  <= (go_ovl && m_gS)  ? fw_n : (go_ovl && ma_gS)  ? fwa_n : gS_t;
+		gS1_q <= (go_ovl && m_gS1) ? fw_n : (go_ovl && ma_gS1) ? fwa_n : gS1_t;
+		gD_q  <= (go_ovl && m_gD)  ? fw_n : (go_ovl && ma_gD)  ? fwa_n : gD_t;
+		gD1_q <= (go_ovl && m_gD1) ? fw_n : (go_ovl && ma_gD1) ? fwa_n : gD1_t;
+		gM_q  <= (go_ovl && m_gM)  ? fw_n : (go_ovl && ma_gM)  ? fwa_n : gM_t;
+		gMD_q <= (go_ovl && m_gMD) ? fw_n : (go_ovl && ma_gMD) ? fwa_n : gMD_t;
 		state <= nstate;
 
+		//--------------------------------------------------------------
+		// F: refill D when it went into X (or is empty), from the block holding fpc and the one after it, each
+		// from either kept block or from the instruction port in this clock
+		ackv = if_req && if_ack;
+		b0 = fpc[31:3]; b1 = b0 + 29'd1;
+		hA = 1'b1;
+		if (fc_valid && fc_addr == b0) dA = fc_data;
+		else if (pf_valid && pf_addr == b0) dA = pf_data;
+		else if (ackv && if_addr == b0) dA = if_data;
+		else begin hA = 1'b0; dA = fc_data; end
+		hB = 1'b1;
+		if (pf_valid && pf_addr == b1) dB = pf_data;
+		else if (fc_valid && fc_addr == b1) dB = fc_data;
+		else if (ackv && if_addr == b1) dB = if_data;
+		else begin hB = 1'b0; dB = pf_data; end
+		p0 = {1'b0, fpc[2:1]}; p1 = p0 + 3'd1; p2 = p0 + 3'd2;
+		fw0 = hw_of(dA, p0[1:0]);
+		fw1 = p1[2] ? hw_of(dB, p1[1:0]) : hw_of(dA, p1[1:0]);
+		fw2 = p2[2] ? hw_of(dB, p2[1:0]) : hw_of(dA, p2[1:0]);
+		fh1 = p1[2] ? hB : hA;
+		fh2 = p2[2] ? hB : hA;
+		fn1 = need_e1(fw0);
+		fn2 = fn1 && need_e2(fw0, fw1);
+		flen = fn2 ? 2'd3 : fn1 ? 2'd2 : 2'd1;
+		// BR (0xf0-0xfc) is predicted taken: F goes on from its target
+		fbr = fw0[15:12] == 4'hf && fw0[11:8] <= 4'hc;
+		fofs = fw0[7] ? {(fw1[0] ? 9'h1ff : 9'h000), fw0[6:0], fw1[15:1], 1'b0}
+		              : {(fw0[0] ? 25'h1ffffff : 25'h0), fw0[6:1], 1'b0};
+		ftgt = fpc + {29'd0, flen, 1'b0} + fofs;
+		ftake = (!d_valid || (go && !frm_req)) && hA && (!fn1 || fh1) && (!fn2 || fh2);
+		fcross = ftake && (p0 + {1'b0, flen}) >= 3'd4;
+		if (ftake) begin
+			d_valid <= 1'b1;
+			d_op <= fw0; d_e1 <= fw1; d_e2 <= fw2; d_ilen <= flen;
+			d_ipc <= fpc; d_npc <= fpc + {29'd0, flen, 1'b0};
+			d_pred <= fbr;
+			fpc <= fbr ? ftgt : fpc + {29'd0, flen, 1'b0};
+		end else if (go && !frm_req) d_valid <= 1'b0;
+		// keep the block holding the next fpc and the one after it; request the first of them not held
+		if (fcross) begin
+			fc_valid <= hB; fc_addr <= b1; fc_data <= dB;
+			pf_valid <= 1'b0;
+		end else begin
+			fc_valid <= hA; fc_addr <= b0; fc_data <= dA;
+			pf_valid <= hB; pf_addr <= b1; pf_data <= dB;
+		end
+		nb = fcross ? b1 : b0;
+		if (fcross ? !hB : !hA) begin if_req <= 1'b1; if_addr <= nb; end
+		else if (fcross || !hB) begin if_req <= 1'b1; if_addr <= nb + 29'd1; end
+		else if_req <= 1'b0;
+		if (ftake && fbr) begin if_req <= 1'b1; if_addr <= ftgt[31:3]; end
+		// a store into a kept block, D, the blocks at fpc or the one being fetched: fetch again from D
+		if (st_hit && st_code) begin
+			fc_valid <= 1'b0; pf_valid <= 1'b0; d_valid <= 1'b0; if_req <= 1'b0;
+			fpc <= d_valid ? d_ipc : fpc;
+		end
+		// a change of PC: start again from it
+		if (redir) begin
+			d_valid <= 1'b0;
+			fpc <= pc;
+			if_req <= 1'b1; if_addr <= pc[31:3];
+		end
 	end
 end
 
@@ -1867,7 +2104,7 @@ task exec_ldst;
 					2'd2: begin
 						if (is_n) begin
 							// reserved
-							nstate = ST_INT; p_w0_en <= 1'b0;  
+							nstate = ST_XW; p_w0_en <= 1'b0;  
 						end else begin // LDW.IOD
 							ls_ea = ls_dreg + (extra_s & 32'hfffffffc);
 							job_start(1'b0, 1'b1, 3'd0, 2'd1, ls_ea, 32'd0, 32'd0, 32'd0);
@@ -1929,7 +2166,7 @@ task exec_ldst;
 					end
 					2'd2: begin
 						if (is_n) begin
-							nstate = ST_INT;  
+							nstate = ST_XW;  
 						end else begin // STW.IOD
 							ls_ea = ls_dreg + (extra_s & 32'hfffffffc);
 							job_start(1'b1, 1'b1, 3'd0, 2'd1, ls_ea, 32'd0, ls_sreg, 32'd0);

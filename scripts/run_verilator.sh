@@ -12,8 +12,8 @@
 # The bench's sources are listed in sim/<tb>/verilator.files: unlike
 # scripts/run_sim.sh this does not compile all of rtl/, because Verilator
 # parses every file it is given and not all vendored code is clean for it.
-# -G arguments are top-level parameter overrides and go to the build; the
-# rest go to the run. Output is in obj_verilator/<tb>/ (git-ignored), not
+# -G arguments (top-level parameter overrides) and +define+ macros go to the
+# build; the rest go to the run. Output is in obj_verilator/<tb>/ (git-ignored), not
 # build/, which is scripts/build_staged.py's Quartus worktree.
 #
 # TOOLS: the MSYS2 MinGW64 install (verilator, g++, make, perl). The script
@@ -44,6 +44,7 @@ GEN=(); RUN=(); THREADS=1
 for a in "$@"; do
 	case "$a" in
 		-G*)         GEN+=("$a") ;;
+		+define+*)   GEN+=("$a" -CFLAGS "-D${a#+define+}") ;;   # e.g. +define+E1_PIPE: to the build, and to main.cpp
 		--x-*=*)     GEN+=("${a%%=*}" "${a#*=}") ;;   # --x-initial=unique, --x-assign=unique: to the build
 		--threads=*) THREADS="${a#--threads=}" ;;
 		*)           RUN+=("$a") ;;
@@ -54,7 +55,7 @@ done
 # It is passed the bench name and must be cheap when nothing changed.
 [ -x scripts/verilator_prep.sh ] && scripts/verilator_prep.sh "$TB"
 
-# A parameter override or a thread count changes the model, so it gets its
+# A parameter override, a macro or a thread count changes the model, so it gets its
 # own build directory
 OUT="obj_verilator/$TB$(printf '%s' "${GEN[@]+"${GEN[@]}"}" | tr -c 'A-Za-z0-9_' '_')"
 [ "$THREADS" = 1 ] || OUT="${OUT}_t$THREADS"

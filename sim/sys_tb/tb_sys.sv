@@ -50,7 +50,7 @@ module tb_sys (
 	output            game_flip,
 	output            dbg_miss,
 	output            dbg_miss_ic,
-	output     [22:4] dbg_miss_line,
+	output     [23:4] dbg_miss_line,
 	output            dbg_rf_we,
 	output     [5:0]  dbg_rf_wa,
 	output     [31:0] dbg_rf_wd,
@@ -84,7 +84,11 @@ module tb_sys (
 
 // CPU timer enable: 25 of every 28 clocks (50 MHz from 56)
 reg [4:0] tk;
-wire cpu_tick = tk < 5'd25;
+wire f_aoh = family == 5'd14;
+reg [2:0] tk7 = 3'd0;                       // aoh's 80 MHz: 10 ticks in 7 clocks, a second in 3 of them
+always @(posedge clk) tk7 <= (tk7 == 3'd6) ? 3'd0 : tk7 + 3'd1;
+wire cpu_tick  = f_aoh || tk < 5'd25;
+wire cpu_tick2 = f_aoh && (tk7 == 3'd0 || tk7 == 3'd2 || tk7 == 3'd4);
 always @(posedge clk) tk <= (tk == 5'd27) ? 5'd0 : tk + 5'd1;
 
 wire        spr_we, pal_we;
@@ -111,11 +115,11 @@ wire  [5:0] m2_wrx;
 wire [63:0] m_dout, m_doutb;
 
 vh_main u_main (
-	.clk(clk), .prst(prst), .rst(rst), .board(board), .family(family), .prg2(prg2), .pause(pause), .cpu_tick(cpu_tick),
+	.clk(clk), .prst(prst), .rst(rst), .board(board), .family(family), .prg2(prg2), .pause(pause), .cpu_tick(cpu_tick), .cpu_tick2(cpu_tick2),
 	.vblank_irq(vblank_start), .p1p2(p1p2), .system(system), .xbtn(7'h7f),
 	.flip(game_flip), .snd_latch(snd_latch), .snd_latch_wr(snd_latch_wr),
 	.ym_wr(ym_wr), .ym_a0(ym_a0), .oki_wr(oki_wr), .snd_wd(snd_wd), .oki_bank(oki_bank),
-	.ym_dout(ym_dout), .oki_dout(oki_dout),
+	.ym_dout(ym_dout), .oki_dout(oki_dout), .oki2_wr(oki2_wr), .oki2_dout(oki2_dout),
 	.spr_we(spr_we), .spr_be(spr_be), .spr_addr(spr_addr), .spr_wd(spr_wd), .spr_rd(spr_rd),
 	.pal_we(pal_we), .pal_be(pal_be), .pal_addr(pal_addr), .pal_wd(pal_wd), .pal_rd(pal_rd),
 	.ee_blank(ee_blank), .ee_load_we(ee_load_we), .ee_load_addr(ee_load_addr), .ee_load_data(ee_load_data),
@@ -133,11 +137,11 @@ vh_main u_main (
 );
 
 wire        gfx_req, gfx_rdy, gfx_dv;
-wire [24:0] gfx_addr;
+wire [25:0] gfx_addr;
 wire [31:0] gfx_data;
 
 vh_video u_video (
-	.clk(clk), .rst(vrst), .code_mask(code_mask), .palshift(family == 5'd7), .code17(family == 5'd12),
+	.clk(clk), .rst(vrst), .code_mask(code_mask), .palshift(family == 5'd7), .code17(family == 5'd12), .aoh(f_aoh),
 	.spr_we(spr_we), .spr_be(spr_be), .spr_addr(spr_addr), .spr_wd(spr_wd), .spr_rd(spr_rd),
 	.pal_we(pal_we), .pal_be(pal_be), .pal_addr(pal_addr), .pal_wd(pal_wd), .pal_rd(pal_rd),
 	.flip(game_flip ^ flip_osd),
@@ -152,7 +156,7 @@ wire [26:1] m0_addr;
 wire        m0_req, m0_ack;
 
 vh_gfxport #(.GFX_BASE(SD_GFX), .GFXHI_BASE(SD_GFXHI)) u_gfx (
-	.clk(clk), .prst(prst), .gfx_req(gfx_req), .gfx_rdy(gfx_rdy), .gfx_addr(gfx_addr), .gfx_dv(gfx_dv), .gfx_data(gfx_data),
+	.clk(clk), .prst(prst), .aoh(f_aoh), .gfx_req(gfx_req), .gfx_rdy(gfx_rdy), .gfx_addr(gfx_addr), .gfx_dv(gfx_dv), .gfx_data(gfx_data),
 	.mem_addr(m0_addr), .mem_req(m0_req), .mem_ack(m0_ack), .mem_dout(m_dout), .mem_doutb(m_doutb)
 );
 
@@ -167,11 +171,14 @@ wire        snd_qs = family < 5'd2 || family == 5'd11;
 wire        ym_wr, ym_a0, oki_wr;
 wire [7:0]  snd_wd, ym_dout, oki_dout;
 wire [2:0]  oki_bank;
+wire        oki2_wr;
+wire [7:0]  oki2_dout;
 assign m1_addr = snd_qs ? qs_addr : yo_addr;
 assign m1_req  = snd_qs ? qs_req : yo_req;
 
 vh_ymoki u_ymoki (
-	.clk(clk), .rst(rst | snd_qs), .xtal14(family == 5'd7), .dl(1'b0),
+	.clk(clk), .rst(rst | snd_qs), .xtal14(family == 5'd7), .aoh(f_aoh), .dl(1'b0),
+	.oki2_wr(oki2_wr), .oki2_dout(oki2_dout),
 	.ym_wr(ym_wr), .ym_a0(ym_a0), .ym_din(snd_wd), .ym_dout(ym_dout),
 	.oki_wr(oki_wr), .oki_din(snd_wd), .oki_dout(oki_dout), .bank(oki_bank), .banked(family == 5'd4 || family == 5'd10 || family == 5'd12 || family == 5'd13),
 	.sd_addr(yo_addr), .sd_req(yo_req), .sd_ack(m1_ack), .sd_dout(m1_dout),
