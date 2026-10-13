@@ -15,13 +15,12 @@ Boong-Ga Boong-Ga and Age Of Heroes need the 128 MB SDRAM module.**
 - [Games](#games)
   - [Supported](#supported)
   - [Supported (Limenko core)](#supported-limenko-core)
-  - [Not yet](#not-yet)
 - [Hardware](#hardware)
   - [Video timing](#video-timing)
   - [Floorplan](#floorplan)
 - [Installation](#installation)
 - [Controls](#controls)
-- [Status](#status)
+- [Status](#status-1)
   - [Todo](#todo)
   - [Resource usage](#resource-usage)
 - [Limenko core](#limenko-core)
@@ -36,6 +35,8 @@ Boong-Ga Boong-Ga and Age Of Heroes need the 128 MB SDRAM module.**
 * **20261013** (`releases/Arcade-Limenko_20261013.rbf`)
   * New core, Limenko Power System 2: Dynamite Bomber, Legend of Heroes, Super Bubble 2003 (two sets),
     To Heart House, Spotty ([Limenko core](#limenko-core))
+  * QS1000, in this core and in the source for the next Vamphalf release: IMA ADPCM, looping with a key-off
+    fade, pitch bend, and the left and right volumes swapped against MAME's (Verification)
 
 * **20261010** (`releases/Arcade-Vamphalf_20261010.rbf`)
   * New set: Age Of Heroes - Silkroad 2 (128 MB SDRAM)
@@ -60,7 +61,7 @@ Boong-Ga Boong-Ga and Age Of Heroes need the 128 MB SDRAM module.**
 
 **Status**: All listed games run and are playable with sound.
 
-Age of Heroes needs an _80MHz_ CPU core. It does all of it's screen drawing in the vblank period in a few scanlines.
+Age of Heroes needs an _80MHz_ CPU core. It does all of its screen drawing in the vblank period in a few scanlines.
 As the CPU isn't fast enough yet, it results in some screen tearing when scrolling vertically (luckily it's a side-scroller...).
 To avoid this, I'm delaying the screen drawing until much later (read hack), resulting in one screen of lag.
 
@@ -130,9 +131,9 @@ sound board.
 
 | Chip | Function | Status |
 |-|-|-|
-| Hyperstone E1-16T / GMS30C2116, E1-32T, 50 MHz | Main CPU | Written here from MAME's `e132xs`: `rtl/e1/e1_pipe.sv`, pipelined (fetch and operand read run ahead of execute; the next instruction goes in beside the last clock of an ALU instruction, a load or store, or a predicted branch), built from the multi-cycle `rtl/e1/e1_cpu.sv`, which stays as the reference; behind a 16 KB I-cache and a 4 KB D-cache (`rtl/vh_cpumem.sv`) |
+| Hyperstone E1-16T / GMS30C2116, E1-32T, 50 MHz; E1-32XN, 80 MHz (Age Of Heroes) | Main CPU | Written here from MAME's `e132xs`: `rtl/e1/e1_pipe.sv`, pipelined (fetch and operand read run ahead of execute; the next instruction goes in beside the last clock of an ALU instruction, a load or store, or a predicted branch), built from the multi-cycle `rtl/e1/e1_cpu.sv`, which stays as the reference; behind a 16 KB I-cache and a 4 KB D-cache (`rtl/vh_cpumem.sv`) |
 | Sprites and palette | Video | Written here (`rtl/video/vh_video.sv`): rendered per scanline from a copy of the sprite list taken once a frame |
-| QS1000 (8052 + 32-voice wavetable) | Sound, QS1000 boards | 8052: jotego's JT8051, changed (`rtl/qs1000/PROVENANCE.md`); wavetable written here from MAME's `qs1000.cpp` (`rtl/qs1000/vh_qs1000_voice.sv`) |
+| QS1000 (8052 + 32-voice wavetable) | Sound, QS1000 boards | 8052: jotego's JT8051, changed (`rtl/qs1000/PROVENANCE.md`); wavetable written here from MAME's `qs1000.cpp` (`rtl/qs1000/vh_qs1000_voice.sv`), with the mix balance, IMA ADPCM, looping, a key-off fade, pitch bend and the left and right volumes taken from recordings instead (Verification) |
 | YM2151 | FM sound | jotego's JT51 (`rtl/sound/PROVENANCE.md`) |
 | OKI M6295 | ADPCM sound | jotego's JT6295, with the Fuuki core's ROM bridge and sample cache |
 | 93C46 | Settings EEPROM | From Arcade-KonamiGX_MiSTer |
@@ -158,7 +159,7 @@ Revision `Vamphalf` at `5c4af03` (the 20261010 release), fitted 10 Oct 2026:
 A 32 MB SDRAM module is required (the images are up to 24 MB; work RAM sits above them). Boong-Ga
 Boong-Ga and Age Of Heroes need the 128 MB module: their graphics are stored above the 32 MB line.
 
-* Take the latest `*.rbf` from `releases/` and put it in `_Arcade/cores`, renamed to drop the
+* Take the latest `Arcade-Vamphalf_*.rbf` from `releases/` and put it in `_Arcade/cores`, renamed to drop the
   `Arcade-` prefix (`Arcade-Vamphalf_YYYYMMDD.rbf` becomes `Vamphalf_YYYYMMDD.rbf`)
 * Put the `*.mra` files and the `_alternatives` folder from `releases/` in `_Arcade` (or a subdirectory
   starting with an underscore, e.g. `_Arcade/_Vamphalf`)
@@ -191,10 +192,12 @@ Known issues:
   of the vertical blank, before the game rewrites it, because the CPU, slower than the original, does not
   finish the rewrite in time for a later copy; a later copy tore when the screen scrolled vertically
   (`docs/HACKS.md`).
-* The QS1000 follows MAME's model, which has no envelopes, filter or looping.
+* The QS1000 has no envelopes beyond a key-off fade, and no filter; MAME has neither. The 20261010 release
+  also follows MAME's ADPCM decoding, its left and right volumes, and its voices stopping at their loop end;
+  the source since then, as in the Limenko release, does not (Verification).
 * The SUPLUP board's games run 2.2% slow (Video timing).
-* Not yet checked on the board: flip screen, the `.nvm` save and restore. This release was started on the
-  board with Boong-Ga Boong-Ga and Age Of Heroes; the other sets ran on the unpipelined CPU in the
+* Not yet checked on the board: flip screen, the `.nvm` save and restore. The 20261010 release was started on
+  the board with Boong-Ga Boong-Ga and Age Of Heroes; the other sets ran on the unpipelined CPU in the
   previous release.
 
 `docs/ROADMAP.md` is the plan and its progress.
@@ -270,7 +273,7 @@ defaults and Spotty with its own sound board (`debug/hw/lm/legendoh_18f61b5.png`
 
 Known issues:
 
-* **Volume Boost**: the QS1000 games set the chip's volume register far lower than the Vamphalf games do, and
+* **Volume Boost**: the QS1000 games set the chip's volume register far lower than Mission Craft does, and
   they are near silent in MAME. Volume Boost raises them in 6 dB steps. Each set's default (Dynamite Bomber and
   Super Bubble 2003 +18 dB, Legend of Heroes +12 dB, To Heart House +24 dB) brings its level in play within
   3 dB of Mission Craft's, as rendered from MAME's register writes. No Limenko board has been measured
@@ -322,8 +325,8 @@ This core is being developed with heavy use of a frontier coding assistant.
 ## Verification
 
 MAME's `vamphalf.cpp`, `vamphalf_prot.cpp`, `qs1000.cpp` and `e132xs` are the reference, except for the
-QS1000's sound levels, which are set from and checked against a PCB recording, and the E1's SETADR
-instruction (both below). Where the core
+QS1000's mix balance, ADPCM decoding, looping, key-off fade, pitch bend and left and right volumes, which
+come from recordings, and the E1's SETADR instruction (all below). Where the core
 follows MAME on something MAME marks as uncertain, it is listed in `docs/MAME_KLUDGES.md`; the core's own
 approximations are in `docs/HACKS.md`.
 
@@ -344,15 +347,24 @@ approximations are in `docs/HACKS.md`.
   EEPROM identical to the image (or to a `.nvm` loaded after it); `finalgdr`'s backup RAM identical to its
   `.nvm`, and the save path reads every `.nvm` byte back.
 * QS1000: the 8052 with the board's memories agrees with MAME's trace for 3,000,000 instructions per set
-  (`sim/qs1000_tb`); the wavetable engine equals a transcription of MAME's on every tick, 3,000,000 per
-  set alone (`sim/qs1000v_tb`) and 6.9M and 7.0M ticks in the whole board in play, where the 8052's
-  register writes equal MAME's.
+  (`sim/qs1000_tb`). The wavetable engine equals `scripts/qs1000_model.py`, a transcription of MAME's with
+  the core's departures, on every tick: 0 of 3,000,000 sums differ on `misncrft` and `wivernwg`, with MAME's
+  looping and with the core's (`sim/qs1000v_tb`). Earlier, with MAME's ADPCM decoding, it equalled the
+  transcription for 6.9M and 7.0M ticks in the whole board in play, where the 8052's register writes equal
+  MAME's.
+* QS1000 departures from MAME (`docs/MAME_KLUDGES.md`, Sound; the research is Arcade-Eolith_MiSTer's
+  `docs/QS1000_FEATURES.md`): IMA ADPCM from a reading of the chip's firmware, checked on Mission Craft's 10
+  music samples (the most tonal decode for 8 of 10); looping and the key-off fade from the Mission Craft
+  recording below; pitch bend from Hidden Catch's PCB recording and a Serdaco Qwave recording; the left and
+  right volumes from three General MIDI files recorded on an LG GS1000R module.
 * QS1000 sound levels against a
   [PCB recording of Mission Craft](https://www.youtube.com/watch?v=ur5dur6w9L4) (1188 s analysed): the
   music is ADPCM, the shot and other effects PCM. The shot peaks at a median -2.9 dB of the recording's
-  RMS (range -5.5 to -1.9 dB over 18 one-minute windows); MAME's balance gives -20.3 dB. The core's balance (ADPCM x2, PCM x4: effects 18 dB higher
-  against the music than MAME) gives -2.6 dB with the same measurement (`scripts/qs1000_stems.py`,
-  `docs/MAME_KLUDGES.md`, Sound).
+  RMS (range -5.5 to -1.9 dB over 18 one-minute windows); MAME's balance gives -20.3 dB. The core's balance
+  with MAME's ADPCM decoding (ADPCM x2, PCM x4: effects 18 dB higher against the music than MAME) gives
+  -2.6 dB with the same measurement (`scripts/qs1000_stems.py`, `docs/MAME_KLUDGES.md`, Sound). IMA's music
+  is 12.9 dB quieter at the same gain, so with IMA decoding ADPCM is x8; that is not measured on the
+  recording again (`docs/HACKS.md`).
 * SETADR: MAME puts the frame-wrap carry in bit 0 where its original source says bit 9. With MAME's
   version Mr. Kicker (SEMICOM-003b PCB) hangs whenever it rewrites its EEPROM (from blank, or after a
   damaged save), which is why MAME marks it not working; with the carry in bit 9 it rebuilds a blank EEPROM
