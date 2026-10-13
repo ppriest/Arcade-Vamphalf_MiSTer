@@ -1,7 +1,7 @@
 // QS1000 voice engine against the model, sum for sum.
 //
 //   run_verilator.sh qs1000v_tb +img=<image.bin> +wave=<set>_wave.txt +mix=<model mix.txt> [+ticks=N]
-//                    [+lat=<clocks>] [+jitter=1]
+//                    [+lat=<clocks>] [+jitter=1] [+bal=pcb] [+loop=pcb]
 //
 // +img is the .mra image (scripts/build_mra.py --image); its sample region (SD_SAMPLES .. SD_GFX) is the
 // ROM the engine reads, served one 16-byte line per request after +lat clocks (+jitter adds 0-15).
@@ -64,6 +64,7 @@ int main(int argc, char **argv) {
 	auto tick = [&]() { top->clk = 0; top->eval(); top->clk = 1; top->eval(); };
 	top->rst = 1; top->wr = 0; top->tick = 0; top->rom_ack = 0;
 	top->bal_pcb = arg(argc, argv, "+bal=", "mame") == "pcb";   // +bal=pcb: the PCB balance (model --balance pcb)
+	top->loop_pcb = arg(argc, argv, "+loop=", "mame") == "pcb"; // +loop=pcb: looping and key-off fade (model --loop pcb)
 	for (int i = 0; i < 8; i++) tick();
 	top->rst = 0;
 

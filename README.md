@@ -2,6 +2,8 @@
 
 A MiSTer FPGA core for the Hyperstone E1-based arcade boards of MAME's `vamphalf` driver (Danbi /
 F2 System, SemiCom, Sun, Omega System, Logic), built with Quartus Prime 17.0.2 Lite for the DE10-nano.
+The same repository builds a second core, `Limenko`, for MAME's `limenko.cpp` (Limenko Power System 2):
+see [Limenko core](#limenko-core).
 
 **Status: work in progress. Some games lose a small number of frames that do not complete in time.
 Boong-Ga Boong-Ga and Age Of Heroes need the 128 MB SDRAM module.**
@@ -12,6 +14,7 @@ Boong-Ga Boong-Ga and Age Of Heroes need the 128 MB SDRAM module.**
 - [Status](#status)
 - [Games](#games)
   - [Supported](#supported)
+  - [Supported (Limenko core)](#supported-limenko-core)
   - [Not yet](#not-yet)
 - [Hardware](#hardware)
   - [Video timing](#video-timing)
@@ -21,6 +24,7 @@ Boong-Ga Boong-Ga and Age Of Heroes need the 128 MB SDRAM module.**
 - [Status](#status)
   - [Todo](#todo)
   - [Resource usage](#resource-usage)
+- [Limenko core](#limenko-core)
 - [AI Attestation](#ai-attestation)
 - [Verification](#verification)
 - [Acknowledgements](#acknowledgements)
@@ -28,6 +32,10 @@ Boong-Ga Boong-Ga and Age Of Heroes need the 128 MB SDRAM module.**
 - [License](#license)
 
 ## History
+
+* **20261013** (`releases/Arcade-Limenko_20261013.rbf`)
+  * New core, Limenko Power System 2: Dynamite Bomber, Legend of Heroes, Super Bubble 2003 (two sets),
+    To Heart House, Spotty ([Limenko core](#limenko-core))
 
 * **20261010** (`releases/Arcade-Vamphalf_20261010.rbf`)
   * New set: Age Of Heroes - Silkroad 2 (128 MB SDRAM)
@@ -102,6 +110,21 @@ YM2151 and two M6295s (Age Of Heroes: a 384 x 224 screen and 18-bit sprite codes
 | Final Godori (Korea, version 2.20.5915) | 2001 | SemiCom | `finalgdr` | E1-32, YM2151 + banked M6295 | 1,000,000 of 1,000,000 | 32 KB backup RAM, saved in the `.nvm` after the EEPROM |
 | Age Of Heroes - Silkroad 2 (v0.63 - 2001/02/07) | 2001 | Unico | `aoh` | E1-32XN, YM2151 + two M6295 | 1,000,000 of 1,000,000 | Needs the 128 MB SDRAM module (64 MB of graphics) |
 | Boong-Ga Boong-Ga (Spank'em!) | 2001 | Taff System | `boonggab` | E1-16, YM2151 + banked M6295 | 1,000,000 of 1,000,000 | Needs the 128 MB SDRAM module (28 MB of graphics). Four buttons give four of the photo sensors' seven hit strengths (`docs/HACKS.md`) |
+
+### Supported (Limenko core)
+
+The `Limenko` core's sets ([Limenko core](#limenko-core)), on Limenko's Power System 2 (an E1-32XN cartridge
+system) except Spotty, whose board has a GMS30C2232 (an E1-32 second source), the same video chip and its own
+sound board.
+
+| Name | Year | Manufacturer | Set | Board | MAME trace | Notes |
+|-|-|-|-|-|-|-|
+| Dynamite Bomber (Korea, Rev 1.5) | 2000 | Limenko | `dynabomb` | Power System 2, QS1000 | 957,951, to the first vertical-blank interrupt | |
+| Legend of Heroes | 2000 | Limenko | `legendoh` | Power System 2, QS1000 | 284,101, to the first vertical-blank interrupt | Four players' inputs, on pads 3 and 4 (not tried with four); the link between two cabinets is not emulated, in MAME either |
+| Super Bubble 2003 (World, Ver 1.0) | 2003 | Limenko | `sb2003` | Power System 2, QS1000 | 1,000,000 of 1,000,000 | |
+| Super Bubble 2003 (Asia, Ver 1.0) | 2003 | Limenko | `sb2003a` | Power System 2, QS1000 | | Clone of `sb2003` |
+| To Heart House | 200? | Limenko | `hrthouse` | Power System 2, QS1000 | 268,357, to the first vertical-blank interrupt | MAME marks its graphics imperfect (sprite and tilemap priorities, sprite scrolling); the core draws what MAME draws. 4 KB NVRAM, saved in the `.nvm` after the EEPROM |
+| Spotty (Ver. 2.0.2) | 2001 | Prince Co. | `spotty` | GMS30C2232, AT89C4051 + M6295 | 474,527, then a timer interrupt's timing differs | |
 
 ## Hardware
 
@@ -196,6 +219,102 @@ grade 7, every clock meeting timing (clk_sys +0.649 ns, hdmi pll +0.099 ns):
 | DSP blocks | 48 | 112 |
 | PLLs | 3 | 6 |
 
+## Limenko core
+
+`Limenko` is a second core built from this repository, for the games of MAME's `limenko.cpp`
+(Limenko Power System 2). It shares the CPU, the QS1000 and the EEPROM with the Vamphalf core. The memory
+map, the inputs and the video are its own. Spotty uses the same video chip with its own sound board.
+
+The games are in [Supported (Limenko core)](#supported-limenko-core).
+
+### Hardware
+
+| Chip | Function | Status |
+|-|-|-|
+| Hyperstone E1-32XN (Spotty: GMS30C2232), 80 MHz on the board | Main CPU | The Vamphalf core's `e1_pipe` and caches, at the core's 56 MHz clock; the CPU's timer counts at 80 MHz |
+| L2D_HYP | Video: three 8x8 8bpp tilemaps, bitmap sprites, a 15-bit palette | Written here: `rtl/video/lm_video.sv` draws the tilemaps per scanline; `lm_sprites.sv` draws the sprites into a frame buffer in DDR3, double-buffered and swapped at the vertical-blank interrupt (`lm_fb.sv`), as the board's two frame-buffer DRAMs |
+| QS1000 | Sound, all sets but Spotty | As the Vamphalf core; Legend of Heroes' 8052 program banks 2-7 are read from SDRAM |
+| AT89C4051 (4 MHz) + OKI M6295 | Spotty's sound | jotego's JT8052 and JT6295 (`rtl/sound/lm_spotty.sv`, `docs/HACKS.md`) |
+| 93C46 | Settings EEPROM | As the Vamphalf core |
+
+MAME gives a 384 x 240 screen at 60 Hz and no raw timing. The core uses 8 MHz pixels (32 MHz / 4; the board has
+32, 24 and 20 MHz crystals) on a 512 x 264 raster: 59.19 Hz, 384 x 240 visible. Not measured on a board
+(`docs/HACKS.md`).
+
+### Installation
+
+A 32 MB SDRAM module is enough: Legend of Heroes, the largest set, takes 30 MB.
+
+* Put `Arcade-Limenko_YYYYMMDD.rbf` from `releases/` in `_Arcade/cores`, renamed `Limenko_YYYYMMDD.rbf`
+* The Limenko `.mra` files are in `releases/` with the Vamphalf ones (Super Bubble 2003 (Asia) in
+  `_alternatives`); install them the same way
+
+### Controls
+
+Pad: Button 1-4, Start, Coin, Pause, Service Coin, Service Mode, then Button 5-7. The `.mra` names each game's
+buttons: Dynamite Bomber's Bomb, Throw and Jump; Super Bubble 2003's Jump and Bubble; Legend of Heroes' Attack
+and Jump (buttons 3 and 4 not identified); To Heart House's Hold 1-4, Take / Odd and Bet / Double Up (Start is
+Start / Even); Spotty's Hold 1-4, Bet, Stop and Change.
+
+Keyboard: the Vamphalf core's MAME defaults for the joysticks, buttons 1-4, Start, Coin, service and pause.
+Buttons 5-7 are on the pad only, and the holds are buttons 1-4, not MAME's poker keys.
+
+The DIP page has Sound Enable (Spotty: Demo Sounds) and, on the QS1000 games, Volume Boost (Status). The OSD
+has Flip Screen and, except on Spotty, whose sound is mono, Stereo Mix.
+
+### Status
+
+All six sets play on the board with this release's build, the QS1000 games with sound at the Volume Boost
+defaults and Spotty with its own sound board (`debug/hw/lm/legendoh_18f61b5.png`,
+`debug/hw/lm/spotty_18f61b5.png`).
+
+Known issues:
+
+* **Volume Boost**: the QS1000 games set the chip's volume register far lower than the Vamphalf games do, and
+  they are near silent in MAME. Volume Boost raises them in 6 dB steps. Each set's default (Dynamite Bomber and
+  Super Bubble 2003 +18 dB, Legend of Heroes +12 dB, To Heart House +24 dB) brings its level in play within
+  3 dB of Mission Craft's, as rendered from MAME's register writes. No Limenko board has been measured
+  (`docs/HACKS.md`); on the MiSTer the defaults sound right.
+* The tilemaps and palette are read as the game writes them, not copied at the vertical blank. In Legend of
+  Heroes a change can show on the top 13 lines one frame earlier than in MAME (`docs/HACKS.md`).
+* Flip screen is checked in simulation only.
+
+### Resource usage
+
+The release revision (`Limenko`, commit `18f61b5`, default seed), every clock meeting timing (clk_sys
++1.250 ns, hdmi pll +0.475 ns; worst hold +0.242 ns):
+
+| resource | used | available |
+| --- | --- | --- |
+| Logic (ALMs) | 32,656 | 41,910 |
+| Block memory bits | 3,045,468 | 5,662,720 |
+| RAM blocks | 414 | 553 |
+| DSP blocks | 49 | 112 |
+| PLLs | 3 | 6 |
+
+### Verification
+
+MAME's `limenko.cpp` is the reference; the core's departures are in `docs/HACKS.md` and `docs/MAME_KLUDGES.md`.
+
+* Whole board (`sim/lm_tb`) against MAME's trace from reset: `sb2003` 1,000,000 of 1,000,000 instructions;
+  `dynabomb`, `legendoh` and `hrthouse` up to the first vertical-blank interrupt (957,951, 284,101 and 268,357);
+  `spotty` up to 474,527, where MAME takes a timer interrupt the game set for the next timer tick. Over 300
+  frames the EEPROM ends identical to MAME's in all five parent sets, and To Heart House's NVRAM too.
+* Video: a model of MAME's drawing is pixel-identical to MAME on 210 of 210 captured frames (five sets,
+  attract and play); the video RTL (`sim/lm_video_tb`) is identical to the model on all 210, tiles and
+  sprites. In the whole board, Dynamite Bomber's frames 1500-1510 are pixel-identical to MAME's 1495-1505;
+  Legend of Heroes' match MAME's apart from lines 0-12 (Known issues).
+* Flip screen: Dynamite Bomber's frames 700, 1500 and 1501 flipped equal the unflipped frames turned
+  180 degrees, every pixel.
+* QS1000: the 8052 agrees with MAME's trace for 3,000,000 instructions on `dynabomb` and `sb2003` and
+  14,000,000 on `legendoh` (its banked reads included).
+* Spotty's sound board (`sim/spotty_tb`) against MAME's AT89C4051 trace: 3,300,000 instructions, attract and
+  play, 0 mismatches in state, M6295 writes and status reads.
+* Volume Boost (`sim/lm_top_tb`, `sb2003`, 1140 frames): every output sample equals the QS1000's output
+  shifted and clamped.
+* `.mra`: every set's image is identical to MAME's ROM_START (`scripts/build_mra_lm.py`); the fast load leaves
+  SDRAM, the QS1000's program and the EEPROM identical to the image (`sim/lm_top_tb`).
+
 ## AI Attestation
 
 This core is being developed with heavy use of a frontier coding assistant.
@@ -250,8 +369,8 @@ approximations are in `docs/HACKS.md`.
   [Template_MiSTer](https://github.com/MiSTer-devel/Template_MiSTer) framework, and Sorgelig's
   `sdram.v`, here by way of the Psikyo, Fuuki and KonamiGX cores.
 - The **MAMEdev team**: Angelo Salese, David Haywood, Pierpaolo Prazzoli and Tomasz Slanina
-  (`vamphalf.cpp`), Philip Bennett (`qs1000.cpp`), Pierpaolo Prazzoli (`e132xs`), for the driver and
-  device emulations that are this core's specification.
+  (`vamphalf.cpp`), Pierpaolo Prazzoli and Tomasz Slanina (`limenko.cpp`), Philip Bennett (`qs1000.cpp`),
+  Pierpaolo Prazzoli (`e132xs`), for the driver and device emulations that are these cores' specification.
 - **Jose Tejada (jotego)** for JT8051, JT51 and JT6295 ([jtcores](https://github.com/jotego/jtcores)).
 - **Umberto Parisi (rmonic79)** for `crt_adjust.sv`, from Arcade-Raiden_MiSTer by way of the Fuuki core.
 

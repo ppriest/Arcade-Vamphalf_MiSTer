@@ -48,6 +48,10 @@ together, and these changes. The microcode is the same: `jt8052.vh` / `jt8052_pa
    while bit 5 is low; the port latch alone cannot tell a write from a held value. And `p3_latch`, the
    P3 SFR as written (`p3_o` gates bits 1:0 with the UART pins): the ROM bank is P3 bits 2:0.
 
+5. `jt8052.v`: output `p1_we`, the same for P1 (`sfr_addr == 8'h90`). Limenko's spotty (an AT89C4051) keeps
+   a board latch that takes every P1 write (`limenko.cpp audiocpu_p1_w`), including one of the value the
+   port already holds.
+
 Not implemented: Timer 2 (T2CON, T2MOD, RCAP2, TL2/TH2, IE.5, IP.5, vector 0x2B). Neither firmware
 touches it; see `docs/QS1000_8052_FINDINGS.md`. The upstream testbenches under
 `modules/jt8051/ver` are not run against `jt8052` (their runner `simunit.sh`, `as31` and `ruby` are

@@ -9,9 +9,16 @@
 //                 0x0200-0x0211  writes also go to the wavetable engine
 //   P1 in         the latch      INT1 is the latch's pending flag: set by the main CPU's write,
 //                                cleared by a write to P3 with bit 5 low (qs1000_p3_w)
-module vh_qs1000 (
+// Limenko (lm, limenko.cpp qs1000_p3_w / init_common): the data window is "qs1000:cpu"[bank * 0x10000 + addr],
+// 512 KB in SDRAM at SNDCPU_BASE. u7 holds its first 128 KB, banks 0 and 1; banks 2-7 are read from SDRAM a
+// 16-byte line at a time, and the 8052's enables are held while a line it reads is fetched (docs/HACKS.md).
+module vh_qs1000 #(
+	parameter [26:0] SAMPLES_BASE = 27'h0200000,   // vh_sdram_map.svh SD_SAMPLES
+	parameter [26:0] SNDCPU_BASE  = 27'h0100000    // the 8052 program in SDRAM (Limenko's banks 2-7)
+) (
 	input               clk,
 	input               rst,
+	input               lm,
 
 	input               dl_we,           // u7 download, while rst is held
 	input       [16:0]  dl_addr,
@@ -20,8 +27,9 @@ module vh_qs1000 (
 	input               latch_wr,
 	input       [7:0]   latch_d,
 	input               bal_pcb,         // mix balance: the PCB recording's, or MAME's (vh_qs1000_voice)
+	input               loop_pcb,        // looping and the key-off fade, or MAME's neither (vh_qs1000_voice)
 
-	// SDRAM port 1: one 16-byte line of the sample region per request (double read)
+	// SDRAM port 1: one 16-byte line of the sample region, or of Limenko's banks 2-7, per request (double read)
 	output reg  [26:1]  sd_addr,
 	output reg          sd_req,
 	input               sd_ack,
@@ -34,8 +42,6 @@ module vh_qs1000 (
 	output      [15:0]  dbg_drops,
 	output      [15:0]  dbg_stalls
 );
-
-`include "vh_sdram_map.svh"
 
 // 24 MHz: 3 enables in every 7 clocks of 56 MHz, never two in a row (jt8052 requires it). The 750 kHz
 // tick is every 32nd enable, as MAME's 24 MHz / 32.
@@ -65,7 +71,7 @@ always @(posedge clk) begin
 	if (rst) begin
 		latch <= 8'd0; pending <= 1'b0;
 	end else begin
-		if (cen && p3_we && !p3_latch[5]) pending <= 1'b0;   // one enable after the write
+		if (mcen && p3_we && !p3_latch[5]) pending <= 1'b0;  // one enable after the write
 		if (latch_wr) begin latch <= latch_d; pending <= 1'b1; end
 	end
 end
@@ -73,15 +79,32 @@ end
 wire        x_acc, x_wr;
 wire [15:0] x_addr;
 wire [7:0]  x_dout;
+
+// Limenko's banks 2-7: the line buffer, and the 8052's enable held until the byte it reads is in xd_q. x_addr
+// changes only on an enable; a hit on two clocks running means xd_q holds that byte.
+reg  [127:0] xl_data;
+reg  [18:4]  xl_tag;
+reg          xl_v;
+reg  [7:0]   xd_q;
+reg          xl_hit_d;
+wire         xl_need = lm && x_acc && !x_wr && x_addr[15:8] != 8'd0 && p3_latch[2:1] != 2'd0;
+wire         xl_hit  = xl_v && xl_tag == {p3_latch[2:0], x_addr[15:4]};
+wire         x_wait  = xl_need && !(xl_hit && xl_hit_d);
+wire         mcen    = cen && !x_wait;
+always @(posedge clk) begin
+	xl_hit_d <= xl_hit;
+	xd_q <= xl_data[127 - 8 * x_addr[3:0] -: 8];
+end
+
 vh_qs1000_mcu u_mcu (
-	.clk(clk), .rst(rst), .cen(cen),
+	.clk(clk), .rst(rst), .cen(mcen), .lm(lm), .xd_q(xd_q),
 	.dl_we(dl_we), .dl_addr(dl_addr), .dl_data(dl_data),
 	.p1_i(latch), .int1n(~pending),
 	.p1_o(), .p2_o(), .p3_o(), .p3_latch(p3_latch), .p3_we(p3_we),
 	.x_acc(x_acc), .x_wr(x_wr), .x_addr(x_addr), .x_dout(x_dout), .x_din()
 );
 
-wire wave_wr = cen && x_acc && x_wr && x_addr[15:5] == 11'h010 && x_addr[4:0] <= 5'h11;
+wire wave_wr = mcen && x_acc && x_wr && x_addr[15:5] == 11'h010 && x_addr[4:0] <= 5'h11;
 
 wire         rom_req;
 wire [19:0]  rom_line;
@@ -90,39 +113,54 @@ reg  [127:0] rom_data;
 vh_qs1000_voice u_voice (
 	.clk(clk), .rst(rst),
 	.wr(wave_wr), .wr_off(x_addr[4:0]), .wr_data(x_dout),
-	.tick(tick), .bal_pcb(bal_pcb),
+	.tick(tick), .bal_pcb(bal_pcb), .loop_pcb(loop_pcb),
 	.rom_req(rom_req), .rom_line(rom_line), .rom_ack(rom_ack), .rom_data(rom_data),
 	.mix_valid(), .mix_l(), .mix_r(),
 	.out_l(out_l), .out_r(out_r),
 	.dbg_drops(dbg_drops), .dbg_stalls(dbg_stalls)
 );
 
-// sample ROM lines from SDRAM. SD_SAMPLES holds the first 4 MB of MAME's 16 MB region, which is empty
-// above 0x280000: lines past 4 MB read as zero without a request.
+// sample ROM lines from SDRAM. SAMPLES_BASE holds the first 4 MB of MAME's 16 MB region (Vamphalf's sets end by
+// 0x280000, Limenko's by 0x400000): lines past 4 MB read as zero without a request. A line the 8052 waits for
+// goes first.
 function [63:0] sw64(input [63:0] g);
 	sw64 = {g[7:0], g[15:8], g[23:16], g[31:24], g[39:32], g[47:40], g[55:48], g[63:56]};
 endfunction
 
-reg sd_busy;
+reg sd_busy, sd_x;
 always @(posedge clk) begin
 	rom_ack <= 1'b0;
 	if (rst) begin
 		sd_busy <= 1'b0;
 		sd_req <= sd_ack;
+		xl_v <= 1'b0;
 	end else if (!sd_busy) begin
-		if (rom_req && !rom_ack) begin
+		if (xl_need && !xl_hit) begin
+			sd_addr <= SNDCPU_BASE[26:1] + {4'd0, p3_latch[2:0], x_addr[15:4], 3'b000};
+			sd_req <= ~sd_req;
+			sd_busy <= 1'b1;
+			sd_x <= 1'b1;
+			xl_tag <= {p3_latch[2:0], x_addr[15:4]};
+			xl_v <= 1'b0;
+		end else if (rom_req && !rom_ack) begin
 			if (rom_line[19:18] != 2'd0) begin
 				rom_data <= 128'd0;
 				rom_ack <= 1'b1;
 			end else begin
-				sd_addr <= SD_SAMPLES[26:1] + {rom_line[17:0], 3'b000};
+				sd_addr <= SAMPLES_BASE[26:1] + {rom_line[17:0], 3'b000};
 				sd_req <= ~sd_req;
 				sd_busy <= 1'b1;
+				sd_x <= 1'b0;
 			end
 		end
 	end else if (sd_req == sd_ack) begin
-		rom_data <= {sw64(sd_dout), sw64(sd_doutb)};
-		rom_ack <= 1'b1;
+		if (sd_x) begin
+			xl_data <= {sw64(sd_dout), sw64(sd_doutb)};
+			xl_v <= 1'b1;
+		end else begin
+			rom_data <= {sw64(sd_dout), sw64(sd_doutb)};
+			rom_ack <= 1'b1;
+		end
 		sd_busy <= 1'b0;
 	end
 end
@@ -138,6 +176,8 @@ module vh_qs1000_mcu (
 	input               clk,
 	input               rst,
 	input               cen,
+	input               lm,              // Limenko's data window: banks 0-1 from u7, 2-7 from xd_q
+	input       [7:0]   xd_q,
 
 	input               dl_we,
 	input       [16:0]  dl_addr,
@@ -164,8 +204,8 @@ wire        ram_we;
 wire [7:0]  ram_din;
 reg         rom_hi;
 
-// u7: the bank offset bank * 0x7f00 is bank * 0x8000 - bank * 0x100
-wire [17:0] xb = {p3_latch[2:0], 15'd0} - {7'd0, p3_latch[2:0], 8'd0} + {2'd0, x_addr};
+// u7: the bank offset bank * 0x7f00 is bank * 0x8000 - bank * 0x100; Limenko's bank * 0x10000
+wire [17:0] xb = lm ? {1'b0, p3_latch[0], x_addr} : {p3_latch[2:0], 15'd0} - {7'd0, p3_latch[2:0], 8'd0} + {2'd0, x_addr};
 wire [7:0]  u7_qa, u7_qb;
 vh_dpram #(.AW(17), .DW(8), .NBE(1)) u_u7 (
 	.clk(clk), .a_ce(cen | dl_we), .a_we(dl_we), .a_addr(dl_we ? dl_addr : {2'd0, rom_addr[14:0]}),
@@ -181,7 +221,7 @@ vh_dpram #(.AW(8), .DW(8), .NBE(1)) u_iram (
 
 reg [7:0] xram [0:255];
 reg [7:0] xram_q;
-reg       x_lo;
+reg       x_lo, x_sd;
 always @(posedge clk) begin
 	if (cen) begin
 		rom_hi <= rom_addr[15];
@@ -189,8 +229,9 @@ always @(posedge clk) begin
 	end
 	xram_q <= xram[x_addr[7:0]];
 	x_lo <= x_addr[15:8] == 8'd0;
+	x_sd <= lm && p3_latch[2:1] != 2'd0;
 end
-assign x_din = x_lo ? xram_q : u7_qb;
+assign x_din = x_lo ? xram_q : x_sd ? xd_q : u7_qb;
 
 jt8052 u_mcu (
 	.rst(rst), .clk(clk), .cen(cen),

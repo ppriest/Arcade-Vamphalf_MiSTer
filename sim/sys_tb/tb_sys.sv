@@ -186,10 +186,10 @@ vh_ymoki u_ymoki (
 );
 
 vh_qs1000 u_snd (
-	.clk(clk), .rst(rst | ~snd_qs),
+	.clk(clk), .rst(rst | ~snd_qs), .lm(1'b0),
 	.dl_we(snd_dl_we | (ioctl_download && ioctl_wr && ioctl_addr[26:17] == SD_SNDCPU[26:17])),
 	.dl_addr(snd_dl_we ? snd_dl_addr : ioctl_addr[16:0]), .dl_data(snd_dl_we ? snd_dl_data : ioctl_dout),
-	.latch_wr(snd_latch_wr), .latch_d(snd_latch), .bal_pcb(bal_pcb),
+	.latch_wr(snd_latch_wr), .latch_d(snd_latch), .bal_pcb(bal_pcb), .loop_pcb(1'b0),
 	.sd_addr(qs_addr), .sd_req(qs_req), .sd_ack(m1_ack), .sd_dout(m1_dout), .sd_doutb(m1_doutb),
 	.out_l(), .out_r(),
 	.dbg_drops(snd_drops), .dbg_stalls(snd_stalls)

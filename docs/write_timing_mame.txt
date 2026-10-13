@@ -120,3 +120,166 @@ What it means for the sprite-list latch (references/video_write_sweep.md section
            line 240..244. play: palette 110.6, spr_used 3344.6, all in vblank; first line 240, last line 240..247.
   The last dword of band 15 (0x40007ffc) is never written (last15: no writes); the last address written varies per frame
   (0x40001024 .. 0x40007c34), so part of the list is left as it was. The copy for aoh starts at line 250 (vh_video).
+
+--- Limenko Power System 2 (limenko.cpp 96962b96c89, MAME 0.289; Phase 8) ---
+  attract: python scripts/write_timing.py <set> --skip 600 --frames 1800
+  play:    python scripts/write_timing.py <set> --coin 600 --skip 1500 --frames 1800 --tag _play
+  The screen has no raw timing (set_refresh_hz 60, set_vblank_time 0, 384 x 240): the frame is 240 lines,
+  line 0 is the vblank interrupt (irq0_line_hold), so "vblank start 0 (0 lines of vblank)" is the interrupt
+  and the strip runs from it. Regions: scripts/mame/regions.json "bases" "limenko". spr_cmd is the
+  sprite-draw command (0x8003e000). Closing snapshots (debug/lm_census/snap_play/) show play in every set;
+  spotty's play run waits on "press HOLD and CHANGE" (its play inputs are not driven).
+
+dynabomb: 240 lines, vblank start 0 (0 lines of vblank), 1800 frames
+  region      /frame  +0..1 vblank +0..23  from vblank start, 8 lines a column
+  fgvram       167.5  14.9%   0.0%  56.3%  |3111110......                 |
+  mdvram        17.9  14.3%   0.0% 100.0%  |63                            |
+  bgvram       169.4  68.5%   0.0%  94.6%  |80....0.    ..                |
+  palette       82.6   8.2%   0.0%  99.0%  |431.  ...                     |
+  spr_b0       263.5  30.5%   0.0%  90.8%  |800.  00     .                |
+  spr_b1       263.6  30.3%   0.0%  91.2%  |800.  00.                     |
+  vreg0          1.0   0.1%   0.0%  91.1%  |700.   0.    .                |
+  vscroll        6.0   0.0%   0.0%  91.1%  |700.   0.    .                |
+  spr_cmd        1.0 100.0%   0.0% 100.0%  |#                             |
+
+dynabomb_play (coin at frame 600): 240 lines, vblank start 0 (0 lines of vblank), 1800 frames
+  region      /frame  +0..1 vblank +0..23  from vblank start, 8 lines a column
+  fgvram         9.1   9.4%   0.0% 100.0%  |#                             |
+  mdvram         9.9   0.0%   0.0%  91.9%  |26 0                          |
+  bgvram        14.2  14.0%   0.0%  94.4%  |3600                          |
+  palette       50.1   4.0%   0.0%  96.5%  |540......                     |
+  spr_b0       283.4   4.0%   0.0% 100.0%  |#0.                           |
+  spr_b1       283.6   4.0%   0.0%  99.8%  |#0. .   .                     |
+  vreg0          1.2  17.0%   0.0%  99.9%  |#00 .   .                     |
+  vscroll        6.0   0.0%   0.0%  99.9%  |#00 .   .                     |
+  spr_cmd        1.0 100.0%   0.0% 100.0%  |#                             |
+
+legendoh: 240 lines, vblank start 0 (0 lines of vblank), 1800 frames
+  region      /frame  +0..1 vblank +0..23  from vblank start, 8 lines a column
+  fgvram        21.4   0.0%   0.0%   0.0%  |   0521.                      |
+  mdvram        21.4   0.0%   0.0%  39.7%  |  34  1                       |
+  bgvram        21.4   0.0%   0.0%  85.0%  |251  00                       |
+  palette       14.2   0.0%   0.0%  97.0%  |  #     00                    |
+  spr_b0       260.7 100.0%   0.0% 100.0%  |#                             |
+  spr_b1       260.7 100.0%   0.0% 100.0%  |#                             |
+  vreg0          2.0 100.0%   0.0% 100.0%  |#                             |
+  vscroll        6.0 100.0%   0.0% 100.0%  |#                             |
+  spr_cmd        1.0 100.0%   0.0% 100.0%  |#                             |
+
+legendoh_play (coin at frame 600): 240 lines, vblank start 0 (0 lines of vblank), 1800 frames
+  region      /frame  +0..1 vblank +0..23  from vblank start, 8 lines a column
+  fgvram         7.1   0.0%   0.0%   0.0%  |   131 11                     |
+  mdvram         7.1   0.0%   0.0%  38.9%  | .32  11                      |
+  bgvram         7.1   0.0%   0.0%  63.7%  |23   21                       |
+  palette       11.1   0.0%   0.0%  80.4%  | 251                          |
+  spr_b0       288.4 100.0%   0.0% 100.0%  |#                             |
+  spr_b1       287.9 100.0%   0.0% 100.0%  |#                             |
+  vreg0          2.0  50.0%   0.0% 100.0%  |#                             |
+  vscroll        6.0   0.4%   0.0% 100.0%  |#                             |
+  spr_cmd        1.0 100.0%   0.0% 100.0%  |#                             |
+
+sb2003: 240 lines, vblank start 0 (0 lines of vblank), 1800 frames
+  region      /frame  +0..1 vblank +0..23  from vblank start, 8 lines a column
+  mdvram        85.6   0.6%   0.0% 100.0%  |# 0                           |
+  bgvram         2.4   0.0%   0.0%  66.7%  |  63                          |
+  palette       15.6  37.1%   0.0%  95.7%  |# .0                          |
+  spr_b0        32.6   0.0%   0.0%  99.2%  |711..                         |
+  spr_b1        32.6   0.0%   0.0%  99.4%  |711.                          |
+  vreg0          1.0   0.0%   0.0%  99.1%  |800..                         |
+  vscroll        6.0   0.0%   0.0%  99.2%  |800..                         |
+  spr_cmd        1.0 100.0%   0.0% 100.0%  |#                             |
+
+sb2003_play (coin at frame 600): 240 lines, vblank start 0 (0 lines of vblank), 1800 frames
+  region      /frame  +0..1 vblank +0..23  from vblank start, 8 lines a column
+  mdvram         1.6   0.0%   0.0%  93.3%  |  #0                          |
+  bgvram         1.6   0.0%   0.0%  50.0%  |  55                          |
+  palette       56.7   8.7%   0.0%  99.0%  |6200                          |
+  spr_b0        66.9   0.0%   0.0%  76.8%  |3222.                         |
+  spr_b1        67.1   0.0%   0.0%  76.7%  |3222.                         |
+  vreg0          1.0   0.0%   0.0%  80.5%  |32110                         |
+  vscroll        6.0   0.0%   0.0%  80.5%  |32110                         |
+  spr_cmd        1.0 100.0%   0.0% 100.0%  |#                             |
+
+sb2003a: 240 lines, vblank start 0 (0 lines of vblank), 1800 frames
+  region      /frame  +0..1 vblank +0..23  from vblank start, 8 lines a column
+  mdvram        85.6   0.6%   0.0% 100.0%  |# 0                           |
+  bgvram         2.4   0.0%   0.0%  66.7%  |  63                          |
+  palette       15.6  37.1%   0.0%  95.7%  |# .0                          |
+  spr_b0        32.6   0.0%   0.0%  99.2%  |711..                         |
+  spr_b1        32.6   0.0%   0.0%  99.4%  |711.                          |
+  vreg0          1.0   0.0%   0.0%  99.1%  |800..                         |
+  vscroll        6.0   0.0%   0.0%  99.2%  |800..                         |
+  spr_cmd        1.0 100.0%   0.0% 100.0%  |#                             |
+
+sb2003a_play (coin at frame 600): 240 lines, vblank start 0 (0 lines of vblank), 1800 frames
+  region      /frame  +0..1 vblank +0..23  from vblank start, 8 lines a column
+  mdvram         1.6   0.0%   0.0%  93.3%  |  #0                          |
+  bgvram         1.6   0.0%   0.0%  50.0%  |  55                          |
+  palette       56.7   8.7%   0.0%  99.0%  |6200                          |
+  spr_b0        66.9   0.0%   0.0%  76.8%  |3222.                         |
+  spr_b1        67.1   0.0%   0.0%  76.7%  |3222.                         |
+  vreg0          1.0   0.0%   0.0%  80.5%  |32110                         |
+  vscroll        6.0   0.0%   0.0%  80.5%  |32110                         |
+  spr_cmd        1.0 100.0%   0.0% 100.0%  |#                             |
+
+hrthouse: 240 lines, vblank start 0 (0 lines of vblank), 1800 frames
+  region      /frame  +0..1 vblank +0..23  from vblank start, 8 lines a column
+  fgvram         4.0   0.0%   0.0% 100.0%  |82                            |
+  palette       94.9   0.0%   0.0%  98.5%  |4410                          |
+  spr_b0       304.4   0.0%   0.0%  95.2%  | 530                          |
+  spr_b1       304.5   0.0%   0.0%  95.3%  | 630                          |
+  vreg0          1.0   0.0%   0.0%  95.3%  | 530                          |
+  vscroll        6.0   0.0%   0.0%  95.3%  | 530                          |
+  spr_cmd        1.0 100.0%   0.0% 100.0%  |#                             |
+
+hrthouse_play (coin at frame 600): 240 lines, vblank start 0 (0 lines of vblank), 1800 frames
+  region      /frame  +0..1 vblank +0..23  from vblank start, 8 lines a column
+  fgvram        13.4   0.0%   0.0% 100.0%  |#0                            |
+  mdvram         1.6   0.0%   0.0% 100.0%  |#                             |
+  palette       74.3   0.0%   0.0%  98.8%  |5300                          |
+  spr_b0       299.7   0.0%   0.0%  95.6%  |1520.0                        |
+  spr_b1       299.8   0.0%   0.0%  95.9%  |2420.0                        |
+  vreg0          1.0   0.0%   0.0%  95.8%  |0620.0                        |
+  vscroll        6.0   0.0%   0.0%  95.8%  |0620.0                        |
+  spr_cmd        1.0 100.0%   0.0% 100.0%  |#                             |
+
+spotty: 240 lines, vblank start 0 (0 lines of vblank), 1800 frames
+  region      /frame  +0..1 vblank +0..23  from vblank start, 8 lines a column
+  fgvram        19.0  24.5%   0.0% 100.0%  |#                             |
+  mdvram        20.6   3.2%   0.0% 100.0%  |63                            |
+  bgvram        28.3  18.4%   0.0%  97.3%  |36000.                        |
+  palette        2.8  28.2%   0.0% 100.0%  |81                            |
+  spr_b0       303.9  31.5%   0.0% 100.0%  |#..                           |
+  spr_b1       303.9  31.3%   0.0%  99.8%  |# .  .                        |
+  vreg0          1.0   6.9%   0.0%  99.9%  |#..  .                        |
+  vscroll        6.0   0.0%   0.0%  99.9%  |#..  .                        |
+  spr_cmd        1.0 100.0%   0.0% 100.0%  |#                             |
+
+spotty_play (coin at frame 600): 240 lines, vblank start 0 (0 lines of vblank), 1800 frames
+  region      /frame  +0..1 vblank +0..23  from vblank start, 8 lines a column
+  spr_b0       307.8  59.6%   0.0% 100.0%  |#                             |
+  spr_b1       308.0  58.8%   0.0% 100.0%  |#                             |
+  vreg0          1.0   0.0%   0.0% 100.0%  |#                             |
+  vscroll        6.0   0.0%   0.0% 100.0%  |#                             |
+  spr_cmd        1.0 100.0%   0.0% 100.0%  |#                             |
+
+Summary
+- Every set: one draw command a frame, on line 0 after the interrupt, before any other video write of the
+  frame. Sprite RAM, video registers, palette and VRAM are written after it. The last write of any region
+  (99% / last line): dynabomb attract 58 / 106, play 59 / 69; legendoh 72 / 72, play 68 / 68; sb2003 27 / 32,
+  play 32 / 35; hrthouse 29 / 30, play 43 / 46; spotty 36 / 46, play 2 / 7. Nothing later in the frame.
+- legendoh writes its sprite list and video registers on lines 0..2, the VRAM and palette up to line 72.
+- MAME draws the sprites at the command into its 512 x 512 bitmap and the screen update at the next
+  interrupt shows that bitmap: the picture of a frame is the list drawn at that frame's command, and the
+  tilemaps, scroll and palette as written after it.
+- Which bank is written after a command: scripts/lm_census.py (docs/lm_census_mame.txt).
+
+Limenko: CPU reads of the video RAMs, and the largest frame's writes (for step 3's tilemap buffering)
+- Reads (scripts/mame/read_count.lua; attract frames 300-2100, play frames 1200-3000 after a coin at 600): no set
+  reads fg, md or bg VRAM, sprite RAM or the video registers. The palette is read by sb2003 in play (281,600 reads,
+  156 a frame) and by hrthouse (839,168, 466 a frame).
+- Writes per frame (scripts/mame/write_max.lua, frames 1-3600, attract / play): the largest frame, all of fg, md,
+  bg VRAM and the palette: dynabomb 80,736 / 29,632, sb2003 26,657 / 26,657, legendoh 34,176 / 38,562, hrthouse
+  31,335 / 31,335, spotty 26,696 / 26,696. Frames over 256 writes: 769, 246, 635, 718, 451, 447, 144, 144, 31,
+  13; over 8,192: 8, 9, 1, 1, 10, 8, 1, 1, 17, 8. The large frames rewrite whole layers (each layer's largest
+  frame is 8,192 writes or more in every set).

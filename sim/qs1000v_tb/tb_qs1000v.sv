@@ -7,6 +7,7 @@ module tb_qs1000v (
 	input       [7:0]  wr_data,
 	input              tick,
 	input              bal_pcb,
+	input              loop_pcb,
 	output             rom_req,
 	output      [19:0] rom_line,
 	input              rom_ack,

@@ -1,0 +1,3 @@
+`verilator_config
+// main.cpp loads the graphics straight into the array
+public_flat_rw -module "tb_lm_video" -var "gfx"

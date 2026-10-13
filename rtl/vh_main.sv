@@ -201,6 +201,7 @@ wire        g_bram;                       // finalgdr's backup RAM window (decod
 
 vh_cpumem #(.ROM_BASE(SD_MAINCPU), .WRAM_BASE(SD_WRAM), .SPRHI_BASE(SD_SPRHI), .PRGLO_BASE(SD_PRGLO), .AOHPRG_BASE(SD_AOHPRG)) u_mem (
 	.clk(clk), .prst(prst), .rst(rst), .prg2(prg2), .aoh(f_ao), .aoh_sys(ao_sys), .aoh_p12(ao_p12),
+	.lm(1'b0), .lm_xram(1'b0), .pal_wait(1'b0), .x_we(), .x_be(), .x_addr(), .x_wd(), .x_rd(32'd0), .lm_cmd(),
 	.bus_req(bus_req), .bus_wr(bus_wr), .bus_io(bus_io), .bus_addr(bus_addr),
 	.bus_be(bus_be), .bus_wdata(bus_wdata), .bus_ack(bus_ack), .bus_rdata(bus_rdata), .la_req(la_req), .la_addr(la_addr),
 	.if_req(if_req), .if_addr(if_addr), .if_ack(if_ack), .if_data(if_data),

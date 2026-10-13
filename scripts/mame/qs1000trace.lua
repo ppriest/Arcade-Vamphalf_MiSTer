@@ -1,4 +1,5 @@
--- Per-instruction and per-access trace of the QS1000's 8052 (device :qs1000:cpu), from reset.
+-- Per-instruction and per-access trace of the QS1000's 8052 (device :qs1000:cpu), or of the 8051 named by
+-- CORE_CPU (spotty's :audiocpu), from reset.
 -- Driven by scripts/mame_qs1000_trace.py (MAME must run with -debug; the debugger's
 -- instruction hook is what this relies on; see docs/QS1000_TRACE_FORMAT.md).
 --
@@ -6,6 +7,7 @@
 --   CORE_TAG      file prefix (set name)
 --   CORE_TRACE_N  stop after about this many 8052 instructions (Python trims to exactly N)
 --   CORE_FRAMES   backstop: stop at this frame regardless
+--   CORE_COIN     frame to press Coin 1 at for CORE_HOLD frames (default 6); 0: none
 --   CORE_LATCH    I/O-space offset of the main CPU's sound-latch write (misncrft 0x100,
 --                 wivernwg 0x1500)
 --
@@ -19,9 +21,13 @@ local TAG    = os.getenv("CORE_TAG") or "trace"
 local N      = tonumber(os.getenv("CORE_TRACE_N") or "500000")
 local FRAMES = tonumber(os.getenv("CORE_FRAMES") or "100000")
 local LATCH  = tonumber(os.getenv("CORE_LATCH") or "0x100")
+local LSHIFT = tonumber(os.getenv("CORE_LATCH_SHIFT") or "0")
+local COIN   = tonumber(os.getenv("CORE_COIN") or "0")
+local HOLD   = tonumber(os.getenv("CORE_HOLD") or "6")   -- the latch byte's bit position (Limenko 16)
 local mach   = manager.machine
 local dbg    = mach.debugger
-local cpu    = mach.devices[":qs1000:cpu"]
+local CPU    = os.getenv("CORE_CPU") or ":qs1000:cpu"
+local cpu    = mach.devices[CPU]
 local mcpu   = mach.devices[":maincpu"]
 local path   = string.format("%s/%s_q.raw", OUT, TAG)
 
@@ -30,7 +36,7 @@ dbg.visible_cpu = cpu
 local act = 'tracelog "I %04X %02X %02X %02X %04X %02X %02X %02X %02X %02X %02X %02X %02X ' ..
             '%02X %02X %02X %02X %02X %02X %02X %02X %02X ",pc,a,psw,sp,dptr,r0,r1,r2,r3,r4,r5,r6,r7,' ..
             'b,ie,ip,tcon,tmod,tl0,th0,tl1,th1'
-dbg:command(string.format("trace %s,:qs1000:cpu,noloop,{%s}", path, act))
+dbg:command(string.format("trace %s,%s,noloop,{%s}", path, CPU, act))
 dbg:command("go")
 
 local done, err = false, nil
@@ -89,14 +95,20 @@ subs[#subs + 1] = ios:install_write_tap(0, ios.address_mask, "qlatch", function(
     if done or mach:side_effects_disabled() then return data end
     if offset == LATCH then
         nlatch = nlatch + 1
-        dbg:command(string.format('tracelog "L %%02X %%08X\n",%#x,%#x', data & 0xff, offset))
+        dbg:command(string.format('tracelog "L %%02X %%08X\n",%#x,%#x', (data >> LSHIFT) & 0xff, offset))
     end
     return data
 end)
 
+local coin
+for _, port in pairs(mach.ioport.ports) do
+    if port.fields["Coin 1"] then coin = port.fields["Coin 1"] end
+end
+
 subs[#subs + 1] = emu.add_machine_frame_notifier(function()
     local fr = mach.screens[":screen"]:frame_number()
     if done then return end
+    if coin and COIN > 0 then coin:set_value((fr >= COIN and fr < COIN + HOLD) and 1 or 0) end
     dbg:command(string.format('tracelog "# frame %%d\n",%d', fr))
     count_instr()
     if ninstr > N or fr >= FRAMES then finish() end

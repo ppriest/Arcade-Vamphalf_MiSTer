@@ -27,7 +27,8 @@ module jt8052(
     output            x_wr,
     output            x_acc,
     output            p3_we,     // [VH] P3 was written at the last enable (the QS1000 latch acknowledge)
-    output     [ 7:0] p3_latch   // [VH] the P3 SFR as written
+    output     [ 7:0] p3_latch,  // [VH] the P3 SFR as written
+    output            p1_we      // [VH] P1 was written at the last enable (spotty's port latch)
 );
 
 wire [ 7:0] ir, a, b, psw, sp, sfr_dout, sfr_addr, sfr_din;
@@ -155,13 +156,17 @@ jt8052_regs u_regs(
     .cond        ( cond        )
 );
 
-// [VH] high for the enable period after a write to P3, registered so that its user is not on the ALU's path
-reg p3_wr;
+// [VH] high for the enable period after a write to P3 (P1), registered so that its user is not on the ALU's path
+reg p3_wr, p1_wr;
 always @(posedge clk) begin
-    if (rst) p3_wr <= 1'b0;
-    else if (cen) p3_wr <= sfr_we && sfr_addr == 8'hb0;
+    if (rst) begin p3_wr <= 1'b0; p1_wr <= 1'b0; end
+    else if (cen) begin
+        p3_wr <= sfr_we && sfr_addr == 8'hb0;
+        p1_wr <= sfr_we && sfr_addr == 8'h90;
+    end
 end
 assign p3_we = p3_wr;
+assign p1_we = p1_wr;
 
 jt8052_periph u_periph(
     .rst             ( rst             ),

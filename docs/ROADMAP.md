@@ -157,6 +157,7 @@ which `scripts/build_mra.py` reads.
 | Sprite RAM 64 KB, palette 64 KB | BRAM in `vh_video` | read by the line engine every line |
 | E1 internal RAM 4 KB at 0xc0000000 | BRAM in `vh_cpumem` | zero-wait on the chip; about a quarter of Wivern Wings' fetches |
 | DDR3 | the HDMI rotator; the ROM image at load time (fast load: `rtl/memory/vh_rom_loader.sv` copies it to SDRAM with the game in reset) | no run-time game data |
+| DDR3, `Limenko` revision | the sprite frame buffer during play: two 384 x 240 x 16-bit frames, drawn over one frame, swapped at the interrupt (Phase 8) | the board's own double-buffered frame (two IS41C16256); two frames in BRAM need 252 M10K or more with about 170 free; on SDRAM the up to 258,624 single-word writes a frame exceed the frame. The user's choice over a per-line renderer |
 
 Ports, fixed priority: 0 the sprite rows (a line deadline), 1 the sound board (Phase 3), 2 the CPU's
 line fills and buffered writes, and the ROM download.
@@ -294,7 +295,7 @@ for an unrelated write buffer, waits for the line's prefetch when it is in fligh
 execute (`la_req`) hits in one clock; a two-access job issues its second access as the first is acked.
 Conformance 104 of 104 runs; MAME PC traces as `e1_cpu` on all 14 sets (three differ from MAME at the same
 instruction with either CPU). Release builds, seed 3: `4f1ed2e` +0.778 ns, `5dab2e1` +0.053 ns at `clk_sys`, 467 of
-553 RAM blocks (seed 1 of `4f1ed2e` missed the HDMI clock by 11 ps). Not yet on the board. In play (`sim/sys_tb
+553 RAM blocks (seed 1 of `4f1ed2e` missed the HDMI clock by 11 ps); `5c4af03` +0.649 ns, 34,988 ALMs; `8f1f21c` +1.708 ns, 32,580 ALMs (the register-write queue and operand forwarding changes from Arcade-Eolith_MiSTer, where its LESSONS_LEARNED, Timing closure, `[Eolith]`, has the mechanism; every check above unchanged). In play (`sim/sys_tb
 +prof`, 1300 frames, coin at 300), clocks per instruction while busy:
 
 | | e1_cpu | step 1 | 2 | 3 | 4 | `5dab2e1` | frames without idle, e1_cpu -> `5dab2e1` |
@@ -310,6 +311,83 @@ What is left is memory. Every set measured copies 32 KB of work RAM to sprite RA
 first (the clock moved into waiting for the prefetch), two prefetch buffers (demand misses waited behind them:
 slower on all three sets). Next: step 5 on the board (the probe revision needs timing: -0.222 ns at `700d599`);
 faster port-2 fills would need `sdram.sv`.
+
+**Phase 8: Limenko Power System 2, a second `.rbf`.** Asked for by the user. MAME `limenko.cpp` (`96962b96c89`):
+Dynamite Bomber (`dynabomb`), Legend of Heroes (`legendoh`), Super Bubble 2003 (`sb2003`, `sb2003a`), To Heart House
+(`hrthouse`, `MACHINE_IMPERFECT_GRAPHICS`) and Spotty (`spotty`, Prince Co., "only uses the same graphics chip"). The five
+parent sets are in `roms/`. Approved by the user with all five in scope. Step 1 done (below); the user chose the
+DDR3 frame buffer.
+
+- Shared with this core: the E1-32XN at 80 MHz (20 MHz x 4, as `aoh`), `e1_pipe` and `vh_cpumem`; the QS1000 (24 MHz,
+  the 8052 with its P3-banked data window, the voice engine); the 93C46 EEPROM; the vblank interrupt
+  (`irq0_line_hold`). Spotty has instead an AT89C4051 (an 8051, 4 MHz) driving one M6295: jt8052 and jt6295 are in the
+  core.
+- Different: the memory map (main RAM 2 MB at 0, program ROM 2 MB at 0xffe00000, data ROM 4 MB at 0x40000000; at
+  0x80000000 three tilemap RAMs of 32 KB, sprite RAM 8 KB in two banks, palette 8 KB of xBGR555, video registers at
+  0x8001ffec, the sprite-draw command at 0x8003e000), the I/O map (inputs at 0x0000, 0x0200, 0x0400 in bits 31:16, the
+  EEPROM at 0x1200, the sound latch at 0x1400 bits 23:16) and the video chip (`SYS L2D_HYP`).
+- Video: three 8x8 8bpp tilemaps (128 x 64 tiles, x and y scroll and an enable per layer from the video registers;
+  bg opaque, md and fg with pen 0 transparent) and bitmap sprites (8 to 64 pixels wide and high in steps of 8, 8bpp,
+  flip x and y, the code a byte offset / 64 into the graphics ROM, two priorities: below fg or above all), up to 1024 a
+  frame. A CPU write to 0x8003e000 swaps the sprite-RAM banks and draws the bank now selected into a 512 x 512 frame,
+  shown until the next command. The main board has two 256K x 16 DRAMs (IS41C16256, 512 KB each, one 512 x 512 x
+  16-bit frame) beside the video chip: hardware evidence for a double-buffered sprite frame buffer.
+- Step 1 (`docs/lm_census_mame.txt`, `docs/write_timing_mame.txt`; attract and play, 1800 frames each, all six sets):
+  one draw command in every frame, on line 0 after the interrupt, then the sprite list, registers, palette and VRAM
+  written by line 106 at the latest (dynabomb attract; 72 or earlier in the others). Worst line 1536 bytes of sprite
+  rows (sb2003); most sprites on a line 59 (sb2003 play); worst command 266 sprites, 258,624 pixels drawn. Five sets
+  rewrite the bank MAME has just drawn from line 0..8 after the command, so either design copies the list (1026
+  dwords at the largest count seen, hrthouse's 512) before the first such write.
+- Sprite buffer options (the user chose DDR3; memory plan), M10K counts estimated from the Vamphalf fit's per-module figures (about 385 of 553 used
+  without sprite buffering, the three tilemap RAMs 96 of them):
+  - Per line, from the list copied at the command (MAME's picture: one list per frame, drawn whole). About 10 M10K.
+    Worst line: 1536 bytes of sprite rows plus 1152 of tile rows from SDRAM, an estimated 2500-3000 of 3584 clocks
+    from `sdram.sv`'s state counts (not measured); the CPU gets the rest.
+  - Frame buffer in BRAM: two 384 x 240 x 13-bit frames need 252 M10K or more; about 170 are free. Does not fit.
+  - Frame buffer in SDRAM: up to 258,624 single-word writes a frame at about 8 clocks each on `sdram.sv` exceeds
+    the 946,000-clock frame. Does not fit without a burst-write controller.
+  - Frame buffer in DDR3 (the board's structure, drawn over the frame): the sprite rows' worst-frame SDRAM load
+    averages about 1000 bytes a line instead of 1536 at the peak line; adds a DDR3 writer, a scan-out prefetch and a
+    clear. The Limenko games are horizontal, so the DDR3 port is otherwise idle during play.
+- Found for step 3: the game's VRAM, scroll and palette writes run to line 106 after the interrupt; MAME shows them
+  all at the next interrupt, a raster with 24 blank lines shows part of them mid-frame. The user's choice: live VRAM
+  and palette (no back copies), the scroll registers and layer enables latched at the interrupt (HACKS.md).
+- Steps 3 and 4, done in simulation: `rtl/video/lm_video.sv` (the tile engine, drawing up to three lines ahead into
+  four slots per layer), `rtl/video/lm_sprites.sv` and `rtl/video/lm_fb.sv` (the sprite draw into the DDR3 frame
+  buffer, swapped at the interrupt). `scripts/lm_render_model.py` is pixel-identical to MAME on all 210 captured
+  frames (`scripts/lm_capture.py`: five sets, attract and play, 21 frames each); `sim/lm_video_tb` is identical to
+  the model on all 210, tiles and sprites. `sim/lm_tb` (CPU, real SDRAM controller, DDR3 model), 1511 frames:
+  dynabomb's frames 1500-1510 pixel-identical to MAME's 1495-1505; legendoh's to 1497-1507 except lines 0-12 (the
+  live palette and VRAM, HACKS.md); no late tile line, sprite draw or sprite line. The sprite draw uses the graphics
+  port only while the tile engine is idle: before that legendoh overran 16,086 tile lines.
+- Step 6, started: build `b22b9e5` (spotty's sound in): 32,319 ALMs, 410 of 553 M10K, clk_sys setup slack +1.246 ns. Flip Screen on the OSD (the chip has no flip register): `sim/lm_tb` dynabomb frames 700, 1500 and 1501 flipped equal the unflipped frames turned 180 degrees, every pixel. The one DIP per set ("Sound Enable", spotty's "Demo Sounds", IN2 bit 29) from the `.mra` `<switches>`. Stereo Mix hidden on spotty. Build `5f20b8e` with these: 32,197 ALMs, 410 M10K, +1.715 ns; deployed as `Limenko_30000001.rbf` with the six `.mra` files (`releases/`). On the board (`Limenko_stp` `a2ded84`, the zips copied to `/media/fat/games/mame/`): dynabomb shows its warning, attract and title screens (`debug/hw/lm/dynabomb_zip_1.png` to `_3.png`). The first launches were black because the zips were missing (LESSONS_LEARNED). The frame buffer's DDR3 reads are held from a reset until the copy starts (`0e5083c`; `sim/lm_top_tb +race=1` hangs the copy without it). Button names from MAME play (no manual found; `scripts/build_mra_lm.py`); legendoh's buttons 3 and 4 are not identified. The QS1000 sets were near silent on the board: the games set the chip's volume register far below misncrft's, as quiet in MAME. "Volume Boost" in the `.mra` `<switches>` (6 dB a step, defaults per set from their rendered levels; HACKS.md). Build `18f61b5`: 32,656 ALMs, 414 M10K, +1.250 ns; deployed as `Limenko_30000008.rbf` and released as `Arcade-Limenko_20261013.rbf`. On the board (the user): dynabomb, sb2003 and hrthouse play with sound at the defaults, the boost judged good; legendoh, sb2003a and spotty play too (`debug/hw/lm/legendoh_18f61b5.png`, `debug/hw/lm/spotty_18f61b5.png`): all six sets.
+- Step 5, in sim: spotty's sound board, `rtl/sound/lm_spotty.sv` (jt8052 as the AT89C4051, the board's P1/P3 latch, jt6295 on SDRAM port 1). `sim/spotty_tb` against MAME's AT89C4051 trace: 2,000,000 instructions of attract (6 sound commands) and 1,300,000 with a coin at frame 150 (17 commands, 33 M6295 writes), 0 mismatches in state, M6295 writes and status reads. `sim/lm_tb` spotty, coin at 150, 420 frames: 17 commands, 33 M6295 writes with MAME's values, 274,762 sample bytes through SDRAM equal to the image; the commands come 1-3 frames apart from MAME's (main-CPU timing), so channel choices differ.
+- Step 2, done (spotty's sound board is step 5): the `Limenko` and `Limenko_stp` revisions (`Limenko.sv`, `files_lm.qip`), `rtl/lm_main.sv`,
+  `rtl/video/lm_video.sv` (RAMs, registers, raster; no picture yet), `vh_cpumem` and `vh_qs1000` in Limenko mode,
+  `scripts/build_mra_lm.py` (six images identical to ROM_START; dynabomb's and spotty's regions identical to MAME's).
+  `sim/lm_tb` from reset against MAME's instruction traces: sb2003 agrees for all 1,000,000; dynabomb, legendoh and
+  hrthouse up to the RTL's first vblank interrupt (957,951, 284,101, 268,357); spotty up to 474,527, where MAME takes
+  a timer interrupt the game set for the next TR tick. Over 300 frames every set issues one draw command a frame and
+  sends sound commands; the 93C46 ends identical to MAME's in all five (three write it) and hrthouse's NVRAM is
+  identical. The 8052 (`sim/qs1000_tb -GLM=1`) agrees with MAME for 3,000,000 instructions on dynabomb and sb2003,
+  which read no banked data in that time, and for 14,000,000 on legendoh (101,208 external accesses checked, its
+  bank-2 reads included). In `sim/lm_tb`, legendoh over 900 frames: 1,000 bank-2 reads through SDRAM, each equal
+  to the image. `Limenko` build (`f1a9049`, seed 1, no tile or sprite engines yet): 28,740 ALMs, 377 of 553 M10K,
+  clk_sys setup slack +1.053 ns. Inputs: dynabomb with a coin at frame 1500 changes the same six work-RAM bytes
+  as MAME (the credit count among them, `scripts/mame/share_dump.lua`, `sim/lm_tb +ramdump`); without it, the RTL's
+  2 MB of work RAM at frame 1800 differs from MAME's in 140 bytes.
+- Raster: MAME gives 384 x 240 at 60 Hz and no raw timing; the board has 32, 24 and 20 MHz crystals. Proposed: 32 MHz / 4 =
+  8 MHz pixels on `aoh`'s 512 x 264 raster (59.19 Hz), unverified (HACKS.md).
+- Memory: the largest set, `legendoh`: program 2 MB, data 4 MB, graphics 18 MB, QS1000 samples 4 MB, main RAM 2 MB:
+  30 MB, inside a 32 MB module. Its QS1000 program is 512 KB (eight 64 KB banks; 128 KB on the others): `u7` stays 128 KB
+  of block RAM and the upper banks come from SDRAM, unless the M10K count leaves room for all of it.
+- The second `.rbf`: Quartus revisions `Limenko` and `Limenko_stp` sharing the CPU, memory and sound RTL, with their own
+  top-level options, main glue and video (`lm_main.sv`, `lm_video.sv`); `.mra` files with `<rbf>Limenko</rbf>` from
+  `build_mra.py`; `sim/sys_tb` and a video bench on the Limenko top; `scripts/mame/regions.json` for the driver.
+- Steps, each verified before the next: (1) captures, census and write sweep, the frame-buffer decision (to the user);
+  (2) the revision, memory and I/O maps, EEPROM, inputs, the QS1000 banks: each set against MAME's PC trace from reset;
+  (3) the tilemaps against MAME's frames; (4) the sprites against MAME's frames; (5) Spotty's sound board, if in scope;
+  (6) hardware.
 
 ## Verification strategy
 
@@ -328,6 +406,9 @@ own benches run unchanged on arrival; `.mra` files generated and read back again
    after ~15 minutes to 2 hours is unverified.
 6. **DDR3 / SDRAM size.** Assumed 32 MB SDRAM is enough; the user's memory notes say size for
    128 MB, so more is available.
+7. **Vamphalf release with `892dc77`** (SDRAM_CLK T - 2.0 ns, the default since): the SuperStation One reporter
+   confirmed it cures Age Of Heroes' black screen; Age Of Heroes plays on the DE10-nano with it
+   (`debug/hw/aoh_892dc77.png`). The 20261010 release predates it. Release an updated `.rbf` when the user asks.
 
 ## Next steps
 

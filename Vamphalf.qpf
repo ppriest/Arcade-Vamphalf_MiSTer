@@ -1,4 +1,7 @@
 QUARTUS_VERSION = "17.0"
-# Vamphalf_stp is the instrumented revision (ISSP probes, OSD debug page); Vamphalf the release.
+# Vamphalf_stp is the instrumented revision (ISSP probes, OSD debug page); Vamphalf the release. Limenko and
+# Limenko_stp: the second .rbf (limenko.cpp, ROADMAP Phase 8). The last revision listed is the default.
+PROJECT_REVISION = "Limenko_stp"
+PROJECT_REVISION = "Limenko"
 PROJECT_REVISION = "Vamphalf_stp"
 PROJECT_REVISION = "Vamphalf"

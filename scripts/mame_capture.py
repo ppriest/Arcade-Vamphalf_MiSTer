@@ -60,9 +60,13 @@ def mame_paths():
 
 
 def regions(game=None):
-    """regions.json; the keys of "sets"[game], if any, replace the top-level ones."""
+    """regions.json; the keys of "sets"[game], if any, replace the top-level ones, after
+    those of "bases"[the set's "base"] (a driver other than vamphalf.cpp)."""
     r = json.loads((LUA_DIR / "regions.json").read_text(encoding="utf-8"))
-    r.update(r.pop("sets", {}).get(game, {}))
+    bases = r.pop("bases", {})
+    s = r.pop("sets", {}).get(game, {})
+    r.update(bases.get(s.get("base"), {}))
+    r.update(s)
     return r
 
 

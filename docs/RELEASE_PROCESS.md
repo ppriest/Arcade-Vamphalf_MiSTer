@@ -46,6 +46,9 @@ Steps for a release:
 7. Update `README.md`: History, Supported table, Status, Resource usage.
 
 **Current state:** `Arcade-Vamphalf_20261010.rbf`, release revision at `5c4af03` seed 3, every clock meets timing (worst setup +0.099 ns, hdmi pll; clk_sys +0.649 ns; worst hold +0.183 ns); Age Of Heroes started on the board (its sprite snapshot at line 240, `HACKS.md`); Boong-Ga Boong-Ga started on `5dab2e1`, the same CPU; the other sets not played on the pipelined CPU; released at the user's request; no smoketest script yet (step 2).
+`Arcade-Limenko_20261013.rbf`, release revision `Limenko` at `18f61b5`, default seed, every clock meets timing
+(worst setup +0.475 ns, hdmi pll; clk_sys +1.250 ns; worst hold +0.242 ns); all six sets played on the board
+(the user's reports); released at the user's request.
 
 ## Submitting the core upstream
 

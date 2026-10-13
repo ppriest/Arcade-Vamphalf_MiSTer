@@ -64,6 +64,14 @@ set fields_V {
     {torn_vblanks     221  236 dec}
     {vblanks_written  237  252 dec}
 }
+set fields_A {
+    {sound_latch_writes  0  15 dec}
+    {last_latch         16  23 hex}
+    {in2_bit29          24  24 bit}
+    {qs1000_sdram_reqs  32  47 dec}
+    {audio_l_peak       48  63 dec}
+    {audio_nonzero_clk  64  95 dec}
+}
 set fields_D {
     {fill_bytes_hi   32  63 hex}
     {fill_bytes_lo    0  31 hex}
@@ -135,6 +143,7 @@ if {$want ne ""} {
 # than guesses.
 switch -- $inst_id {
     F       { set fields $fields_F }
+    A       { set fields $fields_A }
     D       { set fields $fields_D }
     T       { set fields $fields_T }
     S       { set fields $fields_S }

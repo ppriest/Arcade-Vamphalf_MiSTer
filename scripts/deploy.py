@@ -184,19 +184,24 @@ RBF_STEM = PROJECT
 RBF_FIRST = 30000001
 
 
-def next_rbf_name(m):
+def rbf_stem(rev):
+    """The .mra's <rbf> for a revision: its name without _stp (Limenko, Limenko_stp -> Limenko)."""
+    return re.sub(r"_stp$", "", rev)
+
+
+def next_rbf_name(m, stem=RBF_STEM):
     if m.dry:
-        return f"{RBF_STEM}_{RBF_FIRST}.rbf"   # a dry run never asks the device
+        return f"{stem}_{RBF_FIRST}.rbf"   # a dry run never asks the device
     listing = m.run(f"ls -1 {REMOTE_CORES} 2>/dev/null; true")
     numbers = [int(n) for n in
-               re.findall(rf"^{RBF_STEM}_(\d+)\.rbf(?:\.held)?$", listing, re.M)
+               re.findall(rf"^{stem}_(\d+)\.rbf(?:\.held)?$", listing, re.M)
                if int(n) >= RBF_FIRST]
-    plain = f"{RBF_STEM}.rbf"
+    plain = f"{stem}.rbf"
     if plain in listing.split():
         print(f"    {plain} -> {plain}.held  (pre-numbering build, moved aside)")
         m.run(f"mv {REMOTE_CORES}/{plain} {REMOTE_CORES}/{plain}.held")
     n = max(numbers) + 1 if numbers else RBF_FIRST
-    return f"{RBF_STEM}_{n}.rbf"
+    return f"{stem}_{n}.rbf"
 
 
 def main():
@@ -208,7 +213,7 @@ def main():
     ap.add_argument("--sta", help="default: build/output_files/<rev>.sta.summary")
     ap.add_argument("--name", default=None,
                     help=f"remote core filename. Default: the next numbered "
-                         f"{RBF_STEM}_NNNNNNNN.rbf on the device (see "
+                         f"<revision>_NNNNNNNN.rbf on the device, _stp dropped (see "
                          "next_rbf_name); the .mra's <rbf> tag must match the "
                          "part before the underscore")
     ap.add_argument("--all", action="store_true",
@@ -251,11 +256,12 @@ def main():
             print("\n--force given; deploying anyway.")
         print(f"\n  core -> {REMOTE_CORES}")
         m.run(f"mkdir -p {REMOTE_CORES}")
-        name = a.name or next_rbf_name(m)
+        name = a.name or next_rbf_name(m, rbf_stem(rev))
         m.put(rbf, f"{REMOTE_CORES}/{name}")
         # machine-wide: which commit this numbered file is, for identity.py
         from identity import record_deploy
-        record_deploy(name, REPO)
+        if not a.dry_run:
+            record_deploy(name, REPO)
 
     # ---- .mra files ----
     if not a.rbf_only:

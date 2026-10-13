@@ -6,7 +6,9 @@
 // output chain. The board is rtl/vh_main.sv (CPU, memory, I/O), rtl/video/vh_video.sv and the sound
 // boards (rtl/qs1000/vh_qs1000.sv, rtl/sound/vh_ymoki.sv).
 //
-// Clocks (rtl/pll): clk_sys 56 MHz for everything, SDRAM included; SDRAM_CLK the same lagging by T - 3 ns (rtl/pll/pll_0002.v).
+// Clocks (rtl/pll): clk_sys 56 MHz for everything, SDRAM included; SDRAM_CLK the same lagging by T - 2 ns (rtl/pll/pll_0002.v:
+// 71 steps of the 560 MHz VCO's 223.2 ps; the MiSTer convention, T - 3 ns, is 67), so the read data is sampled 0.9 ns
+// earlier in its window: a black screen on Age Of Heroes on a SuperStation One, which this cured (the reporter).
 
 module emu
 (
@@ -672,9 +674,10 @@ assign m1_addr = snd_qs ? qs_addr : yo_addr;
 assign m1_req  = snd_qs ? qs_req : yo_req;
 
 vh_qs1000 u_snd (
-	.clk(clk_sys), .rst(core_reset | ~snd_qs),
+	.clk(clk_sys), .rst(core_reset | ~snd_qs), .lm(1'b0),
 	.dl_we(snd_dl), .dl_addr(lb_addr[16:0]), .dl_data(lb_dout),
 	.latch_wr(snd_latch_wr), .latch_d(snd_latch), .bal_pcb(1'b1),     // the PCB recording's balance (MAME_KLUDGES.md, Sound)
+	.loop_pcb(1'b1),                                                  // the recording's looping and key-off fade (the same)
 	.sd_addr(qs_addr), .sd_req(qs_req), .sd_ack(m1_ack), .sd_dout(m1_dout), .sd_doutb(m1_doutb),
 	.out_l(qs_l), .out_r(qs_r),
 	.dbg_drops(), .dbg_stalls()

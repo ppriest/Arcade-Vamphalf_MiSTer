@@ -3,7 +3,8 @@
 // Memories follow the board as MAME has it (qs1000.cpp, vamphalf.cpp):
 //   program   0x0000-0x7fff  u7 image (+rom=<file>, 128 KB, only the first 32 KB is addressable)
 //   external  0x0000-0x00ff  RAM
-//             0x0100-0xffff  u7 bank (P3 latch bits 2:0): u7[(bank*0x7f00 + addr) mod 128 KB]
+//             0x0100-0xffff  u7 bank (P3 latch bits 2:0): u7[(bank*0x7f00 + addr) mod 128 KB]; with LM=1
+//                            (limenko.cpp) u7[bank*0x10000 + addr], +rom up to 512 KB
 //             0x0200-0x0211  also written to the wavetable registers (ignored here; the engine is
 //                            not modelled, the trace compare covers the writes)
 // Internal RAM is 256 bytes in the model; CORE selects which CPU drives it:
@@ -15,7 +16,7 @@
 //           o_ready is low, and main.cpp holds reset until then
 // main.cpp supplies port pins and INT1 from the MAME trace and checks the state after every
 // instruction.
-module tb_qs1000 #(parameter CORE=0) (
+module tb_qs1000 #(parameter CORE=0, parameter LM=0) (
 	input             clk,
 	input             rst,
 	input             int1n,
@@ -61,7 +62,7 @@ module tb_qs1000 #(parameter CORE=0) (
 
 reg  cen = 1'b0;
 reg  [7:0] rom   [0:32767];
-reg  [7:0] u7    [0:131071];
+reg  [7:0] u7    [0:524287];
 reg  [7:0] iram  [0:255];
 reg  [7:0] xram  [0:255];
 reg  [7:0] rom_din = 8'd0, ram_din = 8'd0;
@@ -77,7 +78,7 @@ assign o_cen = cen;
 
 initial begin
 	for (i = 0; i < 32768; i = i + 1) rom[i] = 8'hff;
-	for (i = 0; i < 131072; i = i + 1) u7[i] = 8'hff;
+	for (i = 0; i < 524288; i = i + 1) u7[i] = 8'hff;
 	for (i = 0; i < 256; i = i + 1) begin iram[i] = 8'd0; xram[i] = 8'd0; end
 	if ($value$plusargs("rom=%s", romfile)) $readmemh(romfile, u7);
 	for (i = 0; i < 32768; i = i + 1) rom[i] = u7[i];
@@ -106,7 +107,10 @@ always @(posedge clk) if (cen) begin
 end
 
 assign x_din_c = x_addr < 16'h100 ? xram[x_addr[7:0]] :
-                 u7[(bank * 17'h7f00 + {1'b0, x_addr}) & 17'h1ffff];
+                 LM ? u7[{bank, x_addr}] : u7[(bank * 17'h7f00 + {1'b0, x_addr}) & 17'h1ffff];
+// CORE=2 with LM: banks 2-7 as the board's wrapper presents them, a clock after the address
+reg [7:0] xd_q;
+always @(posedge clk) xd_q <= u7[{bank, x_addr}];
 
 // one event per cen with x_acc; the bench compares it with the trace's X row
 always @(posedge clk) begin
@@ -202,7 +206,7 @@ end
 else begin : g_core
 	// the trace supplies P1 and INT1; P0, P2 and the P3 pins are the module's own constants
 	vh_qs1000_mcu u_snd (
-		.clk, .rst, .cen,
+		.clk, .rst, .cen, .lm(LM != 0), .xd_q(xd_q),
 		.dl_we(!dl_n[17]), .dl_addr(dl_n[16:0]), .dl_data(u7[dl_n[16:0]]),
 		.p1_i, .int1n,
 		.p1_o, .p2_o, .p3_o, .p3_latch(), .p3_we(),

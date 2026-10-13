@@ -855,6 +855,16 @@ pair before the RTL around it.
   449 VRAM bytes and 607 pixels different; the earlier clean result had used matching arguments.
   Write the bench arguments (coin schedule, DIPs, start presses) into the capture's manifest and make
   the comparison script refuse a mismatch.
+- **[Vamphalf] A bench's idle inputs are MAME's defaults, not all ones.** The Limenko bench drove
+  every input port 0xffff. IN2 bit 29 is the "Sound Enable" DIP with 0 = on, so the games ran with
+  sound off and wrote no sound commands in 300 frames; MAME's own reads of IN2 (0xdfffffff, from the
+  instruction trace's bus file) showed the bit. Build the idle value from the driver's PORT_DIPSETTING
+  defaults and active-high fields, and check it against a MAME read of the port.
+- **[Vamphalf] A RAM MAME saves starts as MAME's device fills it.** hrthouse's NVRAM compared against
+  MAME's saved file after 300 frames differed in 444 bytes, every one RTL 0x00 against MAME 0xff:
+  `nvram_device` fills with ones by default (`nvram.cpp`, `DEFAULT_ALL_1`), the block RAM started at
+  zero, and the bytes the game wrote all matched. A game that checks its NVRAM on first boot sees the
+  difference too; fill to the device's default before the `.nvm` load.
 
 ## Timing closure
 
@@ -1317,6 +1327,12 @@ the PC MAME's speed-up handler names, waiting for a flag the vblank handler sets
 
 ## Hardware bring-up (MiSTer / DE10-nano)
 
+- **[Vamphalf] A black screen on a new `.mra`: check its zip is on the board first.** The Limenko
+  revision came up black on both sets launched; the probes showed the CPU looping on its error vector
+  and the first line fill reading zeros, which looked like a broken copy into SDRAM. The zips were not
+  on the MiSTer. Main_MiSTer's `mra_loader.cpp` logs a missing part and sends the image without it,
+  so the core receives the `.mra`'s filler bytes and nothing tells it a part is missing. Before
+  reading probes on a set new to the board: `ls /media/fat/games/mame/<set>.zip`.
 - **The SDRAM pinout has an authoritative in-repo reference.** The `.qsf` does `source sys/sys.tcl`;
   cross-check `output_files/<rev>.pin`. The `.qsf` also *restates* every location assignment after
   the `source` line because the IDE re-saved the project, so a future `sys.tcl` update would be

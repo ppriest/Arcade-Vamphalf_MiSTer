@@ -34,15 +34,6 @@
     "_comment": "I/O address of the flip write (flipscreen_w: flip = data & 1). vamphalf.cpp misncrft_io 0x040, wyvernwg_io 0x0800.",
     "flip_port": "0x40"
   },
-  "sets": {
-    "mrkickera": {"bus_bytes": 4},
-    "aoh": {"bus_bytes": 4, "sweep_regions": {"spr_bands": ["0x40000000", "0x400087ff"], "spr_used": ["0x40000800", "0x40007fff"], "spr_rest": ["0x40008800", "0x4003ffff"]}},
-    "yorijori": {"bus_bytes": 4},
-    "wivernwg": {"bus_bytes": 4, "video": {"flip_port": "0x800"},
-                 "_sweep_regions_comment": "Extra named ranges for write_timing.py. Sprite RAM split: spr_bands = the 17 bands of 0x800 bytes (0x8800); spr_used = bands 1..15, the only bytes draw_sprites reads; spr_rest = past the 17 bands. io_flip taps the I/O space (name prefix io_).",
-  "sweep_regions": {"spr_bands": ["0x40000000", "0x400087ff"], "spr_used": ["0x40000800", "0x40007fff"],
-                                   "spr_rest": ["0x40008800", "0x4003ffff"], "io_flip": ["0x800", "0x800"]}}
-  },
   "inputs": {
     "coin": "Coin 1",
     "start": "1 Player Start",
@@ -52,5 +43,134 @@
     "coin_period": 97,
     "start_period": 211,
     "press_len": 5
+  },
+  "bases": {
+    "limenko": {
+      "_comment": "limenko.cpp (96962b96c89) program_map. videoreg: [0] layer and sprite enables, sprite count bits 25:16; [1] fg, [2] md, [3] bg scroll (y bits 15:0, x 31:16). spr_cmd: a write swaps the sprite banks and draws (spriteram_buffer_w).",
+      "cpu": ":maincpu",
+      "space": "program",
+      "bus_bytes": 4,
+      "big_endian": true,
+      "read": {
+        "mainram": ["0x00000000", "0x001fffff"],
+        "fgvram": ["0x80000000", "0x80007fff"],
+        "mdvram": ["0x80008000", "0x8000ffff"],
+        "bgvram": ["0x80010000", "0x80017fff"],
+        "spriteram": ["0x80018000", "0x80019fff"],
+        "palette": ["0x8001c000", "0x8001dfff"],
+        "videoreg": ["0x8001ffec", "0x8001ffff"]
+      },
+      "wtap": {},
+      "sweep": ["fgvram", "mdvram", "bgvram", "spr_b0", "spr_b1", "palette", "vreg0", "vscroll", "spr_cmd"],
+      "sweep_regions": {
+        "spr_b0": ["0x80018000", "0x80018fff"],
+        "spr_b1": ["0x80019000", "0x80019fff"],
+        "vreg0": ["0x8001ffec", "0x8001ffef"],
+        "vscroll": ["0x8001fff0", "0x8001fffb"],
+        "spr_cmd": ["0x8003e000", "0x8003e003"]
+      },
+      "trace": {
+        "addr_hi": "0xffffffff",
+        "io": [],
+        "vectors": ["0xffffff00", "0xffffffff"],
+        "rom": [["0xffe00000", "0xffffffff"], ["0x40000000", "0x403fffff"]],
+        "ram": [["0x00000000", "0x001fffff"], ["0x80000000", "0x8001ffff"]]
+      },
+      "video": {},
+      "census": {
+        "bitpos": 31
+      },
+      "inputs": {
+        "coin": "Coin 1",
+        "start": "1 Player Start",
+        "hold": "P1 Right",
+        "pulse": "P1 Button 1",
+        "coin_period": 97,
+        "start_period": 211,
+        "press_len": 5
+      }
+    }
+  },
+  "sets": {
+    "mrkickera": {
+      "bus_bytes": 4
+    },
+    "aoh": {
+      "bus_bytes": 4,
+      "sweep_regions": {
+        "spr_bands": ["0x40000000", "0x400087ff"],
+        "spr_used": ["0x40000800", "0x40007fff"],
+        "spr_rest": ["0x40008800", "0x4003ffff"]
+      }
+    },
+    "yorijori": {
+      "bus_bytes": 4
+    },
+    "wivernwg": {
+      "bus_bytes": 4,
+      "video": {
+        "flip_port": "0x800"
+      },
+      "_sweep_regions_comment": "Extra named ranges for write_timing.py. Sprite RAM split: spr_bands = the 17 bands of 0x800 bytes (0x8800); spr_used = bands 1..15, the only bytes draw_sprites reads; spr_rest = past the 17 bands. io_flip taps the I/O space (name prefix io_).",
+      "sweep_regions": {
+        "spr_bands": ["0x40000000", "0x400087ff"],
+        "spr_used": ["0x40000800", "0x40007fff"],
+        "spr_rest": ["0x40008800", "0x4003ffff"],
+        "io_flip": ["0x800", "0x800"]
+      }
+    },
+    "dynabomb": {
+      "base": "limenko"
+    },
+    "legendoh": {
+      "base": "limenko"
+    },
+    "sb2003": {
+      "base": "limenko"
+    },
+    "sb2003a": {
+      "base": "limenko"
+    },
+    "hrthouse": {
+      "base": "limenko",
+      "trace": {
+        "addr_hi": "0xffffffff",
+        "io": [],
+        "vectors": ["0xffffff00", "0xffffffff"],
+        "rom": [["0xffe00000", "0xffffffff"]],
+        "ram": [["0x00000000", "0x001fffff"], ["0x40000000", "0x40000fff"], ["0x80000000", "0x8001ffff"]]
+      },
+      "inputs": {
+        "coin": "Coin 1",
+        "start": "Start / Even",
+        "hold": "",
+        "pulse": "Bet / Double Up",
+        "coin_period": 97,
+        "start_period": 211,
+        "press_len": 5
+      }
+    },
+    "spotty": {
+      "base": "limenko",
+      "trace": {
+        "addr_hi": "0xffffffff",
+        "io": [],
+        "vectors": ["0xffffff00", "0xffffffff"],
+        "rom": [["0xfff00000", "0xffffffff"], ["0x40000000", "0x403fffff"]],
+        "ram": [["0x00000000", "0x001fffff"], ["0x80000000", "0x8001ffff"]]
+      },
+      "census": {
+        "bitpos": 19
+      },
+      "inputs": {
+        "coin": "Coin 1",
+        "start": "1 Player Start",
+        "hold": "",
+        "pulse": "Bet",
+        "coin_period": 97,
+        "start_period": 211,
+        "press_len": 5
+      }
+    }
   }
 }

@@ -14,6 +14,13 @@
 //   anything else reads 0, writes are dropped (0xe000xxxx also pulses xflip_we)
 // aoh (aoh_map, an E1-32XN): work RAM 4 MB, program ROM 4 MB from 0xffc00000 (SDRAM AOHPRG_BASE), internal
 // RAM 8 KB (iram_8k_map), SYSTEM at 0x8021xxxx and P1_P2 at 0x8022xxxx (aoh_sys, aoh_p12)
+// Limenko (lm, limenko.cpp program_map): work RAM 2 MB, program ROM as above (2 MB with prg2), internal RAM
+// 8 KB, and
+//   0x40000000-0x403fffff  data ROM, 4 MB      SDRAM DATA_BASE, through the caches; writes are dropped
+//   0x40000000-0x40003fff  with lm_xram instead: RAM on x_* (hrthouse's NVRAM, spotty's RAM at 0x40002000)
+//   0x80000000-0x8000ffff  fg and md VRAM      spr_*
+//   0x80010000-0x8001ffff  bg VRAM, sprite RAM, palette, RAM, video registers: pal_*
+//   0x8003e000-0x8003ffff  a write pulses lm_cmd (spriteram_buffer_w); reads 0
 //
 // Caches: I 16 KB, D 4 KB, direct-mapped, 16-byte lines filled by one double read. Instruction fetches
 // have their own port (if_*, 8 bytes) so fetch-ahead does not wait behind loads and stores. Stores to
@@ -51,13 +58,17 @@ module vh_cpumem #(
 	parameter [26:0] WRAM_BASE = 27'h1800000,
 	parameter [26:0] SPRHI_BASE = 27'h1a00000,
 	parameter [26:0] PRGLO_BASE = 27'h0700000,
-	parameter [26:0] AOHPRG_BASE = 27'h0300000
+	parameter [26:0] AOHPRG_BASE = 27'h0300000,
+	parameter [26:0] DATA_BASE = 27'h0800000
 ) (
 	input             clk,
 	input             prst,            // power-up only: the port-2 side
 	input             rst,
 	input             prg2,            // a 2 MB program: ROM from 0xffe00000
 	input             aoh,             // aoh_map
+	input             lm,              // Limenko's map
+	input             lm_xram,         // Limenko: RAM at 0x40000000-0x40003fff instead of the data ROM
+	input             pal_wait,        // a write to the pal_* window waits (not acked, not written) while set
 	input      [31:0] aoh_sys,         // aoh's SYSTEM and P1_P2 ports, read at 0x8021xxxx and 0x8022xxxx
 	input      [31:0] aoh_p12,
 
@@ -90,6 +101,13 @@ module vh_cpumem #(
 	output     [13:0] pal_addr,
 	output     [31:0] pal_wd,
 	input      [31:0] pal_rd,
+	// Limenko: the RAM at 0x40000000 (registered read, as the video RAMs), the sprite-draw command
+	output            x_we,
+	output     [3:0]  x_be,
+	output     [11:0] x_addr,
+	output     [31:0] x_wd,
+	input      [31:0] x_rd,
+	output            lm_cmd,
 
 	// I/O: one-clock pulses; io_rdata is sampled in the clock of io_rd
 	output            io_rd,
@@ -140,29 +158,39 @@ endfunction
 wire r_wram = aoh ? bus_addr[31:22] == 10'd0 : bus_addr[31:21] == 11'd0;
 wire r_rom  = rom_at(bus_addr);
 wire r_iram = bus_addr[31:29] == 3'b110;
-wire r_spr  = bus_addr[31:16] == 16'h4000;
-wire r_sprh = bus_addr[31:18] == 14'h1000 && bus_addr[17:16] != 2'd0;
-wire r_pal  = bus_addr[31:16] == 16'h8000;
+wire r_spr  = bus_addr[31:16] == (lm ? 16'h8000 : 16'h4000);
+// the third cached range: sprite RAM above 64 KB, or Limenko's data ROM
+function hi_at(input [31:0] a);
+	hi_at = lm ? !lm_xram && a[31:22] == 10'h100 : a[31:18] == 14'h1000 && a[17:16] != 2'd0;
+endfunction
+function [23:0] ca_of(input w, input r, input [31:0] a);
+	ca_of = w ? {2'b00, a[21:0]} : r ? {2'b01, a[21:0]} : lm ? {2'b10, a[21:0]} : {6'b100000, a[17:0]};
+endfunction
+wire r_hi   = hi_at(bus_addr);
+wire r_sprh = r_hi && !lm;                // written through the caches; the data ROM drops writes
+wire r_pal  = bus_addr[31:16] == (lm ? 16'h8001 : 16'h8000);
+wire r_x    = lm && lm_xram && bus_addr[31:14] == 18'h10000;
 wire r_inp  = aoh && (bus_addr[31:16] == 16'h8021 || bus_addr[31:16] == 16'h8022);
-wire r_sd   = r_wram || r_rom || r_sprh;  // through the caches
-wire [23:0] caddr = r_wram ? {2'b00, bus_addr[21:0]} : r_rom ? {2'b01, bus_addr[21:0]} : {6'b100000, bus_addr[17:0]};
+wire r_sd   = r_wram || r_rom || r_hi;    // through the caches
+wire [23:0] caddr = ca_of(r_wram, r_rom, bus_addr);
 wire        la_wram = aoh ? la_addr[31:22] == 10'd0 : la_addr[31:21] == 11'd0;
 wire        la_rom  = rom_at(la_addr);
-wire        la_sprh = la_addr[31:18] == 14'h1000 && la_addr[17:16] != 2'd0;
-wire [23:0] la_ca   = la_wram ? {2'b00, la_addr[21:0]} : la_rom ? {2'b01, la_addr[21:0]} : {6'b100000, la_addr[17:0]};
+wire        la_hi   = hi_at(la_addr);
+wire [23:0] la_ca   = ca_of(la_wram, la_rom, la_addr);
 
 wire [31:0] ifa    = {if_addr, 3'b000};
 wire        i_wram = aoh ? ifa[31:22] == 10'd0 : ifa[31:21] == 11'd0;
 wire        i_rom  = rom_at(ifa);
 wire        i_iram = ifa[31:29] == 3'b110;
-wire        i_sprh = ifa[31:18] == 14'h1000 && ifa[17:16] != 2'd0;
-wire        i_sd   = i_wram || i_rom || i_sprh;
-wire [23:0] i_caddr = i_wram ? {2'b00, ifa[21:0]} : i_rom ? {2'b01, ifa[21:0]} : {6'b100000, ifa[17:0]};
+wire        i_sd   = i_wram || i_rom || hi_at(ifa);
+wire [23:0] i_caddr = ca_of(i_wram, i_rom, ifa);
 
 // the cached space: 0x000000 work RAM, 0x400000 program ROM (its top 1 MB at 0x700000), 0x800000 sprite RAM
-// above 64 KB. SDRAM: the top MB at ROM_BASE, a 2 MB program's first at PRGLO_BASE, aoh's 4 MB at AOHPRG_BASE.
+// above 64 KB or Limenko's data ROM. SDRAM: the top MB at ROM_BASE, a 2 MB program's first at PRGLO_BASE, aoh's
+// 4 MB at AOHPRG_BASE.
 function [26:0] sdram_of(input [23:0] ca);
-	sdram_of = ca[23] ? SPRHI_BASE + {9'd0, ca[17:0]} : !ca[22] ? WRAM_BASE + {5'd0, ca[21:0]} :
+	sdram_of = ca[23] ? (lm ? DATA_BASE + {5'd0, ca[21:0]} : SPRHI_BASE + {9'd0, ca[17:0]}) :
+	           !ca[22] ? WRAM_BASE + {5'd0, ca[21:0]} :
 	           aoh ? AOHPRG_BASE + {5'd0, ca[21:0]} : ca[20] ? ROM_BASE + {7'd0, ca[19:0]} : PRGLO_BASE + {7'd0, ca[19:0]};
 endfunction
 
@@ -174,12 +202,12 @@ endfunction
 // ---------------------------------------------------------------- state
 localparam [3:0] S_INIT = 0, S_IDLE = 1, S_LOOK = 2, S_WLOOK = 3, S_MISS = 4, S_FILL = 5,
                  S_FILL2 = 6, S_ACK = 7, S_IOW = 8, S_PFW = 9;
-localparam [1:0] SRC_REG = 0, SRC_IRAM = 1, SRC_SPR = 2, SRC_PAL = 3;
+localparam [2:0] SRC_REG = 0, SRC_IRAM = 1, SRC_SPR = 2, SRC_PAL = 3, SRC_X = 4;
 
 reg  [3:0]  st;
 reg  [10:0] swc;
 reg         ack_r;
-reg  [1:0]  rsrc;
+reg  [2:0]  rsrc;
 reg  [31:0] rdata_r;
 reg  [23:0] fa;
 reg         f_ic;               // the fill is for the I-cache
@@ -206,7 +234,7 @@ wire [1:0]  wq_t  = wq_w[1:0] - 2'd1;       // the newest entry
 
 wire idle_go = st == S_IDLE && bus_req;
 // the CPU's announced read, looked up in this clock (lk_*: in the last)
-wire        la_take = st == S_IDLE && !bus_req && la_req && (la_wram || la_rom || la_sprh);
+wire        la_take = st == S_IDLE && !bus_req && la_req && (la_wram || la_rom || la_hi);
 reg         lk_v = 1'b0;
 reg  [23:0] lk_ca;
 
@@ -231,10 +259,12 @@ vh_cache #(.AW(24), .LW(8)) u_dc (.clk(clk), .sweep(sweep), .sw_idx(swc[7:0]),
 	.st_we(st == S_WLOOK && dc_hit), .st_be(st_be8), .st_d({bus_wdata, bus_wdata}));
 
 // ---------------------------------------------------------------- internal RAM
-// 8 bytes wide for the instruction port; the data side has it in its request clock. 4 KB mirrored, 8 KB on aoh.
+// 8 bytes wide for the instruction port; the data side has it in its request clock. 4 KB mirrored, 8 KB on aoh and
+// Limenko.
 wire [63:0] iram_q;
 wire        ir_by_d = idle_go && !bus_io && r_iram;
-wire [12:3] ir_da = {aoh && bus_addr[12], bus_addr[11:3]}, ir_ia = {aoh && if_addr[12], if_addr[11:3]};
+wire        ir8k = aoh || lm;
+wire [12:3] ir_da = {ir8k && bus_addr[12], bus_addr[11:3]}, ir_ia = {ir8k && if_addr[12], if_addr[11:3]};
 vh_cache_ram #(.AW(10), .DW(64), .NB(8)) u_iram (.clk(clk), .addr(ir_by_d ? ir_da : ir_ia),
 	.we(ir_by_d && bus_wr), .be(st_be8), .wd({bus_wdata, bus_wdata}), .q(iram_q));
 
@@ -260,10 +290,15 @@ assign xflip_we = idle_go && bus_wr && !bus_io && bus_addr[31:16] == 16'he000;
 assign spr_be   = bus_be;
 assign spr_addr = bus_addr[15:2];
 assign spr_wd   = bus_wdata;
-assign pal_we   = idle_go && bus_wr && !bus_io && r_pal;
+assign pal_we   = idle_go && bus_wr && !bus_io && r_pal && !pal_wait;
 assign pal_be   = bus_be;
 assign pal_addr = bus_addr[15:2];
 assign pal_wd   = bus_wdata;
+assign x_we     = idle_go && bus_wr && !bus_io && r_x;
+assign x_be     = bus_be;
+assign x_addr   = bus_addr[13:2];
+assign x_wd     = bus_wdata;
+assign lm_cmd   = idle_go && bus_wr && !bus_io && lm && bus_addr[31:13] == 19'h4001f;
 assign io_rd    = idle_go && bus_io && !bus_wr;
 assign io_wr    = idle_go && bus_io && bus_wr;
 assign io_port  = bus_addr[31:13];
@@ -275,12 +310,12 @@ wire        lk_hit = lk_read && dc_hit;
 assign dbg_miss      = (st == S_LOOK && !look_hit) || (lk_read && !dc_hit) || i_take;
 assign dbg_miss_ic   = i_take;
 assign dbg_miss_line = i_take ? i_ca_r[23:4] : caddr[23:4];
-wire        w_fast  = idle_go && bus_wr && (bus_io || r_iram || r_spr || r_pal);
+wire        w_fast  = idle_go && bus_wr && (bus_io || r_iram || r_spr || r_pal && !pal_wait || r_x);
 wire        w_store = idle_go && bus_wr && !bus_io && (r_wram || r_sprh) && (wb_merge || !wb_full);
 assign bus_ack   = ack_r || look_hit || lk_hit || w_fast || w_store || (st == S_FILL2 && !f_ic);
 assign bus_rdata = (st == S_LOOK || lk_hit) ? (bus_addr[2] ? dc_q[31:0] : dc_q[63:32]) :
                    rsrc == SRC_IRAM ? (bus_addr[2] ? iram_q[31:0] : iram_q[63:32]) :
-                   rsrc == SRC_SPR ? spr_rd : rsrc == SRC_PAL ? pal_rd : rdata_r;
+                   rsrc == SRC_SPR ? spr_rd : rsrc == SRC_PAL ? pal_rd : rsrc == SRC_X ? x_rd : rdata_r;
 
 // ---------------------------------------------------------------- CPU side and port 2
 reg  [2:0]  m_who;              // what port 2 is doing
@@ -424,9 +459,9 @@ always @(posedge clk) begin
 			end else if (r_inp) begin
 				rdata_r <= bus_addr[17] ? aoh_p12 : aoh_sys;
 				ack_r <= 1'b1; st <= S_ACK;
-			end else if (r_iram || r_spr || r_pal) begin
+			end else if (r_iram || r_spr || r_pal || r_x) begin
 				if (!bus_wr) begin                // a write was acked in this clock (w_fast)
-					rsrc <= r_iram ? SRC_IRAM : r_spr ? SRC_SPR : SRC_PAL;
+					rsrc <= r_iram ? SRC_IRAM : r_spr ? SRC_SPR : r_pal ? SRC_PAL : SRC_X;
 					ack_r <= 1'b1; st <= S_ACK;
 				end
 			end else if (r_sd && !bus_wr) begin

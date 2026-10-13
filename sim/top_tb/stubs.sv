@@ -13,6 +13,8 @@ module hps_io #(parameter CONF_STR = "", CONF_STR_BRAM = 0, PS2DIV = 0, WIDE = 0
 	input      [15:0] status_menumask,
 	output     [31:0] joystick_0,
 	output     [31:0] joystick_1,
+	output     [31:0] joystick_2,       // Limenko.sv's players 3 and 4
+	output     [31:0] joystick_3,
 	output            ioctl_download,
 	output     [15:0] ioctl_index,
 	output            ioctl_wr,
@@ -39,6 +41,8 @@ module hps_io #(parameter CONF_STR = "", CONF_STR_BRAM = 0, PS2DIV = 0, WIDE = 0
 	assign status = st;
 	assign joystick_0 = j0;
 	assign joystick_1 = j1;
+	assign joystick_2 = 0;
+	assign joystick_3 = 0;
 	assign ioctl_download = dl;
 	assign ioctl_index = idx;
 	assign ioctl_wr = wr;

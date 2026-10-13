@@ -139,7 +139,8 @@ reg        frm_req, frm_fin, ret_pend, frm_body;
 reg [1:0]  frm_kind;
 reg [5:0]  frm_tn;
 // Registers, never RAM: one clock can push several entries (five for the FP trap). A ring: X pushes and the
-// queue commits in the same clocks, so it need never be empty.
+// queue commits in the same clocks, so it need never be empty. Its positions are not reset to 0 when it
+// empties, so where X pushes does not depend on what commits in the same clock.
 (* ramstyle = "logic" *) reg        wq_g [0:7];
 (* ramstyle = "logic" *) reg        wq_raw [0:7];
 (* ramstyle = "logic" *) reg [5:0]  wq_i [0:7];
@@ -147,8 +148,8 @@ reg [5:0]  frm_tn;
 reg [2:0]  wq_cnt, wq_rd;   // write and read positions
 reg [2:0]  t3;
 reg        wq_busy0, did_commit;
-reg [2:0]  wq_cnt_start;
-// queue head before this cycle's pushes
+// the queue head at the start of the clock: a local commits from it at the start of the clock (commit_loc),
+// a global at the end (commit_glob)
 reg        hd_valid, hd_raw;
 reg [5:0]  hd_i;
 reg [31:0] hd_v;
@@ -183,6 +184,7 @@ reg        x_wloc, x_wglob; // it writes L[op[7:4] + FP] / G[op[7:4]]
 reg        x_srw;           // it has queued a write to SR: it retires with the PC and SR after that write
 reg        m_lS, m_lS1, m_lD, m_lD1, m_gS, m_gS1, m_gD, m_gD1, m_gM, m_gMD;   // D's operand is X's write
 reg [31:0] fw_n, fwa_n;     // the values X's instruction queued in this clock: the last, the one before
+reg [31:0] fl_v;            // a load's last access: the value read
 reg [31:0] x_seq;           // instructions gone into X, for the benches
 reg [5:0]  x_didx;
 reg        x_mw_last;       // X is in the last clock of a load or store that writes at most one register
@@ -350,8 +352,6 @@ task wq_push(input wp_g, input wp_raw, input [5:0] wp_i, input [31:0] wp_v);
 		if (wp_g && wp_i[4:0] == 5'd0) pcw_new = 1'b1;
 		if (wp_g) gw_new = 1'b1;
 		if (wp_g && !wp_raw && wp_i[4:0] == 5'd1) x_srw = 1'b1;
-		fwa_n = fw_n;
-		fw_n = wp_v;
 		push_seq = push_seq + 4'd1;
 		case (wq_cnt)
 			3'd0: begin wq_g[0] = wp_g; wq_raw[0] = wp_raw; wq_i[0] = wp_i; wq_v[0] = wp_v; end
@@ -390,11 +390,44 @@ task write_raw(input g, input [5:0] i, input [31:0] v);
 	end
 endtask
 
+// the instruction's one write of res, as write_dst (raw 0) or write_raw (raw 1), made by w1_push
+task w_res(input g, input raw, input [5:0] i);
+	begin w1 = 1'b1; w1_g = g; w1_raw = raw; w1_i = i; end
+endtask
+
+// write_dst / write_raw of res, as wq_push but at the queue position of the start of the clock: no other
+// push comes before it in a clock w1 is set
+task w1_push;
+	begin
+		if (!w1_raw && w1_g && w1_i[4:0] == 5'd0) begin pc = {res[31:1], 1'b0}; redir = 1'b1; end
+		else begin
+			if (!w1_raw && w1_g && w1_i[4:0] == 5'd1 && !sr[18] && !sr[15] && res[15]) req_exc(TRAP_RANGE);
+			if (w1_g && !w1_raw && w1_i[4:0] == 5'd1) x_srw = 1'b1;
+			push_seq = push_seq + 4'd1;
+			case (wq_cnt0)
+				3'd0: begin wq_g[0] = w1_g; wq_raw[0] = w1_raw; wq_i[0] = w1_i; wq_v[0] = res; end
+				3'd1: begin wq_g[1] = w1_g; wq_raw[1] = w1_raw; wq_i[1] = w1_i; wq_v[1] = res; end
+				3'd2: begin wq_g[2] = w1_g; wq_raw[2] = w1_raw; wq_i[2] = w1_i; wq_v[2] = res; end
+				3'd3: begin wq_g[3] = w1_g; wq_raw[3] = w1_raw; wq_i[3] = w1_i; wq_v[3] = res; end
+				3'd4: begin wq_g[4] = w1_g; wq_raw[4] = w1_raw; wq_i[4] = w1_i; wq_v[4] = res; end
+				3'd5: begin wq_g[5] = w1_g; wq_raw[5] = w1_raw; wq_i[5] = w1_i; wq_v[5] = res; end
+				3'd6: begin wq_g[6] = w1_g; wq_raw[6] = w1_raw; wq_i[6] = w1_i; wq_v[6] = res; end
+				default: begin wq_g[7] = w1_g; wq_raw[7] = w1_raw; wq_i[7] = w1_i; wq_v[7] = res; end
+			endcase
+`ifdef SIMULATION
+			if (wq_cnt != wq_cnt0) $display("W1_ORDER cnt=%0d cnt0=%0d op=%04x pc=%08x", wq_cnt, wq_cnt0, op, ipc);
+			if (wq_cnt0 - wq_rd == 3'd7) $display("WQ_OVERFLOW cnt=%0d rd=%0d op=%04x pc=%08x i=%0d g=%0d", wq_cnt0, wq_rd, op, ipc, w1_i, w1_g);
+`endif
+			wq_cnt = wq_cnt0 + 3'd1;
+		end
+	end
+endtask
+
 // queue head, local register: written into the register file at the start of the cycle
 task commit_loc;
 	begin
-		if (wq_rd != wq_cnt && !wq_g[wq_rd]) begin
-			l_we_n = 1'b1; l_wa_n = wq_i[wq_rd]; l_wd_n = wq_v[wq_rd];
+		if (wq_busy0 && !q_hg) begin
+			l_we_n = 1'b1; l_wa_n = hd_i; l_wd_n = hd_v;
 			wq_rd = wq_rd + 3'd1;
 			did_commit = 1'b1;
 			commit_seq = commit_seq + 4'd1;
@@ -406,7 +439,7 @@ endtask
 // of that cycle never sees it and the SR, timer and trap-entry updates stay off its paths
 task commit_glob;
 	begin
-		if (!did_commit && hd_valid) begin
+		if (hd_valid) begin   // never in a clock commit_loc commits
 			if (hd_raw) G[hd_i[4:0]] = hd_v;   // raw writes never target PC or SR
 			else apply_global(hd_i[4:0], hd_v);
 			wq_rd = wq_rd + 3'd1;
@@ -790,6 +823,12 @@ reg signed [8:0] dsel;
 reg [7:0]  func_hi;
 reg        e_ok;
 reg        nodcp;
+// the one register write of an ALU, move or set instruction (w_res), pushed after the execute code as the
+// clock's last push (w1_push): its value, the latest to arrive, then passes one level of the queue's and the
+// forwarding's data selects instead of a select for every call site
+reg        w1, w1_g, w1_raw;
+reg [5:0]  w1_i;
+reg [2:0]  wq_cnt0;         // the queue's write position at the start of the clock
 
 wire [31:0] bus_rd_lane = bus_rdata;
 
@@ -818,22 +857,22 @@ always @(posedge clk) begin
 		redir = 1'b0;
 		st_hit = 1'b0;
 		tt_fin = 1'b0;
-		fw_n = 32'd0; fwa_n = 32'd0;
+		w1 = 1'b0; wq_cnt0 = wq_cnt; res = 32'd0;
 		q_pend = wq_cnt - wq_rd;
 		q_hg = wq_g[wq_rd]; q_hi = wq_i[wq_rd][4:0];
 		wq_busy0 = (wq_cnt != wq_rd);
-		l_we_n = 1'b0;
-		did_commit = 1'b0;
-		commit_loc;
-		wq_cnt_start = wq_cnt;      // entries pushed in this cycle are committed from the next one
-		if (wq_rd == wq_cnt) begin wq_rd = 3'd0; wq_cnt = 3'd0; wq_cnt_start = 3'd0; end
-		hd_valid = (wq_rd != wq_cnt_start) && wq_g[wq_rd];
+		// entries pushed in this cycle are committed from the next one
+		hd_valid = wq_busy0 && q_hg;
 		hd_raw = wq_raw[wq_rd]; hd_i = wq_i[wq_rd]; hd_v = wq_v[wq_rd];
+		// a PC write waiting, from the start of the clock (a head commit_loc takes is a local, not one)
 		wq_pcw = 1'b0;
 		for (t_i = 0; t_i < 8; t_i = t_i + 1) begin
 			t3 = t_i[2:0] - wq_rd;
-			if (t3 < wq_cnt - wq_rd && wq_g[t_i] && wq_i[t_i][4:0] == 5'd0) wq_pcw = 1'b1;
+			if (t3 < q_pend && wq_g[t_i] && wq_i[t_i][4:0] == 5'd0) wq_pcw = 1'b1;
 		end
+		l_we_n = 1'b0;
+		did_commit = 1'b0;
+		commit_loc;
 		// TR reaching TCR raises the timer interrupt from the next clock (timer_hit), which keeps the
 		// counter chain out of this clock's interrupt check
 		if (timer_hit) timer_pend = 1'b1;
@@ -1067,7 +1106,7 @@ casez (opc)
 				subt = e1[13:12];
 				if ((!sl && sc == 4'd1) || (!dl && dc < 4'd2)) begin
 				end else begin
-					write_raw(!dl, dl ? didx : {2'b0, dc}, sreg << e1[13:12]);
+					res = sreg << e1[13:12]; w_res(!dl, 1'b1, dl ? didx : {2'b0, dc});
 					if (!e1[14]) begin
 						cond = (!sl && sc == 4'd0) ? (sreg >= extra_u) : (sreg > extra_u);
 						if (cond) req_exc(TRAP_RANGE);
@@ -1080,7 +1119,7 @@ casez (opc)
 				             : ({18'b0, e1[13:0]} | (e1[14] ? 32'hffffc000 : 32'h0));
 				res = sreg & imm;
 				sr[1] = (res == 32'd0);
-				write_dst(!dl, dl ? didx : {2'b0, dc}, res);
+				w_res(!dl, 1'b0, dl ? didx : {2'b0, dc});
 			end
 			//------------------------------------------------ sum
 			8'h18, 8'h19, 8'h1a, 8'h1b: begin
@@ -1092,7 +1131,7 @@ casez (opc)
 				sr[3] = (sregc[31] ^ t33[31]) & (imm[31] ^ t33[31]);
 				res = t33[31:0];
 				sr[2:1] = {res[31], res == 32'd0};
-				write_dst(!dl, dl ? didx : {2'b0, dc}, res);
+				w_res(!dl, 1'b0, dl ? didx : {2'b0, dc});
 			end
 			//------------------------------------------------ sums
 			8'h1c, 8'h1d, 8'h1e, 8'h1f: begin
@@ -1103,7 +1142,7 @@ casez (opc)
 				sr[3] = (sregc[31] ^ t33[31]) & (imm[31] ^ t33[31]);
 				res = t33[31:0];
 				sr[2:1] = {res[31], res == 32'd0};
-				write_dst(!dl, dl ? didx : {2'b0, dc}, res);
+				w_res(!dl, 1'b0, dl ? didx : {2'b0, dc});
 				// MAME: tests src_code against SR even for a local source
 				if (sr[3] && (sl ? sidx : {2'b0, sc}) != 6'd1) req_exc(TRAP_RANGE);
 			end
@@ -1134,9 +1173,9 @@ casez (opc)
 					sr[2:1] = {res[31], res == 32'd0};
 					if (!dl) begin
 						tmp32b = {1'b0, dc} + (tmpv[5] ? 5'd16 : 5'd0);
-						write_dst(1'b1, {1'b0, tmp32b[4:0]}, res);
+						w_res(1'b1, 1'b0, {1'b0, tmp32b[4:0]});
 						if (tmp32b[4:0] == 5'd0) sr[4] = 1'b0;
-					end else wq_push(1'b0, 1'b0, didx, res);
+					end else w_res(1'b0, 1'b0, didx);
 				end
 			end
 			//------------------------------------------------ add
@@ -1147,7 +1186,7 @@ casez (opc)
 				sr[3] = (sregc[31] ^ t33[31]) & (dreg[31] ^ t33[31]);
 				res = t33[31:0];
 				sr[2:1] = {res[31], res == 32'd0};
-				write_dst(!dl, dl ? didx : {2'b0, dc}, res);
+				w_res(!dl, 1'b0, dl ? didx : {2'b0, dc});
 				if (!dl && dc == 4'd0) sr[4] = 1'b0;
 			end
 			//------------------------------------------------ adds
@@ -1157,7 +1196,7 @@ casez (opc)
 				sr[3] = (sregc[31] ^ t33[31]) & (dreg[31] ^ t33[31]);
 				res = t33[31:0];
 				sr[2:1] = {res[31], res == 32'd0};
-				write_dst(!dl, dl ? didx : {2'b0, dc}, res);
+				w_res(!dl, 1'b0, dl ? didx : {2'b0, dc});
 				if (sr[3]) req_exc(TRAP_RANGE);
 			end
 			//------------------------------------------------ cmpb
@@ -1176,7 +1215,7 @@ casez (opc)
 					default:   res = dreg & sreg;
 				endcase
 				sr[1] = (res == 32'd0);
-				write_dst(!dl, dl ? didx : {2'b0, dc}, res);
+				w_res(!dl, 1'b0, dl ? didx : {2'b0, dc});
 			end
 			//------------------------------------------------ subc
 			8'h40, 8'h41, 8'h42, 8'h43: begin
@@ -1190,13 +1229,13 @@ casez (opc)
 				res = dreg - tmp32b;
 				if (tmpv[1] && res == 32'd0) sr[1] = 1'b1;
 				sr[2] = res[31];
-				write_dst(!dl, dl ? didx : {2'b0, dc}, res);
+				w_res(!dl, 1'b0, dl ? didx : {2'b0, dc});
 			end
 			//------------------------------------------------ not
 			8'h44, 8'h45, 8'h46, 8'h47: begin
 				res = ~sreg;
 				sr[1] = (res == 32'd0);
-				write_dst(!dl, dl ? didx : {2'b0, dc}, res);
+				w_res(!dl, 1'b0, dl ? didx : {2'b0, dc});
 			end
 			//------------------------------------------------ sub
 			8'h48, 8'h49, 8'h4a, 8'h4b: begin
@@ -1206,7 +1245,7 @@ casez (opc)
 				sr[3] = (t33[31] ^ dreg[31]) & (dreg[31] ^ sregc[31]);
 				res = t33[31:0];
 				sr[2:1] = {res[31], res == 32'd0};
-				write_dst(!dl, dl ? didx : {2'b0, dc}, res);
+				w_res(!dl, 1'b0, dl ? didx : {2'b0, dc});
 				if (!dl && dc == 4'd0) sr[4] = 1'b0;
 			end
 			//------------------------------------------------ subs
@@ -1216,7 +1255,7 @@ casez (opc)
 				sr[3] = (t33[31] ^ dreg[31]) & (dreg[31] ^ sregc[31]);
 				res = t33[31:0];
 				sr[2:1] = {res[31], res == 32'd0};
-				write_dst(!dl, dl ? didx : {2'b0, dc}, res);
+				w_res(!dl, 1'b0, dl ? didx : {2'b0, dc});
 				if (sr[3]) req_exc(TRAP_RANGE);
 			end
 			//------------------------------------------------ addc
@@ -1235,7 +1274,7 @@ casez (opc)
 				sr[0] = t33[32];
 				if (res == 32'd0 && tmpv[1]) sr[1] = 1'b1;
 				sr[2] = res[31];
-				write_dst(!dl, dl ? didx : {2'b0, dc}, res);
+				w_res(!dl, 1'b0, dl ? didx : {2'b0, dc});
 			end
 			//------------------------------------------------ neg
 			8'h58, 8'h59, 8'h5a, 8'h5b: begin
@@ -1245,7 +1284,7 @@ casez (opc)
 				sr[3] = t64[31] & sregc[31];
 				res = 32'd0 - sregc;
 				sr[2:1] = {res[31], res == 32'd0};
-				write_dst(!dl, dl ? didx : {2'b0, dc}, res);
+				w_res(!dl, 1'b0, dl ? didx : {2'b0, dc});
 			end
 			//------------------------------------------------ negs
 			8'h5c, 8'h5d, 8'h5e, 8'h5f: begin
@@ -1254,7 +1293,7 @@ casez (opc)
 				sr[3] = t64[31] & sregc[31];
 				res = 32'd0 - sregc;
 				sr[2:1] = {res[31], res == 32'd0};
-				write_dst(!dl, dl ? didx : {2'b0, dc}, res);
+				w_res(!dl, 1'b0, dl ? didx : {2'b0, dc});
 				if (sr[3]) req_exc(TRAP_RANGE);
 			end
 			//------------------------------------------------ immediate ALU group 0x60-0x7f
@@ -1310,15 +1349,15 @@ casez (opc)
 							sr[1] = (imm == 32'd0); sr[2] = imm[31];
 							if (!dl) begin
 								tmp32b = {1'b0, dc} + (tmpv[5] ? 5'd16 : 5'd0);
-								write_dst(1'b1, {1'b0, tmp32b[4:0]}, imm);
+								res = imm; w_res(1'b1, 1'b0, {1'b0, tmp32b[4:0]});
 								if (tmp32b[4:0] == 5'd0) sr[4] = 1'b0;
-							end else wq_push(1'b0, 1'b0, didx, imm);
+							end else begin res = imm; w_res(1'b0, 1'b0, didx); end
 						end
 					end else begin // andni
 						if (opc[0] && sc == 4'd15) imm = 32'h7fffffff;
 						res = dreg & ~imm;
 						sr[1] = (res == 32'd0);
-						write_dst(!dl, dl ? didx : {2'b0, dc}, res);
+						w_res(!dl, 1'b0, dl ? didx : {2'b0, dc});
 					end
 				end
 				2'b10: begin
@@ -1330,12 +1369,12 @@ casez (opc)
 						sr[3] = (imm[31] ^ t33[31]) & (dreg[31] ^ t33[31]);
 						res = t33[31:0];
 						sr[2:1] = {res[31], res == 32'd0};
-						write_dst(!dl, dl ? didx : {2'b0, dc}, res);
+						w_res(!dl, 1'b0, dl ? didx : {2'b0, dc});
 						if (!dl && dc == 4'd0) sr[4] = 1'b0;
 					end else begin // ori
 						res = dreg | imm;
 						sr[1] = (res == 32'd0);
-						write_dst(!dl, dl ? didx : {2'b0, dc}, res);
+						w_res(!dl, 1'b0, dl ? didx : {2'b0, dc});
 					end
 				end
 				default: begin // 2'b11
@@ -1346,12 +1385,12 @@ casez (opc)
 						sr[3] = (imm[31] ^ t33[31]) & (dreg[31] ^ t33[31]);
 						res = t33[31:0];
 						sr[2:1] = {res[31], res == 32'd0};
-						write_dst(!dl, dl ? didx : {2'b0, dc}, res);
+						w_res(!dl, 1'b0, dl ? didx : {2'b0, dc});
 						if (sr[3]) req_exc(TRAP_RANGE);
 					end else begin // xori
 						res = dreg ^ imm;
 						sr[1] = (res == 32'd0);
-						write_dst(!dl, dl ? didx : {2'b0, dc}, res);
+						w_res(!dl, 1'b0, dl ? didx : {2'b0, dc});
 					end
 				end
 				endcase
@@ -1391,7 +1430,7 @@ casez (opc)
 					res = shr32(res, n5, opc[2]);
 				end
 				sr[2:1] = {res[31], res == 32'd0};
-				wq_push(1'b0, 1'b0, didx, res);
+				w_res(1'b0, 1'b0, didx);
 			end
 			8'h88, 8'h89, 8'h8a: begin // shldi, shld
 				if (opc == 8'h8a && (sidx == didx || sidx == didx1)) begin
@@ -1418,10 +1457,10 @@ casez (opc)
 				res = hi << n5;
 				if (!res[31] ? ((hi & msk) != 32'd0) : (((hi & msk) ^ msk) != 32'd0)) sr[3] = 1'b1;
 				sr[2:1] = {res[31], res == 32'd0};
-				wq_push(1'b0, 1'b0, didx, res);
+				w_res(1'b0, 1'b0, didx);
 			end
 			8'h8e: begin // testlz
-				wq_push(1'b0, 1'b0, didx, clz32(lS_r));
+				res = clz32(lS_r); w_res(1'b0, 1'b0, didx);
 			end
 			8'h8f: begin // rol
 				n5 = lS_r[4:0];
@@ -1432,7 +1471,7 @@ casez (opc)
 				if (!res[31] ? ((res & msk) != 32'd0) : (((res & msk) ^ msk) != 32'd0)) sr[3] = 1'b1;
 				sr[1] = (res == 32'd0); sr[2] = res[31];
 				if (n5 != 5'd0 && res[0]) sr[0] = 1'b1;
-				wq_push(1'b0, 1'b0, didx, res);
+				w_res(1'b0, 1'b0, didx);
 			end
 			8'h8c, 8'h8d, 8'hac, 8'had, 8'hae, 8'haf: begin
 				// reserved: no effect
@@ -1453,7 +1492,7 @@ casez (opc)
 					res = shr32(hi, n5, opc[2]);
 				end
 				sr[2:1] = {res[31], res == 32'd0};
-				write_dst(!dl, dl ? didx : {2'b0, dc}, res);
+				w_res(!dl, 1'b0, dl ? didx : {2'b0, dc});
 			end
 			//------------------------------------------------ loads and stores
 			8'h90, 8'h91, 8'h92, 8'h93, 8'h94, 8'h95, 8'h96, 8'h97,
@@ -1494,7 +1533,7 @@ casez (opc)
 							if (sc[0]) res = cond ? 32'd0 : 32'hffffffff;
 							else if (sc == 4'd2) res = 32'hffffffff;
 							else res = cond ? 32'hffffffff : 32'd0;
-							write_raw(!dl, dl ? didx : {2'b0, dc}, res);
+							w_res(!dl, 1'b1, dl ? didx : {2'b0, dc});
 						end
 					end else begin
 						if (sc == 4'd0) begin
@@ -1502,13 +1541,13 @@ casez (opc)
 							// code puts it in bit 0 (MAME_KLUDGES.md, CPU and I/O: mrkickera hangs with it)
 							res = ((G[18] & 32'hfffffe00) | {23'b0, fp, 2'b00}) +
 							      ((G[18][8] && !sr[31]) ? 32'h200 : 32'd0);
-							write_raw(!dl, dl ? didx : {2'b0, dc}, res);
+							w_res(!dl, 1'b1, dl ? didx : {2'b0, dc});
 						end else if (sc >= 4'd2) begin
 							if (sc[0]) res = {31'b0, !cond};
 							else if (sc == 4'd2) res = 32'd1;
 							else res = {31'b0, cond};
 							if (sc == 4'd3) res = 32'd0;
-							write_raw(!dl, dl ? didx : {2'b0, dc}, res);
+							w_res(!dl, 1'b1, dl ? didx : {2'b0, dc});
 						end
 					end
 				end
@@ -1877,10 +1916,15 @@ nstate = ST_XW;
 
 		default: nstate = ST_RESET;
 		endcase
+		if (w1) w1_push;
+		// fw_n and fwa_n as R uses them: go_ovl comes only beside a fast instruction's clock (its one write is
+		// w1's, res) or a load's last access (its one or two results), so not every push's value is a source
+		fl_v  = p_io ? bus_rdata : lane_ext(bus_rdata, bus_addr, p_kind);
+		fwa_n = (p_n == 2'd2) ? p_r0 : fl_v;
+		fw_n  = (state == ST_MWAIT) ? (p_w1_en ? fl_v : fwa_n) : res;
 
 		// ---- end of cycle: global register commit, register-file write pipeline, completion
 		commit_glob;
-		if (wq_rd == wq_cnt) begin wq_rd = 3'd0; wq_cnt = 3'd0; end
 		l_we_r <= l_we_n; l_wa_r <= l_wa_n; l_wd_r <= l_wd_n;
 		r_new = tt_fin;
 		if (frm_req) begin
@@ -2174,14 +2218,17 @@ task exec_ldst;
 					end
 					default: begin
 						if (is_n) begin // STW.S
+							// MAME: when the pointer's own register-file slot is the target, the update adds to the stored value
+							// The update goes in the queue first, where it lands then not depending on the comparison
+							// with SP, and the store into the register file after it, left out when the slot is the
+							// update's own (MAME stores, then updates: the update's value is the one left).
+							write_raw(ls_dg, ls_didx, ((dl && ls_dreg >= G[18] && ls_dreg[7:2] == didx) ? ls_sreg : ls_dreg) + (extra_s & 32'hfffffffc));
 							if (ls_dreg < G[18]) begin
 								job_start(1'b1, 1'b0, 3'd0, 2'd1, ls_dreg, 32'd0, ls_sreg, 32'd0);
 							end else begin
-								wq_push(1'b0, 1'b0, ls_dreg[7:2], ls_sreg);
+								if (!(dl && ls_dreg[7:2] == didx)) wq_push(1'b0, 1'b0, ls_dreg[7:2], ls_sreg);
 								nstate = ST_MPOST;  fin_req = 1'b0;
 							end
-							// MAME: when the pointer's own register-file slot is the target, the update adds to the stored value
-							write_raw(ls_dg, ls_didx, ((dl && ls_dreg >= G[18] && ls_dreg[7:2] == didx) ? ls_sreg : ls_dreg) + (extra_s & 32'hfffffffc));
 						end else begin // STD.IOD
 							ls_ea = ls_dreg + (extra_s & 32'hfffffffc);
 							job_start(1'b1, 1'b1, 3'd0, 2'd2, ls_ea, ls_ea + 32'h2000, ls_sreg, ls_sregf);
@@ -2213,9 +2260,12 @@ task exec_regind;
 		// MAME: STD.P reads the second source after the pointer update
 		if (is_st && is_pi && is_dbl && sl && sidx1 == didx) ls_sregf = d + 32'd8;
 		if (is_st && is_pi) wq_push(1'b0, 1'b0, didx, d + (is_dbl ? 32'd8 : 32'd4));   // MAME: updated before the store
-		if (!is_st && is_pi && d == 32'd0) wq_push(1'b0, 1'b0, didx, d + (is_dbl ? 32'd8 : 32'd4));
-		if (d == 32'd0) req_exc(TRAP_RANGE);
-		else begin
+		// the zero pointer's update inside its branch: the write position in the other branch is then decoded
+		// from the opcode alone
+		if (d == 32'd0) begin
+			if (!is_st && is_pi) wq_push(1'b0, 1'b0, didx, d + (is_dbl ? 32'd8 : 32'd4));
+			req_exc(TRAP_RANGE);
+		end else begin
 			if (!is_st) begin
 				p_w0_en <= 1'b1; p_w1_en <= is_dbl;
 				if (is_pi) begin

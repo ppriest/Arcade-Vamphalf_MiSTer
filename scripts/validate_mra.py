@@ -57,6 +57,8 @@ from coretools import mame_version, setting   # noqa: E402
 # the driver parse misses or that the core rotates differently. Entries here
 # override the driver.
 ROTATION_OVERRIDE = {}
+# Other drivers in MAME_SRC's directory whose sets have .mra files here (the Limenko revision).
+EXTRA_DRIVERS = ["limenko.cpp"]
 # ---------------------------------------------------------------------------
 
 OSD_COLS = 28                       # Main_MiSTer's DIP line width
@@ -78,9 +80,12 @@ def driver_rotations():
     if not src or not Path(src).exists():
         return None
     out = {}
-    text = Path(src).read_text(encoding="utf8", errors="replace")
-    for m in re.finditer(r'^GAMEL?\(\s*\d+,\s*(\w+),.*?,\s*(ROT\d+)\b', text, re.M):
-        out[m.group(1)] = ROT_TAG.get(m.group(2))
+    for path in [Path(src)] + [Path(src).parent / d for d in EXTRA_DRIVERS]:
+        if not path.exists():
+            continue
+        text = path.read_text(encoding="utf8", errors="replace")
+        for m in re.finditer(r'^GAMEL?\(\s*[\d?]+,\s*(\w+),.*?,\s*(ROT\d+)\b', text, re.M):   # year "200?"
+            out[m.group(1)] = ROT_TAG.get(m.group(2))
     return out
 
 

@@ -46,6 +46,8 @@ for _ = 1, 64 do
     local d = scr:time_until_pos(1) - scr:time_until_pos(0)
     if d > 0 and (line_period == nil or d < line_period) then line_period = d end
 end
+-- a screen without raw timing (limenko.cpp) starts at line 0, where the difference is negative
+if line_period == nil then line_period = frame_period / scr.height end
 local vtotal = math.floor(frame_period / line_period + 0.5)
 
 local function cur_line()

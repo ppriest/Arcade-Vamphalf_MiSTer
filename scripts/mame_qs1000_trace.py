@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Per-instruction and bus-access trace of the QS1000's 8052 from reset, from MAME.
+"""Per-instruction and bus-access trace of the QS1000's 8052 (spotty: the sound board's AT89C4051) from reset,
+from MAME.
 
     python scripts/mame_qs1000_trace.py misncrft 500000 [--out debug/qs1000]
 
@@ -21,9 +22,15 @@ from mame_capture import NO_WINDOW, check_lua_error, lua_runner_env, mame_cmd, m
 
 LATCH = {"misncrft": 0x100, "misncrfta": 0x100, "wivernwg": 0x1500, "wyvernwg": 0x1500,
          "wyvernwga": 0x1500}
+# limenko.cpp io_map: the latch at 0x1400, umask32(0x00ff0000)
+LATCH_SHIFT = {}
+for _g in ("dynabomb", "sb2003", "sb2003a", "legendoh", "hrthouse", "spotty"):
+    LATCH[_g], LATCH_SHIFT[_g] = 0x1400, 16
+# spotty: the AT89C4051 on its sound board (limenko.cpp spotty_state)
+CPU = {"spotty": ":audiocpu"}
 
 
-def run(game, n, raw_dir, frames, timeout):
+def run(game, n, raw_dir, frames, timeout, coin=0):
     mame_dir, exe = mame_paths()
     if raw_dir.exists():
         shutil.rmtree(raw_dir)
@@ -31,7 +38,9 @@ def run(game, n, raw_dir, frames, timeout):
     with tempfile.TemporaryDirectory() as nv:
         env = dict(os.environ, **lua_runner_env("qs1000trace.lua"),
                    CORE_OUT=raw_dir.as_posix(), CORE_TAG=game, CORE_TRACE_N=str(n),
-                   CORE_FRAMES=str(frames), CORE_LATCH=hex(LATCH[game]))
+                   CORE_FRAMES=str(frames), CORE_LATCH=hex(LATCH[game]),
+                   CORE_LATCH_SHIFT=str(LATCH_SHIFT.get(game, 0)), CORE_CPU=CPU.get(game, ":qs1000:cpu"),
+                   CORE_COIN=str(coin))
         cmd = mame_cmd(exe, game, "qs1000trace.lua", mame_dir,
                        ["-nvram_directory", nv, "-seconds_to_run", "3600"])
         cmd[cmd.index("-nodebug")] = "-debug"
@@ -109,10 +118,11 @@ def main():
     ap.add_argument("--frames", type=int, default=100000, help="backstop frame count")
     ap.add_argument("--timeout", type=int, default=7200)
     ap.add_argument("--keep-raw", action="store_true")
+    ap.add_argument("--coin", type=int, default=0, help="press Coin 1 at this frame for 6 frames")
     a = ap.parse_args()
     out = Path(a.out) if a.out else REPO / "debug" / "qs1000"
     raw = REPO / "debug" / f"{a.game}-qs1000raw"
-    r = run(a.game, a.n, raw, a.frames, a.timeout)
+    r = run(a.game, a.n, raw, a.frames, a.timeout, a.coin)
     check_lua_error(raw)
     if not (raw / f"{a.game}_q.done").exists():
         sys.stdout.write(r.stdout[-2000:])

@@ -1,0 +1,223 @@
+Limenko sprite census in MAME 0.289 (limenko.cpp 96962b96c89): scripts/lm_census.py, scripts/mame/lm_census.lua.
+
+Runs, each set, 1800 frames counted:
+  attract: python scripts/lm_census.py <set> --skip 600 --frames 1800
+  play:    python scripts/lm_census.py <set> --coin 600 --skip 1500 --frames 1800 --tag _play
+At each draw command the script walks the list MAME draws (the bank selected after the toggle, entries 0..the
+count latched at the previous command, enabled and inside the graphics region) without drawing. Per command:
+  count         the latched count (entries walked = count + 1)
+  enabled       entries with word 0 bit 31 set that pass MAME's bounds check
+  visible       of those, sprites with a pixel inside 384 x 240 (positions wrap at 512)
+  pix_all       sum of w * h: what MAME draws into its 512 x 512 bitmap
+  pix_vis       of those, pixels inside 384 x 240
+  maxline_vis   the most visible sprite pixels on one line
+  maxline_full  on one visible line, the summed full widths of the sprites crossing it (what a line renderer
+                fetches, 8bpp: bytes)
+  maxspr_line   the most sprites crossing one visible line
+  other         enabled entries in the bank not drawn
+Per frame: the commands, and the CPU's writes into the bank last drawn and into the other bank.
+
+dynabomb attract: 1800 frames, 1800 draw commands, 240 lines a frame
+  commands a frame: 1: 1800
+  command line (16-line bins): 0: 1800
+  CPU writes to the bank last drawn: 948773 in 1800 frames; to the other bank: 0
+  videoreg[0] bits 3:0 (spr bg md fg) at frame end: 1111: 1800
+  per command         max      p99      p50
+  count               510      510      510
+  enabled              35       35        7
+  visible              35       35        7
+  pix_all           80064    78208     9856
+  pix_vis           77568    75656     7552
+  maxline_vis         563      563      176
+  maxline_full        664      664      176
+  maxspr_line          11       11        6
+  other                35       35        7
+
+dynabomb play: 1800 frames, 1800 draw commands, 240 lines a frame
+  commands a frame: 1: 1800
+  command line (16-line bins): 0: 1800
+  CPU writes to the bank last drawn: 1020717 in 1800 frames; to the other bank: 0
+  videoreg[0] bits 3:0 (spr bg md fg) at frame end: 0000: 2, 1111: 1798
+  per command         max      p99      p50
+  count               510      510      510
+  enabled              72       63       52
+  visible              72       63       52
+  pix_all           95424    95424    23936
+  pix_vis           95424    95424    22592
+  maxline_vis         752      752      384
+  maxline_full        752      752      384
+  maxspr_line          24       23       20
+  other                72       63       52
+
+legendoh attract: 1800 frames, 1800 draw commands, 240 lines a frame
+  commands a frame: 1: 1800
+  command line (16-line bins): 0: 1800
+  CPU writes to the bank last drawn: 0 in 0 frames; to the other bank: 938493
+  videoreg[0] bits 3:0 (spr bg md fg) at frame end: 1111: 1800
+  per command         max      p99      p50
+  count                37       37       13
+  enabled              37       37       12
+  visible              37       37       12
+  pix_all           84288    84288    28416
+  pix_vis           84096    84096    23328
+  maxline_vis         616      616      320
+  maxline_full        616      616      320
+  maxspr_line          13       13        5
+  other                37       37       12
+
+legendoh play: 1800 frames, 1800 draw commands, 240 lines a frame
+  commands a frame: 1: 1800
+  command line (16-line bins): 0: 1800
+  CPU writes to the bank last drawn: 0 in 0 frames; to the other bank: 1037338
+  videoreg[0] bits 3:0 (spr bg md fg) at frame end: 1111: 1800
+  per command         max      p99      p50
+  count                86       82       67
+  enabled              84       80       66
+  visible              82       79       65
+  pix_all          104832   101696    82496
+  pix_vis           89312    87712    70136
+  maxline_vis         801      725      609
+  maxline_full        928      880      656
+  maxspr_line          23       21       16
+  other                86       81       67
+
+sb2003 attract: 1800 frames, 1800 draw commands, 240 lines a frame
+  commands a frame: 1: 1800
+  command line (16-line bins): 0: 1800
+  CPU writes to the bank last drawn: 103302 in 1797 frames; to the other bank: 0
+  videoreg[0] bits 3:0 (spr bg md fg) at frame end: 1110: 1800
+  per command         max      p99      p50
+  count                81       80        9
+  enabled              79       78        7
+  visible              79       78        7
+  pix_all          258624   257728      448
+  pix_vis          202007   201307      448
+  maxline_vis        1532     1532       56
+  maxline_full       1536     1536       56
+  maxspr_line          24       24        7
+  other                79       78        7
+
+sb2003 play: 1800 frames, 1800 draw commands, 240 lines a frame
+  commands a frame: 1: 1800
+  command line (16-line bins): 0: 1800
+  CPU writes to the bank last drawn: 241194 in 1788 frames; to the other bank: 0
+  videoreg[0] bits 3:0 (spr bg md fg) at frame end: 1110: 1800
+  per command         max      p99      p50
+  count               268      268       56
+  enabled             266      266       54
+  visible             266      266       54
+  pix_all          179584   179008    18304
+  pix_vis          176864   176256    18304
+  maxline_vis        1264     1256      208
+  maxline_full       1264     1256      208
+  maxspr_line          59       58       18
+  other               266      266       54
+
+sb2003a attract: 1800 frames, 1800 draw commands, 240 lines a frame
+  commands a frame: 1: 1800
+  command line (16-line bins): 0: 1800
+  CPU writes to the bank last drawn: 103302 in 1797 frames; to the other bank: 0
+  videoreg[0] bits 3:0 (spr bg md fg) at frame end: 1110: 1800
+  per command         max      p99      p50
+  count                81       80        9
+  enabled              79       78        7
+  visible              79       78        7
+  pix_all          258624   257728      448
+  pix_vis          202007   201307      448
+  maxline_vis        1532     1532       56
+  maxline_full       1536     1536       56
+  maxspr_line          24       24        7
+  other                79       78        7
+
+sb2003a play: 1800 frames, 1800 draw commands, 240 lines a frame
+  commands a frame: 1: 1800
+  command line (16-line bins): 0: 1800
+  CPU writes to the bank last drawn: 241194 in 1788 frames; to the other bank: 0
+  videoreg[0] bits 3:0 (spr bg md fg) at frame end: 1110: 1800
+  per command         max      p99      p50
+  count               268      268       56
+  enabled             266      266       54
+  visible             266      266       54
+  pix_all          179584   179008    18304
+  pix_vis          176864   176256    18304
+  maxline_vis        1264     1256      208
+  maxline_full       1264     1256      208
+  maxspr_line          59       58       18
+  other               266      266       54
+
+hrthouse attract: 1800 frames, 1800 draw commands, 240 lines a frame
+  commands a frame: 1: 1800
+  command line (16-line bins): 0: 1800
+  CPU writes to the bank last drawn: 1104453 in 1800 frames; to the other bank: 0
+  videoreg[0] bits 3:0 (spr bg md fg) at frame end: 1111: 1800
+  per command         max      p99      p50
+  count               512      512      512
+  enabled             108      108       98
+  visible             104      102       89
+  pix_all          191872   191232   163328
+  pix_vis          173188   171615   124188
+  maxline_vis        1109     1103      904
+  maxline_full       1120     1120      968
+  maxspr_line          39       39       33
+  other               108      108       98
+
+hrthouse play: 1800 frames, 1800 draw commands, 240 lines a frame
+  commands a frame: 1: 1800
+  command line (16-line bins): 0: 1800
+  CPU writes to the bank last drawn: 1089401 in 1800 frames; to the other bank: 0
+  videoreg[0] bits 3:0 (spr bg md fg) at frame end: 1111: 1800
+  per command         max      p99      p50
+  count               512      512      512
+  enabled             108      108       96
+  visible             102       99       83
+  pix_all          189952   189952   151936
+  pix_vis          156468   155968   114312
+  maxline_vis        1021     1020      820
+  maxline_full       1064     1064      824
+  maxspr_line          39       39       31
+  other               108      108       96
+
+spotty attract: 1800 frames, 1800 draw commands, 240 lines a frame
+  commands a frame: 1: 1800
+  command line (16-line bins): 0: 1800
+  CPU writes to the bank last drawn: 1094038 in 1800 frames; to the other bank: 0
+  videoreg[0] bits 3:0 (spr bg md fg) at frame end: 1100: 227, 1110: 1406, 1111: 167
+  per command         max      p99      p50
+  count               510      510      510
+  enabled             144      143      114
+  visible             144      143      114
+  pix_all          104832    97088    77696
+  pix_vis          104832    97088    77696
+  maxline_vis         944      920      688
+  maxline_full        944      920      688
+  maxspr_line          30       30       25
+  other               144      143      114
+
+spotty play: 1800 frames, 1800 draw commands, 240 lines a frame
+  commands a frame: 1: 1800
+  command line (16-line bins): 0: 1800
+  CPU writes to the bank last drawn: 1108440 in 1800 frames; to the other bank: 0
+  videoreg[0] bits 3:0 (spr bg md fg) at frame end: 1010: 1800
+  per command         max      p99      p50
+  count               510      510      510
+  enabled             107      107      107
+  visible             107      107      107
+  pix_all           73536    73536    73536
+  pix_vis           73536    73536    73536
+  maxline_vis         560      560      560
+  maxline_full        560      560      560
+  maxspr_line          20       20       20
+  other               107      107      107
+
+Summary
+- One draw command in every frame of every run (21,600 frames), on line 0 after the interrupt.
+- Worst line: 1536 bytes of sprite rows (sb2003 attract, at most 24 sprites on a line); the most sprites on a
+  line 59, at most 1264 bytes (sb2003 play). Worst command: 266 sprites (sb2003 play); 258,624 pixels drawn
+  and 202,007 visible (sb2003 attract).
+- After a command, dynabomb, sb2003, sb2003a, hrthouse and spotty write the next list into the bank MAME has
+  just drawn (the bank IN2 reports); legendoh writes the other bank. So in five sets MAME draws the list
+  written in the frame before the command's, and the drawn bank is rewritten from line 0 (dynabomb, spotty),
+  2 (sb2003 attract), 4 (sb2003 play), 5 (hrthouse play) or 8 (hrthouse attract) after it
+  (debug/wtiming/<set>.txt). MAME draws at the command, so it shows no conflict; a chip drawing over time
+  would read a bank being rewritten. Unresolved; the core follows MAME and must copy the list before the
+  first of those writes.

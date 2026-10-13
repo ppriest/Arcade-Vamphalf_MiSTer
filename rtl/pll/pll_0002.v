@@ -11,8 +11,10 @@ module  pll_0002(
 	// (docs/ROADMAP.md, Clocks)
 	output wire outclk_0,
 
-	// interface 'outclk1' -- SDRAM_CLK, the same 56 MHz lagging by 14955 ps (67 steps of 223.2 ps, about T - 2.9 ns; the MiSTer
-	// convention is T - 3 ns, and 14857 ps is not a legal step). sdram.sv samples read data 3 clocks after the READ command (CAS 2 plus its input
+	// interface 'outclk1' -- SDRAM_CLK, the same 56 MHz lagging by 15848 ps (71 steps of 223.2 ps, about T - 2.0 ns; the MiSTer
+	// convention, T - 3 ns, is 67 steps, 14955 ps): the read data is sampled 0.9 ns earlier in its window, which cured
+	// a black screen on Age Of Heroes on a SuperStation One (the reporter) and still runs it on a DE10-nano with a
+	// 128 MB module (debug/hw/aoh_892dc77.png, build 892dc77). sdram.sv samples read data 3 clocks after the READ command (CAS 2 plus its input
 	// register), and the chip holds a word from about phase + T + tAC to phase + 2T + tOH, so 3T falls
 	// inside only while T <= phase + tOH + board delay. 180 degrees satisfies that near 96 MHz (the
 	// KonamiGX/Psikyo clock) and not at 56 MHz, where it read the following word: the first bitstream,
@@ -33,7 +35,7 @@ module  pll_0002(
 		.phase_shift0("0 ps"),
 		.duty_cycle0(50),
 		.output_clock_frequency1("56.000000 MHz"),
-		.phase_shift1("14955 ps"),
+		.phase_shift1("15848 ps"),
 		.duty_cycle1(50),
 		.output_clock_frequency2("0 MHz"),
 		.phase_shift2("0 ps"),
