@@ -154,6 +154,10 @@ Revision `Vamphalf` at `5c4af03` (the 20261010 release), fitted 10 Oct 2026:
 
 ![Floorplan of Vamphalf](docs/floorplan/Vamphalf.png)
 
+Limenko boards, revision `Limenko`, fitted 13 Oct 2026:
+
+![Floorplan of Limenko](docs/floorplan/Limenko.png)
+
 ## Installation
 
 A 32 MB SDRAM module is required (the images are up to 24 MB; work RAM sits above them). Boong-Ga

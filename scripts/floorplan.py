@@ -319,12 +319,13 @@ def main():
                     help="one group per framework instance instead of one grey 'sys' group")
     ap.add_argument("--list", action="store_true", help="print the hierarchy with counts, draw nothing")
     ap.add_argument("--reuse", action="store_true", help="use the last atom dump, do not run Quartus")
+    ap.add_argument("--out", help="output directory (default: debug/floorplan)")
     a = ap.parse_args()
 
     root = core_root()
     rev = revision(root, a.rev)
     db = Path(a.db).resolve() if a.db else root / "build"
-    out = root / "debug" / "floorplan"
+    out = Path(a.out).resolve() if a.out else root / "debug" / "floorplan"
     out.mkdir(parents=True, exist_ok=True)
     tsv = out / f"{rev}_atoms.tsv"
     if not (a.reuse and tsv.exists()):
