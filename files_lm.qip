@@ -3,14 +3,14 @@ set_global_assignment -name SYSTEMVERILOG_FILE rtl/debug/vh_trace.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/e1/e1_regram.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/e1/e1_cpu.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/e1/e1_pipe.sv
-# the pipelined CPU (ROADMAP Phase 7)
+# e1_pipe instead of the multi-cycle e1_cpu
 set_global_assignment -name VERILOG_MACRO "E1_PIPE=1"
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/vh_cache.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/vh_cpumem.sv
 set_global_assignment -name VERILOG_FILE rtl/vh_eeprom93c46.v
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/mame_keys.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/lm_main.sv
-# vh_video.sv for its RAM modules (vh_ram_be); vh_video itself is not instantiated
+# for vh_ram_be only; vh_video is not instantiated
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/vh_video.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/lm_fb.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/lm_sprites.sv

@@ -2,8 +2,7 @@
 //
 // One port into each RAM, used in turn by the owner (vh_cpumem sequences them):
 //   lookup  la (byte address in the cached space) presented in a cycle; in the next cycle hit and
-//           q (the 8-byte half of the line holding la) are valid. The tag is compared against the
-//           address registered with the lookup.
+//           q (the 8-byte half of the line holding la) are valid, the tag compared with the registered la.
 //   fill    fill_we writes the 8-byte half fill_half of the line at fa; fill_tag with it marks the
 //           line valid (the owner writes the tag with the second half)
 //   store   st_we writes st_be lanes of st_d into the half at la (the owner asserts it only on a hit,
@@ -11,11 +10,10 @@
 //   sweep   while sweep is high the tag at sw_idx is cleared; the owner runs sw_idx over every line
 //
 // Byte order inside a half: byte 0 of the half in [63:56] (big-endian, as the CPU sees it).
-// AW: address bits of the cached space; LW: line-index bits.
 
 module vh_cache #(
-	parameter AW = 22,
-	parameter LW = 10
+	parameter AW = 22,                  // address bits of the cached space
+	parameter LW = 10                   // line-index bits
 ) (
 	input             clk,
 	input             sweep,

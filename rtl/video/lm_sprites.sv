@@ -1,22 +1,19 @@
-// The Limenko sprite draw engine (limenko.cpp spriteram_buffer_w, draw_sprites): at each draw command it copies the
-// list, clears the back buffer of the DDR3 frame buffer (lm_fb) and draws the list into it; the buffers swap at the
-// next interrupt once the draw is written (MAME shows the bitmap drawn at the last command).
+// Limenko sprite draw (limenko.cpp spriteram_buffer_w, draw_sprites): at each draw command, copy the list, clear
+// the back buffer of the DDR3 frame buffer (lm_fb) and draw the list into it; the buffers swap at the next
+// interrupt once the draw is written (MAME shows the bitmap drawn at the last command).
 //
 // The list: entries 0..count (count from the command before) of the bank the command selects, two dwords each; an
-// entry past the 8 KB sprite RAM reads 0 (MAME reads past its share). The CPU's writes to the v1 window wait while
-// it is copied (v1_wait): the games rewrite the drawn bank from the line of the command.
-// Order: MAME draws entries in order into a 512 x 512 bitmap with a priority bitmap, writing a pixel where the
-// bitmap's priority is below the sprite's (1 below fg, 2 above all), so the first entry wins within a priority. The
-// same picture comes from overwriting: the priority-1 entries from last to first, then the priority-2 entries
-// from last to first.
+// entry past the 8 KB sprite RAM reads 0 (MAME reads past its share). The CPU's v1 writes wait while it is copied
+// (v1_wait): the games rewrite the drawn bank from the line of the command.
+// Order: MAME draws entries first to last with a priority bitmap, writing where the bitmap's priority is below the
+// sprite's (1 below fg, 2 above all), so the first entry wins within a priority. Overwriting gives the same
+// picture: priority-1 entries last to first, then priority-2 entries last to first.
 // An entry: word 0 bit 31 enable, 24:16 x, 27:25 width / 8 - 1, 28 flip x, 8:0 y, 11:9 height / 8 - 1, 12 flip y;
-// word 1 18:0 the code (byte offset / 64 into the graphics), 31:28 colour, 26 below fg. Skipped when the code plus
+// word 1 18:0 the code (byte offset / 64 into the graphics), 31:28 colour, 26 below fg. Skipped when code plus
 // width * height passes the graphics' end. Positions wrap at 512 (MAME draws at x, x - 512 and y, y - 512): a pixel
 // is drawn at ((x + c) & 511, (y + r) & 511) when that is inside 384 x 240.
-// A visible row of the sprite is read from SDRAM (gfx_*, 8-byte granules) into one of two row slots while the
-// other is drawn, two clocks a pixel; pen 0 is transparent; four pixels to a DDR3 word with byte enables.
-// spotty's graphics are 4bpp, the first pixel in bits 3:0 of a byte: pixel offset o of the 8bpp space is
-// nibble o & 1 of byte o >> 1.
+// Pen 0 is transparent. spotty's graphics are 4bpp, the first pixel in bits 3:0 of a byte: pixel offset o of the
+// 8bpp space is nibble o & 1 of byte o >> 1.
 
 module lm_sprites #(
 	parameter [26:0] GFX_BASE = 27'h0e00000
@@ -54,7 +51,7 @@ module lm_sprites #(
 	output reg [15:0] dbg_late          // interrupts at which the last command's draw was not finished
 );
 
-// ---------------------------------------------------------------- list copy
+// List copy
 reg  [31:0] lst [0:2047];
 reg  [10:0] lst_ra;
 reg  [31:0] lst_q;
@@ -70,7 +67,7 @@ always @(posedge clk) begin
 end
 assign v1_wait = cp_run;
 
-// ---------------------------------------------------------------- the walk and the row fetch
+// Walk and row fetch
 localparam [3:0] W_IDLE = 0, W_COPY = 1, W_CLR = 2, W_ENT = 3, W_RD1 = 4, W_W0 = 5, W_W1 = 6, W_DEC = 7,
                  W_ROW = 8, W_SLOT = 9, W_GREQ = 10, W_GWAIT = 11, W_FIN = 12;
 reg  [3:0]  w_st;
@@ -100,7 +97,7 @@ function [6:0] units(input [2:0] a, input [2:0] b);
 	end
 endfunction
 
-// row slots: two of 8 granules, filled by the fetch, drawn by the emitter
+// row slots: two of 8 granules (gfx_*, 8-byte granules); the fetch fills one while the emitter draws the other
 reg         sl_full [0:1];
 reg         sl_f;                   // the slot the fetch fills
 reg  [8:0]  sl_y   [0:1];
@@ -222,7 +219,6 @@ always @(posedge clk) begin
 					f_n <= f_gran - 3'd1;
 					w_st <= W_GREQ;
 				end else if (s_sy >= 9'd240) begin
-					// an invisible row
 					s_row <= s_fy ? s_row - {19'd0, s_w} : s_row + {19'd0, s_w};
 					s_r <= s_r + 6'd1;
 					if (s_r + 6'd1 == s_h[5:0] || s_h == 7'd64 && s_r == 6'd63) w_st <= W_FIN;
@@ -266,8 +262,7 @@ always @(posedge clk) begin
 	end
 end
 
-// ---------------------------------------------------------------- the emitter
-// pixel c of the slot being drawn each clock, packed four to a DDR3 word; a full queue holds it
+// Emitter: pixel c of the slot each clock, packed four to a DDR3 word with byte enables; a full queue holds it
 reg         e_busy;
 reg         e_slot;
 reg  [6:0]  e_c;

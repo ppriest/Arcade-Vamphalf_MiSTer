@@ -1,11 +1,9 @@
-// The Limenko sprite frame buffer in DDR3 (ROADMAP Phase 8, memory plan): two buffers of 240 lines, each line 512
-// pixels of 16 bits (the visible 384 used): bits 11:0 the palette index, 13:12 the priority (0 none, 1 below fg,
-// 2 above all). The draw side (lm_sprites) queues pixel words and clears; the scan-out reads the front buffer's
-// next line into a line buffer during the line before.
-//
-//   buffer b, line l, word k (4 pixels, pixel x in bits 16 * (x & 3) + 15..): DDR3 64-bit word
-//   FB_BASE + b * 0x8000 + l * 128 + k
-//
+// Limenko sprite frame buffer in DDR3 (docs/ROADMAP.md memory plan): two buffers of 240 lines of 512 16-bit pixels
+// (384 used): bits 11:0 the palette index, 13:12 the priority (0 none, 1 below fg, 2 above all). The draw side
+// (lm_sprites) queues pixel words and clears; the scan-out reads the front buffer's next line into a line buffer
+// during the line before.
+// Buffer b, line l, word k (4 pixels, pixel x in bits 16 * (x & 3) + 15..): 64-bit word FB_BASE + b * 0x8000 +
+// l * 128 + k.
 // DDRAM_* is MiSTer's Avalon port: a read of BURSTCNT words returns them on DOUT_READY beats; a burst write holds
 // WE for each beat, ADDR and BURSTCNT taken on the first; BUSY stalls either. One transaction at a time here. A
 // line read goes before queued writes; a clear is queued with the writes, so it lands after the writes before it.

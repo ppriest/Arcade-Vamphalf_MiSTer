@@ -7,10 +7,10 @@
 //   P3 bit 3 falls               the latch takes the main CPU's sound latch; pending clears
 //   P3 read                      bit 2 = no sound latch pending, the rest 0             audiocpu_p3_r
 //
-// in that order within one P3 write. Both latches are ff after reset (the 8051's reset writes P3 and P1 with ff).
-// The MCU is jt8052 with its 4 KB ROM in block RAM (from dl_*), on an enable of 1 in 14 clocks; the M6295
-// takes every fourth. The M6295's ROM (MAME's "oki", 256 KB) is read from SDRAM at SAMPLES_BASE through the
-// bridge and the per-channel granule cache, as in vh_ymoki.
+// in that order within one P3 write. The board latch and the P3 copy are ff after reset (the 8051's reset
+// writes P1 and P3 with ff). The MCU is jt8052 with its 4 KB ROM in block RAM (from dl_*), on an enable of 1
+// in 14 clocks; the M6295 takes every fourth. The M6295's ROM (MAME's "oki", 256 KB) is read from SDRAM at
+// SAMPLES_BASE through the bridge and the per-channel granule cache, as in vh_ymoki.
 module lm_spotty #(
 	parameter [26:0] SAMPLES_BASE = 27'h0
 ) (
@@ -34,7 +34,7 @@ module lm_spotty #(
 	output signed [15:0] out
 );
 
-// ---------------------------------------------------------------- clock enables
+// Clock enables
 reg [3:0] cdiv;
 reg [1:0] odiv;
 reg       mcen, ocen;
@@ -51,7 +51,7 @@ always @(posedge clk) begin
 	end else cdiv <= cdiv + 4'd1;
 end
 
-// ---------------------------------------------------------------- AT89C4051
+// AT89C4051
 wire [15:0] rom_addr;
 wire [7:0]  rom_q, ram_addr, ram_dout, ram_din;
 wire        ram_we, p1_we, p3_we;
@@ -84,7 +84,7 @@ jt8052 u_mcu (
 	.p3_we(p3_we), .p3_latch(p3_latch), .p1_we(p1_we)
 );
 
-// ---------------------------------------------------------------- the board latch
+// The board latch
 wire [7:0] oki_dout;
 reg        oki_wr;
 reg  [7:0] oki_din;
@@ -111,7 +111,7 @@ always @(posedge clk) begin
 	end
 end
 
-// ---------------------------------------------------------------- M6295
+// M6295
 wire        [17:0] oki_rom_addr;
 wire        [7:0]  oki_rom_data;
 wire               oki_rom_ok;

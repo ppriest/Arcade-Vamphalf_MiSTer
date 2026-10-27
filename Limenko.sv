@@ -35,8 +35,6 @@ assign BUTTONS   = 0;
 assign AUDIO_S   = 1;
 assign AUDIO_MIX = status[48:47];
 
-//////////////////////////////////////////////////////////////////
-
 `include "rtl/lm_sdram_map.svh"
 `include "build_id.v"
 
@@ -129,7 +127,7 @@ hps_io #(.CONF_STR(CONF_STR)) hps_io
 	.ps2_key(ps2_key)
 );
 
-///////////////////////   CLOCKS   ///////////////////////////////
+// Clocks
 
 wire clk_sys, clk_sdram_shifted, pll_locked;
 
@@ -144,12 +142,12 @@ pll pll
 
 assign SDRAM_CLK = clk_sdram_shifted;
 
-///////////////////////   RESET   ////////////////////////////////
+// Reset
 
 wire reset = RESET | status[0] | buttons[1] | ~pll_locked;
 
 // The game is held until a ROM is in SDRAM and while the fast load copies it; the memory path is not
-// (LESSONS_LEARNED, "Never hold the memory path in the core reset"). As Vamphalf.sv.
+// (as Vamphalf.sv).
 wire ldr_active;
 reg  rom_loaded = 1'b0, dl_seen = 1'b0, ldr_active_d = 1'b0;
 always @(posedge clk_sys) begin
@@ -168,9 +166,9 @@ reg  nvm_seen = 1'b0;
 wire dl0 = ioctl_download && ioctl_index == 16'd0;
 
 // The video, lm_fb's DDR3 reads with it, is held with the game and from a reset until the copy has started: the
-// copy shares the DDR3 port, and ddram_phy takes any read data that arrives while it waits as its own, so a line
-// read still returning when the copy began shifted the whole image (on the board: a black screen, the CPU
-// trapping at 0xfffffff0). The copy starts only after 256 clocks of that hold, the longest such read drained.
+// copy shares the DDR3 port and ddram_phy takes any read data arriving while it waits as its own, so a line read
+// still in flight shifts the whole image (board: black screen, CPU trapping at 0xfffffff0). The copy waits for
+// 256 clocks of that hold, enough to drain the longest such read.
 wire vid_rst = ~pll_locked | core_reset | ldr_pending | ldr_start;
 reg  [8:0] vid_quiet = 9'd0;
 always @(posedge clk_sys) vid_quiet <= !vid_rst ? 9'd0 : vid_quiet[8] ? vid_quiet : vid_quiet + 9'd1;
@@ -195,7 +193,7 @@ always @(posedge clk_sys) begin
 	end
 end
 
-///////////////////   .mra: mod byte   ///////////////////////////
+// .mra mod byte
 
 // <rom index="1"> (scripts/build_mra_lm.py): [2:0] the game (0 dynabomb, 1 sb2003, 2 legendoh, 3 hrthouse,
 // 4 spotty), [4] a 1 MB program at 0xfff00000 (spotty)
@@ -206,7 +204,7 @@ wire       prg1 = mod_byte[4];
 localparam [2:0] G_DB = 0, G_SB = 1, G_LH = 2, G_HH = 3, G_SP = 4;
 assign mono = game == G_SP;
 
-///////////////////////   INPUTS   ///////////////////////////////
+// Inputs
 
 // MiSTer joystick: 0 R, 1 L, 2 D, 3 U, buttons 1-4 at 4-7, Start 8, Coin 9, Pause 10, Service Coin 11,
 // Service Mode 12, buttons 5-7 at 13-15. MAME's default keys (rtl/mame_keys.sv) ORed into the pads.
@@ -281,7 +279,7 @@ always @(posedge clk_sys) begin
 end
 wire pause_cpu = pause_toggle | status[82];
 
-///////////////////////   NVRAM   ////////////////////////////////
+// NVRAM
 
 // The load byte stream: the HPS's, or the fast load's replay of the regions caught here (index 0).
 wire        ldr_tb_wr;
@@ -345,7 +343,7 @@ always @(posedge clk_sys) begin
 	end
 end
 
-///////////////////////   THE BOARD   ////////////////////////////
+// Board
 
 // the E1's 80 MHz (20 MHz x 4) as timer ticks: one every clock, a second in 3 of every 7
 reg [2:0] tk7 = 3'd0;
@@ -593,7 +591,7 @@ sdram #(.RFS_INTERVAL(10'd218)) u_sdram (
 	.ack2(m2_ack), .dbl2(m2_dbl), .dout2b()
 );
 
-///////////////////////   VIDEO   ////////////////////////////////
+// Video
 
 wire vga_de_raw;
 wire [7:0] crt_r, crt_g, crt_b;

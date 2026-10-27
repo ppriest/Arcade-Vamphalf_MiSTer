@@ -4,9 +4,9 @@
 //   YM2151   28 MHz / 8 = 3.5 MHz, or 14.318181 MHz / 4 on the SUPLUP board (sound_suplup)   jt51
 //   M6295    28 MHz / 16 = 1.75 MHz, or 14.318181 MHz / 8; pin 7 high                      jt6295
 //
-// Both chips' clocks are fractional enables of clk (56 MHz) from one 32-bit phase accumulator each: the
-// enable rate over clk, times 2^32, chosen by xtal14. The M6295's ROM (MAME's "oki1" region) is read from SDRAM at
-// SD_SAMPLES through the bridge and the per-channel granule cache (rtl/sound/PROVENANCE.md).
+// Each chip's clock is a fractional enable of clk (56 MHz) from its own 32-bit phase accumulator, stepping by
+// the enable rate over clk times 2^32, chosen by xtal14 and aoh. The M6295's ROM (MAME's "oki1" region) is read
+// from SDRAM at SD_SAMPLES through the bridge and the per-channel granule cache (rtl/sound/PROVENANCE.md).
 //
 // aoh (vamphalf.cpp:1347-1375): the YM2151 at 3.579545 MHz, "oki1" at 32 MHz / 8 = 4 MHz (SD_SAMPLES, not banked)
 // and a second M6295, "oki2", at 32 MHz / 32 = 1 MHz (SD_SAMPLES2, banked as banked_oki(1)); the two caches
@@ -31,7 +31,7 @@ module vh_ymoki (
 	input       [7:0]   oki_din,
 	output      [7:0]   oki_dout,
 	input       [2:0]   bank,
-	input               banked,           // banked_oki_map (vamphalf.cpp:695): 0x20000-0x3ffff is bank * 0x20000 of the region
+	input               banked,           // banked_oki_map (vamphalf.cpp:695): 0x20000-0x3ffff -> bank * 0x20000
 	input               oki2_wr,          // aoh's oki2 (banked by bank)
 	output      [7:0]   oki2_dout,
 
@@ -47,7 +47,7 @@ module vh_ymoki (
 
 `include "vh_sdram_map.svh"
 
-// ---------------------------------------------------------------- clock enables
+// Clock enables
 reg [31:0] acc_ym = 0, acc_oki = 0, acc_oki2 = 0;
 wire [31:0] step_ym  = (xtal14 || aoh) ? 32'h105d_1736 : 32'h1000_0000;            // 3579545.25 Hz, 3.5 MHz
 wire [31:0] step_oki = aoh ? 32'h1249_2492 : xtal14 ? 32'h082e_8b9b : 32'h0800_0000;   // 4 MHz, 1789772.62 Hz, 1.75 MHz
@@ -61,7 +61,7 @@ always @(posedge clk) begin
 end
 wire cen_ym_p1 = cen_ym && ym_half;
 
-// ---------------------------------------------------------------- YM2151
+// YM2151
 wire signed [15:0] ym_l, ym_r;
 jt51 u_ym (
 	.rst(rst), .clk(clk), .cen(cen_ym), .cen_p1(cen_ym_p1),
@@ -70,7 +70,7 @@ jt51 u_ym (
 	.left(ym_l), .right(ym_r), .xleft(), .xright()
 );
 
-// ---------------------------------------------------------------- M6295
+// M6295
 wire        [17:0] oki_rom_addr;
 wire        [7:0]  oki_rom_data;
 wire               oki_rom_ok;
@@ -102,7 +102,7 @@ sample_cache #(.ENTRIES(8)) u_cache (
 	.g_req(g_req), .g_addr(g_addr), .g_valid(g_valid), .g_data(g_data)
 );
 
-// ---------------------------------------------------------------- aoh's second M6295
+// aoh's second M6295
 wire        [17:0] oki2_rom_addr;
 wire        [7:0]  oki2_rom_data;
 wire               oki2_rom_ok;
@@ -133,8 +133,7 @@ sample_cache #(.ENTRIES(8)) u_cache2 (
 	.g_req(g2_req), .g_addr(g2_addr), .g_valid(g2_valid), .g_data(g_data)
 );
 
-// granule fetches on port 1 (toggle protocol; each cache holds g_req until its g_valid), the first M6295's
-// first
+// granule fetches on port 1 (toggle protocol; each cache holds g_req until its g_valid), the first M6295's first
 reg sd_busy, sd_two;
 always @(posedge clk) begin
 	g_valid <= 1'b0;
@@ -161,7 +160,7 @@ always @(posedge clk) begin
 	end
 end
 
-// ---------------------------------------------------------------- mix
+// Mix
 wire signed [17:0] oki_x16 = {oki_snd, 4'd0};
 wire signed [17:0] oki2_x16 = aoh ? {oki2_snd, 4'd0} : 18'sd0;
 wire signed [18:0] sum_l = ym_l + oki_x16 + oki2_x16;

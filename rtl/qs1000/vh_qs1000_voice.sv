@@ -1,27 +1,24 @@
-// QS1000 wavetable engine, as MAME models it (devices/sound/qs1000.cpp; scripts/qs1000_model.py is
-// the same model in Python and the bench's reference).
+// QS1000 wavetable engine as MAME models it (devices/sound/qs1000.cpp); scripts/qs1000_model.py is the same
+// model in Python and the bench's reference. Departures from MAME: docs/MAME_KLUDGES.md and docs/HACKS.md.
 //
-// MAME runs the engine at 24 MHz / 32 = 750 kHz: per tick every playing voice outputs one sample
-// (8-bit PCM, or IMA ADPCM decoded one nibble per address step, high nibble first, its 16-bit signal
-// wrapping instead of saturating: Arcade-Eolith_MiSTer docs/QS1000_FEATURES.md; MAME decodes OKI), scaled by left/right and voice volume,
-// and advances its address by an 18-bit-fraction pitch accumulator. No envelope, no filter. With loop_pcb
-// low, as MAME: no looping, a voice stops at its loop end, and key-off does nothing. With loop_pcb high
-// (Arcade-Eolith_MiSTer docs/QS1000_FEATURES.md, Recording): a voice reaching its loop end goes back to its
-// loop start (ADPCM with the decoder state it had there, MAME's disabled save/restore), key-off fades
-// it out (`env`) instead, and [204] bends its pitch (`bendmul`; MAME ignores it).
+// Per 750 kHz tick (24 MHz / 32) every playing voice outputs one sample, scaled by left/right and voice
+// volume, and advances its address by an 18-bit-fraction pitch accumulator. No envelope, no filter.
+// Samples are 8-bit PCM or IMA ADPCM (MAME decodes OKI): one nibble per address step, high nibble first,
+// the 16-bit signal wrapping instead of saturating (Arcade-Eolith_MiSTer docs/QS1000_FEATURES.md).
+// loop_pcb low, as MAME: no looping, a voice stops at its loop end, key-off does nothing. loop_pcb high
+// (QS1000_FEATURES.md, Recording): a voice at its loop end returns to its loop start (ADPCM with its decoder
+// state there, MAME's disabled save/restore), key-off fades it out (`env`), [204] bends its pitch (`bendmul`).
 //
-// Register writes (0x200-0x211 of the 8052's data space, `wr_*`) and ticks (`tick`) enter one queue in
-// arrival order and are applied in that order, so the output sequence is MAME's even when a key-on
-// waits for its ROM reads; the engine catches up between ticks (32 voices take 32 clocks plus the
-// pipeline, of the 74.7 a tick has at 56 MHz).
+// Register writes (0x200-0x211 of the 8052's data space) and ticks share one queue, applied in arrival order,
+// so the output sequence is MAME's even when a key-on waits for ROM reads; the engine catches up between
+// ticks (32 voices take 32 clocks plus the pipeline, of the 74.7 a tick has at 56 MHz).
 //
-// Sample ROM reads go through rom_*: a request for one 16-byte line of the sample region (line address
-// = byte address >> 4), answered by rom_ack with the line, byte 0 in [127:120]. Each voice keeps two
-// lines (the one it reads and the next, prefetched); the pipeline stalls only if the line it needs has
-// not arrived.
+// rom_*: one 16-byte line of the sample region per request (line = byte address >> 4), byte 0 in [127:120].
+// Each voice keeps two lines, the one it reads and the next (prefetched); the pipeline stalls only on a line
+// that has not arrived.
 //
-// mix_valid pulses once per tick with the left and right sums (before MAME's /4096); out_l/out_r are
-// the 16-bit output, the mean of 16 ticks (46.875 kHz), clamped.
+// mix_*: the left and right sums, once per tick, before MAME's /4096. out_*: the mean of 16 ticks
+// (46.875 kHz) after the /4096, clamped to 16 bits.
 
 module vh_qs1000_voice (
 	input              clk,
@@ -31,7 +28,7 @@ module vh_qs1000_voice (
 	input       [4:0]  wr_off,          // register - 0x200
 	input       [7:0]  wr_data,
 	input              tick,            // 750 kHz
-	input              bal_pcb,         // 1: the PCB recording's balance (the core); 0: MAME's (benches). See S5
+	input              bal_pcb,         // 1: the PCB recording's balance (the core); 0: MAME's (benches). See S5 gains
 	input              loop_pcb,        // 1: looping, the key-off fade, pitch bend (the core); 0: MAME's (benches)
 
 	output reg         rom_req,         // held until rom_ack
@@ -49,16 +46,15 @@ module vh_qs1000_voice (
 	output reg  [15:0] dbg_stalls       // pipeline stalls on a missing sample line
 );
 
-// ---------------------------------------------------------------- event queue
-// {tick, off[4:0], data[7:0]}
+// Event queue: {tick, off[4:0], data[7:0]}
 localparam QW = 14;
 reg  [QW-1:0] q_mem [0:255];
 reg  [7:0]  q_wr, q_rd;
 wire [7:0]  q_cnt = q_wr - q_rd;
 reg  [QW-1:0] q_head;
-// a write arriving with a tick is queued a clock after it: it belongs to the next sample, as MAME
-// applies a write stamped with the current tick before that tick's sample (the 8052 writes once in
-// 28 clocks or more, so the held write is never overtaken)
+// a write arriving with a tick is queued a clock after it, for the next sample, as MAME applies a write
+// stamped with the current tick before that tick's sample. The 8052 writes at most once in 28 clocks, so
+// the held write is never overtaken.
 reg         wr_h;
 reg  [12:0] wr_hd;
 wire        q_push = tick || wr || wr_h;
@@ -81,18 +77,17 @@ always @(posedge clk) begin
 	q_head <= q_mem[q_rd];
 end
 
-// ---------------------------------------------------------------- registers
+// Registers
 reg  [7:0]  wave [0:17];
-// per-voice volumes, written by key-on and the direct channel writes (E_POP, a clock later), read with
-// the voice in S1 so that S2 has them
+// per-voice volumes: written by key-on and channel writes (from E_POP, a clock later), read in S1 for S2
 reg  [7:0]  lv_mem [0:31], rv_mem [0:31], vv_mem [0:31];
 reg  [7:0]  lv_q, rv_q, vv_q;
 reg         lv_we, rv_we, vv_we;
 reg  [4:0]  vo_wa;
 reg  [7:0]  lv_wd, rv_wd, vv_wd;
 reg  [4:0]  s1_ch;
-// per-voice pitch: the table entry's rate (kf_mem, from key-on) and the bent rate the pipeline adds
-// (fe_mem, rate x bendmul([204]) >> 14), rewritten at key-on and on each channel write of [204]
+// per-voice pitch: kf_mem the table entry's rate (key-on); fe_mem the bent rate the pipeline adds,
+// rate x bendmul([204]) >> 14, written at key-on and on each channel write of [204]
 reg  [15:0] kf_mem [0:31];
 reg  [17:0] fe_mem [0:31];
 reg  [15:0] kf_q;
@@ -114,7 +109,7 @@ always @(posedge clk) begin
 	kf_q <= kf_mem[b_ch];
 end
 
-// ---------------------------------------------------------------- voice state
+// Voice state
 // {sstep[6], ssig[15:12], step[6], sig[15:12],
 //  env[15:0], ssig[11:0], sstep[5:0], lstart[23:0],
 //  flags[1:0] (playing, adpcm), step[5:0], sig[11:0], aaddr[24:0], freq[15:0], acc[17:0],
@@ -157,7 +152,7 @@ always @(posedge clk) begin
 	tg1_q <= tg1_mem[st_ra];
 end
 
-// ---------------------------------------------------------------- ADPCM: IMA's step table
+// ADPCM: IMA's step table
 function [14:0] stepval(input [6:0] s);
 	case (s)
 		7'd0: stepval = 7;     7'd1: stepval = 8;     7'd2: stepval = 9;     7'd3: stepval = 10;
@@ -186,14 +181,14 @@ function [14:0] stepval(input [6:0] s);
 	endcase
 endfunction
 
-// ---------------------------------------------------------------- pitch bend: [204], bit 7 up, bits 6-0 the
-// magnitude v; the rate x (1 + v/128) up, x (1 - v/256) down, in 2.14 (Arcade-Eolith_MiSTer
-// docs/QS1000_FEATURES.md: +16 at +195 cents on Hidden Catch's PCB, -24..-2 at 6.8 cents a step on MIDI recordings)
+// Pitch bend: [204] bit 7 up, bits 6-0 the magnitude v; the rate x (1 + v/128) up, x (1 - v/256) down, in 2.14
+// (Arcade-Eolith_MiSTer docs/QS1000_FEATURES.md: +16 at +195 cents on Hidden Catch's PCB, -24..-2 at 6.8 cents
+// a step on MIDI recordings; docs/HACKS.md)
 function [15:0] bendmul(input [7:0] v);
 	bendmul = v[7] ? 16'd16384 + {2'd0, v[6:0], 7'd0} : 16'd16384 - {3'd0, v[6:0], 6'd0};
 endfunction
 
-// ---------------------------------------------------------------- engine
+// Engine
 localparam [3:0] E_IDLE = 0, E_POP = 1, E_TICK = 2, E_DRAIN = 3, E_KON = 4, E_KWAIT = 5, E_KDONE = 6,
                  E_OUT = 7, E_CLR = 8, E_B1 = 9, E_B2 = 10, E_B3 = 11;
 reg  [4:0]  clr_n;
@@ -203,13 +198,13 @@ reg  [2:0]  kstep;              // key-on reads: 0,1 the table entry's line and 
 reg  [255:0] kbuf;              // the line holding kbase, then the next
 reg  [23:0] kbase;              // table entry, then descriptor address
 reg  [15:0] kfreq;
-// the bent rate: at key-on from kfreq and the staged [204] (stable while the key-on reads, as the queue
-// waits), registered over the reads; on a channel write of [204], from kf_mem over E_B1-E_B3
+// the bent rate: at key-on, kfreq x the staged [204], registered over the key-on reads (the queue waits, so
+// [204] holds); on a channel write of [204], kf_mem x bendmul over E_B1-E_B3
 reg  [15:0] kmul, bmul;
 reg  [31:0] kprod, bprod;
 reg  [7:0]  b_val;
-// key-off fade: rel_v marks the voices keyed off since their key-on (loop_pcb). env -= env >> 8 on every
-// 732nd tick, a time constant of 256 x 732 ticks, 0.25 s at 750 kHz (HACKS.md: one rate for every sample)
+// key-off fade (loop_pcb): rel_v marks the voices keyed off since their key-on. env -= env >> 8 every 732nd
+// tick: a time constant of 256 x 732 ticks, 0.25 s (HACKS.md: one rate for every sample)
 reg  [31:0] rel_v;
 reg  [9:0]  env_ctr;
 reg         env_go;             // this tick decays the fading voices
@@ -240,7 +235,7 @@ always @* begin
 		if (pf_want[j]) pf_pick = j[5:0];
 end
 
-// pipeline
+// Pipeline
 reg  [4:0]  s0_ch;
 reg         s0_v, s1_v, s2_v;
 reg  [4:0]  s2_ch;
@@ -302,13 +297,12 @@ reg  signed [8:0]  r3_res;
 reg  [7:0]  r3_vv, r3_lv, r3_rv, r4_lv, r4_rv;
 reg  signed [17:0] r4_s;
 reg  signed [27:0] r5_pl, r5_pr;
-// the rate is fe_q, the bent one (fe_mem, read with the voice in S1); with loop_pcb low it is the entry's rate
+// fe_q: the bent rate, or the entry's rate with loop_pcb low
 wire [18:0] s2_accsum = {1'b0, s2_st[89:72]} + {1'b0, fe_q};
 wire [23:0] s2_addr_new = s2_st[23:0] + {23'd0, s2_accsum[18]};
-// loop_pcb: the nibble decoded is lstart's, so its pre-decode state is the one to restore at each wrap;
-// and the address after this tick reaches lend, so the voice is written back at lstart, its nibble index
-// one before, with that state: the next tick decodes and outputs lstart's sample, as MAME's disabled code
-// does on finding addr >= loop_end
+// loop_pcb. s2_save: the nibble decoded is lstart's; its pre-decode state is what each wrap restores.
+// s2_wrap: the address after this tick reaches lend; the voice is written back at lstart, nibble index one
+// before, with that state, so the next tick outputs lstart's sample (MAME's disabled code on addr >= loop_end)
 wire [23:0] s2_lst = s2_st[174:151];
 wire        s2_save = loop_pcb && s2_adp && s2_dec && (s2_st[47:24] + s2_na[23:0] == s2_lst);
 wire        s2_wrap = loop_pcb && (s2_lst < s2_st[71:48]) &&
@@ -375,9 +369,8 @@ always @(posedge clk) begin
 		env_go <= 1'b0;
 	end else begin
 		r3_v <= 1'b0;
-		// line requests (demand and prefetch) go out when the fetch unit is free and no key-on is reading;
-		// the slot is invalidated now and turns valid with the data (not a slot whose pf_mem entry is
-		// written this clock: pf_q would read the old one)
+		// line requests (demand and prefetch) go out when the fetch unit is free and no key-on is reading; the
+		// slot is invalid until its data. Not a slot whose pf_mem entry is written this clock: pf_q would be stale.
 		if (!f_busy && !rom_req && es != E_KON && es != E_KWAIT && pf_want != 64'd0 &&
 		    !(pf_we && pf_wa == pf_pick)) begin
 			f_busy <= 1'b1;
@@ -416,8 +409,10 @@ always @(posedge clk) begin
 							if (q_head[7:0] == 8'd0) begin
 								kch <= wave[14][4:0];
 								vo_wa <= wave[14][4:0];
-								lv_we <= 1'b1; lv_wd <= wave[7];      // [207] left, [206] right: MAME has them the
-								rv_we <= 1'b1; rv_wd <= wave[6];      // other way (Arcade-Eolith_MiSTer docs/QS1000_FEATURES.md)
+								// [207] left, [206] right: MAME has them the other way (MAME_KLUDGES.md,
+								// Arcade-Eolith_MiSTer docs/QS1000_FEATURES.md)
+								lv_we <= 1'b1; lv_wd <= wave[7];
+								rv_we <= 1'b1; rv_wd <= wave[6];
 								vv_we <= 1'b1; vv_wd <= wave[8];
 								kbase <= {wave[1], wave[2], wave[3]};
 								kstep <= 3'd0;
@@ -442,7 +437,7 @@ always @(posedge clk) begin
 				end
 			end
 
-			// ---- key-on: read the table entry (6 bytes at kbase) and the descriptor (9 bytes)
+			// Key-on: read the table entry (6 bytes at kbase) and the descriptor (9 bytes)
 			E_KON: if (!f_busy && !rom_req) begin
 				f_busy <= 1'b1;
 				f_kon <= 1'b1;
@@ -494,8 +489,7 @@ always @(posedge clk) begin
 				end
 			end
 
-			// ---- one tick: voices 0..31 through S0 (state read), S1 (line check), S2 (sample, write back);
-			// S3-S5 below
+			// Tick: voices 0..31 through S0 (state read), S1 (line check), S2 (sample, write back); S3-S5 below
 			E_TICK, E_DRAIN: begin
 				if (!stall) begin
 					// S0 -> S1
@@ -552,7 +546,7 @@ always @(posedge clk) begin
 					if (s2_ch == 5'd31) es <= E_OUT;
 				end
 			end
-			// ---- a channel write of [204]: kf_q holds the voice's rate from E_B1's edge on
+			// Channel write of [204]: kf_q holds the voice's rate from E_B1's edge on
 			E_B1: begin
 				bmul <= bendmul(b_val);
 				es <= E_B2;
@@ -601,8 +595,8 @@ always @(posedge clk) begin
 		r5_pl <= r4_s * $signed({1'b0, r4_lv});
 		r5_pr <= r4_s * $signed({1'b0, r4_rv});
 		if (r5_v) begin
-			// bal_pcb low: ADPCM x4, PCM x1 (MAME's gains, qs1000.cpp:484, :513). bal_pcb high, the PCB balance
-			// (MAME_KLUDGES.md, Sound): ADPCM x8, PCM x4, the IMA music at the level the recording set for OKI's x2
+			// bal_pcb low: ADPCM x4, PCM x1 (MAME, qs1000.cpp:484, :513). High, the PCB balance (MAME_KLUDGES.md,
+			// Sound): ADPCM x8, putting IMA's music at the level the recording set for OKI's x2 (HACKS.md); PCM x4
 			acc_l <= acc_l + (r5_adp ? (bal_pcb ? {{1{r5_pl[27]}}, r5_pl, 3'b0} : {{2{r5_pl[27]}}, r5_pl, 2'b0})
 			                         : (bal_pcb ? {{2{r5_pl[27]}}, r5_pl, 2'b0} : {{4{r5_pl[27]}}, r5_pl}));
 			acc_r <= acc_r + (r5_adp ? (bal_pcb ? {{1{r5_pr[27]}}, r5_pr, 3'b0} : {{2{r5_pr[27]}}, r5_pr, 2'b0})

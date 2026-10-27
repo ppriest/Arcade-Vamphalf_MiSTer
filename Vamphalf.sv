@@ -6,9 +6,9 @@
 // output chain. The board is rtl/vh_main.sv (CPU, memory, I/O), rtl/video/vh_video.sv and the sound
 // boards (rtl/qs1000/vh_qs1000.sv, rtl/sound/vh_ymoki.sv).
 //
-// Clocks (rtl/pll): clk_sys 56 MHz for everything, SDRAM included; SDRAM_CLK the same lagging by T - 2 ns (rtl/pll/pll_0002.v:
-// 71 steps of the 560 MHz VCO's 223.2 ps; the MiSTer convention, T - 3 ns, is 67), so the read data is sampled 0.9 ns
-// earlier in its window: a black screen on Age Of Heroes on a SuperStation One, which this cured (the reporter).
+// Clocks (rtl/pll): clk_sys 56 MHz for everything, SDRAM included. SDRAM_CLK is clk_sys lagging by T - 2 ns
+// (rtl/pll/pll_0002.v: 71 steps of the 560 MHz VCO's 223.2 ps; MiSTer's usual T - 3 ns is 67), sampling read data
+// 0.9 ns earlier: with T - 3 ns Age Of Heroes showed a black screen on a SuperStation One (user report).
 
 module emu
 (
@@ -38,15 +38,12 @@ assign AUDIO_MIX = status[48:47];
 assign AUDIO_L   = snd_qs ? qs_l : yo_l;
 assign AUDIO_R   = snd_qs ? qs_r : yo_r;
 
-//////////////////////////////////////////////////////////////////
-
 `include "rtl/vh_sdram_map.svh"
 `include "build_id.v"
 
 wire [1:0] ar = status[122:121];
 
-// Rotation: Auto follows the set's MAME rotation from the mod byte (Mission Craft ROT90, Wivern Wings
-// ROT270, the others ROT0).
+// Rotation Auto: the set's MAME rotation from the mod byte (Mission Craft ROT90, Wivern Wings ROT270, others ROT0)
 wire       board;
 wire [1:0] game_rot;
 wire [1:0] rot_sel    = status[64:63];
@@ -105,7 +102,7 @@ wire [26:0] ioctl_addr;
 wire  [7:0] ioctl_dout;
 wire        ioctl_wait;
 wire  [7:0] ioctl_din;
-wire        f_aoh;                       // the running set is aoh (family 14, below)
+wire        f_aoh;                       // the running set is aoh
 wire [8:0]  vid_vpos;                    // vh_video's line and copy flag, for probe V
 wire        vid_copy;
 wire        ioctl_upload;
@@ -144,7 +141,7 @@ hps_io #(.CONF_STR(CONF_STR)) hps_io
 	.ps2_key(ps2_key)
 );
 
-///////////////////////   CLOCKS   ///////////////////////////////
+// Clocks
 
 wire clk_sys, clk_sdram_shifted, pll_locked;
 
@@ -159,13 +156,12 @@ pll pll
 
 assign SDRAM_CLK = clk_sdram_shifted;
 
-///////////////////////   RESET   ////////////////////////////////
+// Reset
 
 wire reset = RESET | status[0] | buttons[1] | ~pll_locked;
 
-// The game is held until a ROM is in SDRAM (rom_loaded, by either path) and while the fast load copies
-// it (ldr_active); the memory path is not (LESSONS_LEARNED, "Never hold the memory path in the core
-// reset").
+// The game is held until a ROM is in SDRAM (by either path) and while the fast load copies it; the memory path
+// is not (LESSONS_LEARNED, "Never hold the memory path in the core reset").
 wire ldr_active;
 reg  rom_loaded = 1'b0, dl_seen = 1'b0, ldr_active_d = 1'b0;
 always @(posedge clk_sys) begin
@@ -179,9 +175,9 @@ wire       dbg_hold;
 wire core_reset = reset | ioctl_download | ~rom_loaded | ldr_active | dbg_hold;
 
 // Fast ROM load (rtl/memory/vh_rom_loader.sv; trigger after Arcade-Seta_MiSTer's Seta.sv, with
-// Arcade-JalecoMS32_MiSTer's dl0_seen). With address="0x30000000" on the .mra's index-0 ROM the HPS
-// puts the image in DDR3 and the download has no ioctl_wr; the copy starts on the next reset release,
-// once per index-0 download. A download that streams bytes is a byte-path load and is not copied over.
+// Arcade-JalecoMS32_MiSTer's dl0_seen). With address="0x30000000" on the .mra's index-0 ROM the HPS puts the
+// image in DDR3 and sends no ioctl_wr; the copy starts on the next reset release, once per index-0 download.
+// A download that streams bytes went by the byte path and is not copied.
 reg  dl0_d = 1'b0, dl0_seen = 1'b0, dl_seen_wr = 1'b0, ldr_pending = 1'b0, ldr_start = 1'b0, ldr_done = 1'b0;
 reg  nvm_seen = 1'b0;
 wire dl0 = ioctl_download && ioctl_index == 16'd0;
@@ -206,7 +202,7 @@ always @(posedge clk_sys) begin
 	end
 end
 
-///////////////////   .mra: mod byte   ///////////////////////////
+// .mra mod byte
 
 // <rom index="1">, two bytes (scripts/build_mra.py SETS, BUS32):
 //   byte 0: [0] the E1-32 board, [2:1] rotation (0 ROT0, 1 ROT90, 2 ROT270), [7:3] the I/O map (vh_main family)
@@ -221,12 +217,12 @@ always @(posedge clk_sys)
 assign board    = mod_byte[0];
 assign game_rot = mod_byte[2:1];
 wire [4:0] family = mod_byte[7:3];
-wire       snd_qs = family < 5'd2 || family == 5'd11;   // the QS1000 boards; the others have the YM2151 + M6295
-wire       prg2 = mod_byte1[1];      // a 2 MB program (yorijori)
-wire       f_suplup = family == 5'd7;   // the SUPLUP board: 14.318181 MHz sound clocks, colour in word 2's high byte
-assign     f_aoh = family == 5'd14;     // aoh: its memory map, an 80 MHz CPU, its video and a second M6295
+wire       snd_qs = family < 5'd2 || family == 5'd11;  // the QS1000 boards; the others have the YM2151 + M6295
+wire       prg2 = mod_byte1[1];                        // yorijori
+wire       f_suplup = family == 5'd7;                  // SUPLUP: 14.318181 MHz sound, colour in word 2's high byte
+assign     f_aoh = family == 5'd14;                    // aoh: its memory map, an 80 MHz CPU, its video, a second M6295
 
-///////////////////////   INPUTS   ///////////////////////////////
+// Inputs
 
 // MiSTer joystick: 0 R, 1 L, 2 D, 3 U, buttons 1-4 at 4-7, Start 8, Coin 9, Pause 10, Service 11.
 // MAME "common" P1_P2, active low: per player U D L R, buttons 1-4.
@@ -260,11 +256,8 @@ always @(posedge clk_sys) begin
 end
 wire pause_cpu = pause_toggle | status[82];
 
-///////////////////////   EEPROM   ///////////////////////////////
+// EEPROM
 
-// Blank (a new part) from configuration until the first download; the set's default image arrives in
-// the index-0 stream at SD_EEPROM (Mission Craft), the saved .nvm as index 2 after it. Words are
-// big-endian: the even byte is the high one.
 // The load byte stream: the HPS's, or the fast load's replay of the regions caught here (index 0).
 wire        ldr_tb_wr;
 wire [26:0] ldr_tb_addr;
@@ -274,6 +267,8 @@ wire [15:0] lb_index = ldr_active ? 16'd0 : ioctl_index;
 wire [26:0] lb_addr  = ldr_active ? ldr_tb_addr : ioctl_addr;
 wire  [7:0] lb_dout  = ldr_active ? ldr_tb_dout : ioctl_dout;
 
+// Blank (a new part) from configuration until the first download; the set's default image arrives in the
+// index-0 stream at SD_EEPROM (Mission Craft), a saved .nvm as index 2 after it. Words are big-endian.
 reg        ee_blank = 1'b1;
 reg  [7:0] ee_hi;
 reg        ee_we = 1'b0;
@@ -321,9 +316,9 @@ always @(posedge clk_sys) begin
 	end
 end
 
-///////////////////////   THE BOARD   ////////////////////////////
+// Board
 
-reg [4:0] tk = 5'd0;                       // the CPU's timer: 25 enables in 28 clocks, 50 MHz
+reg [4:0] tk = 5'd0;                        // the CPU's timer: 25 enables in 28 clocks, 50 MHz
 reg [2:0] tk7 = 3'd0;                       // aoh's 80 MHz: 10 ticks in 7 clocks, a second in 3 of them
 always @(posedge clk_sys) tk7 <= (tk7 == 3'd6) ? 3'd0 : tk7 + 3'd1;
 wire cpu_tick  = f_aoh || tk < 5'd25;
@@ -470,7 +465,7 @@ issp_probe #(.INSTANCE_ID("D"), .PROBE_W(128), .SOURCE_W(8)) u_issp_d (
 	.probe({dbg_dlbytes, 6'd0, dbg_fill_a, dbg_fill_d}),
 	.source(dbg_src_d)
 );
-// Instance T: the last 256 cache misses since reset, a ring of {I, 13'b0, line [21:4], instructions
+// Instance T: the last 256 cache misses since reset, a ring of {I, 12'b0, line [22:4], instructions
 // retired before it [31:0]}; the source picks the slot, the probe returns {misses so far [15:0], slot}
 reg  [63:0] dbg_log [0:255];
 reg  [15:0] dbg_log_n = 0;
@@ -539,11 +534,10 @@ issp_probe #(.INSTANCE_ID("X"), .PROBE_W(201), .SOURCE_W(36)) u_issp_x (
 );
 assign dbg_tr_start = dbg_tr_src[35:12];
 assign dbg_tr_idx   = dbg_tr_src[11:0];
-// Instance S: frame time. A frame runs vblank to vblank; the CPU is idle while its last retired PC is in
-// the game's vblank wait (Mission Craft 0xff46-0xff6a, Wivern Wings 0x10752-0x10778, Age Of Heroes 0xb974-0xb9b4
-// and 0xba20-0xba60 about its speed-up PCs 0xb994 and 0xba40, as sim/sys_tb +idle).
-// Busy is the frame's clocks less its idle clocks; a frame with no idle clock is lost (the game's work for
-// it did not finish before the next vblank). Probe {frames [15:0], lost [15:0], busiest frame's busy
+// Instance S: frame time. A frame runs vblank to vblank; the CPU is idle while its last retired PC is in the
+// game's vblank wait (Mission Craft 0xff46-0xff6a, Wivern Wings 0x10752-0x10778, Age Of Heroes 0xb974-0xb9b4 and
+// 0xba20-0xba60 about its speed-up PCs 0xb994 and 0xba40, as sim/sys_tb +idle). Busy is the frame's clocks less
+// its idle clocks; a frame with no idle clock is lost. Probe {frames [15:0], lost [15:0], busiest frame's busy
 // clocks [19:0], last frame's busy clocks [19:0], last frame's clocks [19:0]}, since reset or a clear.
 // Source [0] clear; a rising edge on [1] presses COIN1, on [2] START1, for 8 frames; [3] holds P1 button 1.
 reg  [19:0] spd_fclk = 0, spd_idle = 0, spd_max = 0, spd_lastb = 0, spd_lastf = 0;
@@ -582,11 +576,11 @@ assign dbg_b1    = spd_src2[3];
 issp_probe #(.INSTANCE_ID("S"), .PROBE_W(92), .SOURCE_W(8)) u_issp_s (
 	.clk(clk_sys), .probe({spd_frames, spd_lost, spd_max, spd_lastb, spd_lastf}), .source(spd_src)
 );
-// Instance V: the sprite list against its snapshot copy (vh_video). Per vertical blank (from vblank start): the
-// line of its last sprite-RAM write, counted from vblank start, and whether a write came after the copy began
-// (the copy then holds a part-written list). Probe {vertical blanks with writes [15:0], torn [15:0], the
-// latest last write [8:0], the longest gap between two writes of one vertical blank in clocks [19:0], the
-// last writes in 16 buckets of 4 lines [11:0] each (bucket 15: line 60 on)}; source [0] clears.
+// Instance V: the sprite list against vh_video's snapshot copy. Per vertical blank: the line of its last
+// sprite-RAM write, counted from vblank start, and whether a write came after the copy began (a part-written
+// copy). Probe {vertical blanks with writes [15:0], torn [15:0], latest last write [8:0], longest gap between
+// two writes of one vertical blank in clocks [19:0], last writes in 16 buckets of 4 lines, [11:0] each
+// (bucket 15: line 60 on)}; source [0] clears.
 wire [8:0]  sv_vb  = f_aoh ? 9'd240 : 9'd252;
 wire [8:0]  sv_rel = (vid_vpos >= sv_vb) ? vid_vpos - sv_vb : vid_vpos + 9'd264 - sv_vb;
 reg  [8:0]  sv_last = 0, sv_latest = 0;
@@ -676,8 +670,8 @@ assign m1_req  = snd_qs ? qs_req : yo_req;
 vh_qs1000 u_snd (
 	.clk(clk_sys), .rst(core_reset | ~snd_qs), .lm(1'b0),
 	.dl_we(snd_dl), .dl_addr(lb_addr[16:0]), .dl_data(lb_dout),
-	.latch_wr(snd_latch_wr), .latch_d(snd_latch), .bal_pcb(1'b1),     // the PCB recording's balance (MAME_KLUDGES.md, Sound)
-	.loop_pcb(1'b1),                                                  // the recording's looping and key-off fade (the same)
+	.latch_wr(snd_latch_wr), .latch_d(snd_latch), .bal_pcb(1'b1),     // the PCB recording's balance,
+	.loop_pcb(1'b1),                                                  // looping and key-off fade (MAME_KLUDGES.md, Sound)
 	.sd_addr(qs_addr), .sd_req(qs_req), .sd_ack(m1_ack), .sd_dout(m1_dout), .sd_doutb(m1_doutb),
 	.out_l(qs_l), .out_r(qs_r),
 	.dbg_drops(), .dbg_stalls()
@@ -705,7 +699,7 @@ sdram #(.RFS_INTERVAL(10'd218)) u_sdram (
 	.dbl2(m2_dbl), .dout2b()
 );
 
-///////////////////////   VIDEO   ////////////////////////////////
+// Video
 
 wire vga_de_raw;
 wire [7:0] crt_r, crt_g, crt_b;
@@ -782,10 +776,10 @@ video_freak video_freak
 	.SCALE(status[68:66])
 );
 
-// HDMI rotation: screen_rotate_two writes the output into DDR3 for the HPS framebuffer; the analog
-// output keeps the native raster. Its flip is not used: Flip Screen goes through the engine.
-// While the fast load copies, the copy has DDR3 and the rotator sees it busy (it has no reset and
-// counts a write as taken whenever BUSY is low: Arcade-Seta_MiSTer, Seta.sv).
+// HDMI rotation: screen_rotate_two writes the output into DDR3 for the HPS framebuffer; analog keeps the
+// native raster. Its flip is unused: Flip Screen goes through the engine. While the fast load copies, the copy
+// owns DDR3 and the rotator sees BUSY (it has no reset and counts a write as taken whenever BUSY is low:
+// Arcade-Seta_MiSTer, Seta.sv).
 wire        rot_DDRAM_CLK, rot_DDRAM_WE, rot_DDRAM_RD;
 wire [7:0]  rot_DDRAM_BURSTCNT, rot_DDRAM_BE;
 wire [28:0] rot_DDRAM_ADDR;

@@ -1,7 +1,7 @@
-// The main board: E1 CPU, its memory system (vh_cpumem), and the I/O maps of every family.
+// Main board: E1 CPU, its memory system (vh_cpumem), and the I/O maps of every family.
 //
-// I/O space (the port is the CPU's I/O address >> 13, e132xs.cpp m_read_io / m_write_io; MAME's I/O maps
-// count in that unit: 16-bit words on the E1-16 (address shift -1), so 0x180 and 0x181 are two ports):
+// I/O port = CPU I/O address >> 13 (e132xs.cpp m_read_io / m_write_io), the unit of MAME's I/O maps: 16-bit
+// words on the E1-16 (address shift -1), so 0x180 and 0x181 are two ports.
 //   Mission Craft (board 0, misncrft_io, 16-bit: a word read gives bits 15:0, zero-extended)
 //     0x040 W flip (bit 0)          0x080 R P1_P2          0x090 R SYSTEM
 //     0x0d0 RW protection, 16-byte seeds                    0x1a0 RW protection, 8-byte seeds
@@ -12,7 +12,7 @@
 //     0x0a00 R P1_P2                0x0c00 R SYSTEM          0x1500 W sound latch (bits 7:0)
 //     0x1800 RW protection, 16-word seeds                    0x1c00 W EEPROM     0x1f00 R EEPROM DO
 //   Unmapped ports read 0.
-//   The YM2151 + M6295 boards (family 2 on, all E1-16), per their map in vamphalf.cpp:
+//   YM2151 + M6295 boards, families 2-9, all E1-16 (families 10-13: see the decode below), vamphalf.cpp:
 //     family 2 vamphalf_io:  0x030 OKI, 0x050/0x051 YM, 0x070 R EEPROM, 0x090 W flip (bit 7),
 //                            0x180 R SYSTEM, 0x181 R P1_P2, 0x182 W EEPROM
 //     family 3 coolmini_io:  0x080 W flip, 0x0c0 R SYSTEM, 0x0c1 R P1_P2, 0x0c2 W EEPROM, 0x130 OKI,
@@ -28,10 +28,10 @@
 //                            0x1a0 W EEPROM; no flip
 //     family 9 worldadv_io:  0x060 W EEPROM, 0x0a0 R P1_P2, 0x0d0 R SYSTEM, 0x160 RW protection (vh_prot_wa),
 //                            0x190 OKI, 0x1c0/0x1c1 YM, 0x1e0 R EEPROM; flip at program 0xe0000000, bit 15
-//   family 14 aoh_io (E1-32XN, 32-bit): 0x0120 W EEPROM, 0x0188 OKI 2, 0x0190/0x0191 YM, 0x0198 OKI 1, 0x01a0 W
-//     OKI 2 bank (bits 1:0), the sound chips on bits 15:8; SYSTEM and P1_P2 are in program space (vh_cpumem)
-//   The OKI and YM entries are umask16(0x00ff): data in bits 7:0. The E1-16 maps decode all 9 bits of the
-//   word address; Wivern Wings' 32-bit map ignores the two below its dwords.
+//   family 14 aoh_io (E1-32XN, 32-bit): 0x0120 W EEPROM, 0x0188 OKI 2, 0x0190/0x0191 YM, 0x0198 OKI 1,
+//     0x01a0 W OKI 2 bank (bits 1:0); sound chips on bits 15:8; SYSTEM and P1_P2 in program space (vh_cpumem)
+//   OKI and YM entries are umask16(0x00ff): data in bits 7:0. The E1-16 maps decode all 9 bits of the word
+//   address; Wivern Wings' 32-bit map ignores the two below its dwords.
 //
 // The vertical blank interrupt is INT2, held until the CPU takes it: MAME's irq1_line_hold asserts input
 // line 1, which the E1 numbers INPUT_INT2 (e132xs.h; ISR bit 1, inhibited by FCR bit 29).
@@ -144,7 +144,7 @@ module vh_main (
 
 `include "vh_sdram_map.svh"
 
-// ---------------------------------------------------------------- CPU
+// CPU
 wire        bus_req, bus_wr, bus_io, bus_ack;
 wire        if_req, if_ack;
 wire [31:3] if_addr;
@@ -157,7 +157,7 @@ wire        vbl3 = family == 5'd11;
 wire        f_ao = family == 5'd14;   // aoh
 wire [31:0] ao_sys, ao_p12;
 
-// E1_PIPE: the pipelined CPU (rtl/e1/e1_pipe.sv, ROADMAP Phase 7)
+// E1_PIPE: the pipelined CPU (rtl/e1/e1_pipe.sv)
 wire        la_req;                // e1_pipe: the load being issued, a clock before bus_req
 wire [31:0] la_addr;
 `ifdef E1_PIPE
@@ -192,7 +192,7 @@ vh_trace u_trace (
 	.rec_valid(trace_valid), .rec(trace_rec), .rd_idx(trace_idx), .rd_q(trace_q), .count(trace_count)
 );
 
-// ---------------------------------------------------------------- memory
+// Memory
 wire        io_rd, io_wr, xflip_we;
 wire [18:0] io_port;
 wire [31:0] io_wd;
@@ -216,7 +216,7 @@ vh_cpumem #(.ROM_BASE(SD_MAINCPU), .WRAM_BASE(SD_WRAM), .SPRHI_BASE(SD_SPRHI), .
 	.xflip_we(xflip_we)
 );
 
-// ---------------------------------------------------------------- I/O decode
+// I/O decode
 // E1-16: 9-bit word address; E1-32: 13-bit space, dword entries (MAME's map address is io_port)
 wire [8:0]  pw = io_port[8:0];
 wire [12:2] pd = io_port[12:2];
@@ -238,7 +238,8 @@ wire m_eew   = f_mc && pw == 9'h0f0 || f_vh && pw == 9'h182 || f_cm && pw == 9'h
                f_md && pw == 9'h0f0 || f_su && pw == 9'h008 || f_so && pw == 9'h1a0 || f_wa && pw == 9'h060 ||
                f_bg && pw == 9'h102;
 wire m_latch = f_mc && pw == 9'h100;
-wire m_eer   = f_mc && pw[8:1] == 8'hb0 || f_vh && pw == 9'h070 || f_cm && pw == 9'h1f0 || f_jb && pw == 9'h0b0 ||   // misncrft: 0x160-0x161
+// misncrft's EEPROM DO answers at 0x160-0x161
+wire m_eer   = f_mc && pw[8:1] == 8'hb0 || f_vh && pw == 9'h070 || f_cm && pw == 9'h1f0 || f_jb && pw == 9'h0b0 ||
                f_md && pw == 9'h060 || f_su && pw == 9'h040 || f_so && pw == 9'h000 ||
                f_wa && pw == 9'h1e0 || f_bg && pw == 9'h030;
 wire m_prt8  = f_mc && pw == 9'h1a0;
@@ -300,10 +301,10 @@ assign ao_sys = {11'h7ff, system[4], 2'b11, system[6], system[0], 8'hff, 2'b11, 
 // solitaire (vamphalf.cpp:1102-1131): P1_P2 bits 6:0 columns 1-7 (buttons 1-4, then xbtn 2:0), bits 11:8 Turn Up
 // Card, Select Turned Up Card, Register, Gift (xbtn 6:3); SYSTEM is the common port's
 wire [15:0] so_p1p2 = {4'hf, xbtn[6:3], 1'b1, xbtn[2:0], p1p2[7:4]};
-// boonggab (vamphalf.cpp:1032-1060): P1_P2 bit 0 START1, bits 2/3 left/right, bits 13:11 the photo sensors'
-// strength code, boonggab_photo_sensors_r's 7 none .. 0 strongest as the callback gives it (MAME's active-low
-// field inverts it, which the game takes as a hit at rest: MAME_KLUDGES.md); buttons 1-4 give MAME's 1st, 3rd,
-// 5th and 7th strengths (HACKS.md); bits 10:8 sensors 1-3 idle; SYSTEM bits 7:6 unused
+// boonggab (vamphalf.cpp:1032-1060): P1_P2 bit 0 START1, bits 2/3 left/right, bits 10:8 sensors 1-3 idle,
+// bits 13:11 the photo sensors' strength as boonggab_photo_sensors_r returns it, 7 none .. 0 strongest (MAME's
+// active-low field inverts it, which the game takes as a hit at rest: MAME_KLUDGES.md); buttons 1-4 give
+// MAME's 1st, 3rd, 5th and 7th strengths (HACKS.md); SYSTEM bits 7:6 unused
 wire [2:0]  bg_hit  = !p1p2[7] ? 3'd0 : !p1p2[6] ? 3'd2 : !p1p2[5] ? 3'd4 : !p1p2[4] ? 3'd6 : 3'd7;
 wire [15:0] bg_p1p2 = {2'b11, bg_hit, 3'b111, 4'hf, p1p2[3], p1p2[2], 1'b1, system[6]};
 
@@ -317,9 +318,9 @@ vh_eeprom93c46 #(.CLK_KHZ(56000), .WRITE_US(1), .ERASE_US(1)) u_ee (
 	.rd_addr(ee_rd_addr), .rd_data(ee_rd_data), .written(ee_written)
 );
 
-// protection. Wivern Wings' 0x1800 is a 16-bit handler on the 32-bit bus: MAME calls it once per
-// half, in ascending address order, so a dword write is the high half's value, then the low half's
-// (emumem_heu.cpp sorts the subunits by offset). Unverified against a trace: docs/HACKS.md.
+// Protection. Wivern Wings' 0x1800 is a 16-bit handler on the 32-bit bus: MAME calls it per half in ascending
+// address order (emumem_heu.cpp), so a dword write gives the high half, then the low. Unverified against a
+// trace: docs/HACKS.md.
 wire [15:0] prot_rdata;
 reg         prot_wr2;                    // the low half of a Wivern Wings dword, one clock later
 reg  [15:0] prot_wd2;

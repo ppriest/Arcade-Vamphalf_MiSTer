@@ -1,4 +1,4 @@
-// The Limenko main board (limenko.cpp): E1-32XN CPU (spotty: GMS30C2232), its memory system (vh_cpumem in
+// Limenko main board (limenko.cpp): E1-32XN CPU (spotty: GMS30C2232), its memory system (vh_cpumem in
 // Limenko mode), the I/O map, the 93C46 and the sound latch.
 //
 // I/O space (limenko io_map, spotty io_map; the port is the CPU's I/O address >> 13, as aoh_io in vh_main):
@@ -11,7 +11,7 @@
 //          the others (IP_ACTIVE_LOW)
 //   bit 23 EEPROM DO
 //   bit 31 spriteram_bit (spotty: bit 19)
-// The 4 KB RAM at 0x40000000, mirrored to 0x40003fff (vh_cpumem lm_xram): hrthouse's NVRAM (0x40000000-0x40000fff)
+// 4 KB RAM at 0x40000000, mirrored to 0x40003fff (vh_cpumem lm_xram): hrthouse's NVRAM (0x40000000-0x40000fff)
 // and spotty's RAM (0x40002000-0x400024d3); the other sets have their data ROM there.
 //
 // The vertical blank interrupt is INT1: MAME's irq0_line_hold asserts input line 0, held until the CPU takes it.
@@ -115,7 +115,7 @@ module lm_main (
 
 localparam [2:0] G_DB = 0, G_SB = 1, G_LH = 2, G_HH = 3, G_SP = 4;
 
-// ---------------------------------------------------------------- CPU
+// CPU
 wire        bus_req, bus_wr, bus_io, bus_ack;
 wire        if_req, if_ack;
 wire [31:3] if_addr;
@@ -159,7 +159,7 @@ vh_trace u_trace (
 	.rec_valid(trace_valid), .rec(trace_rec), .rd_idx(trace_idx), .rd_q(trace_q), .count(trace_count)
 );
 
-// ---------------------------------------------------------------- memory
+// Memory
 wire        io_rd, io_wr;
 wire [18:0] io_port;
 wire [31:0] io_wd;
@@ -188,8 +188,8 @@ vh_cpumem #(.ROM_BASE(LM_MAINCPU), .WRAM_BASE(LM_WRAM), .SPRHI_BASE(27'd0), .PRG
 	.xflip_we()
 );
 
-// the RAM at 0x40000000: the CPU on port A, or the blank sweep and the .nvm load while it is in reset; port B reads
-// the NVRAM back. The .nvm holds the bytes in the CPU's order: byte k of a dword is bits 31-8k..24-8k.
+// RAM at 0x40000000: port A the CPU, or the blank sweep and the .nvm load while it is in reset; port B reads the
+// NVRAM back. The .nvm holds the bytes in the CPU's order: byte k of a dword is bits 31-8k..24-8k.
 wire [31:0] nvq;
 wire [3:0]  nv_be = 4'b1000 >> nv_load_addr[1:0];
 reg  [9:0]  nv_sw;
@@ -206,7 +206,7 @@ always @(posedge clk) nv_lane <= nv_rd_addr[1:0];
 assign nv_rd_data = nvq[31 - 8 * nv_lane -: 8];
 assign nv_written = x_we;
 
-// ---------------------------------------------------------------- I/O
+// I/O
 wire [12:0] pk = io_port[12:0];
 wire p_in0 = pk == 13'h0000, p_in1 = pk == 13'h0200, p_in2 = pk == 13'h0400;
 wire p_ee  = pk == 13'h1200, p_lat = pk == 13'h1400;

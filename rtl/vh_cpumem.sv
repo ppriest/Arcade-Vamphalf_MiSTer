@@ -1,57 +1,51 @@
-// The E1's memory system: address decode, the CPU's internal RAM, the caches in front of work RAM and
-// program ROM (both in SDRAM), the video RAM ports, the I/O port, and the owner of sdram.sv's port 2.
+// E1 memory system: address decode, the CPU's internal RAM, the caches in front of work RAM and program ROM
+// (both in SDRAM), the video RAM ports, the I/O port, and sdram.sv's port 2.
 //
 // Program space (vamphalf.cpp common_map / common_32bit_map, e132xs.cpp iram_4k_map):
-//   0x00000000-0x001fffff  work RAM, 2 MB     SDRAM WRAM_BASE, through the caches
+//   0x00000000-0x001fffff  work RAM, 2 MB     SDRAM WRAM_BASE, cached
 //   0x40000000-0x4000ffff  sprite RAM         vh_video spr_*
-//   0x40010000-0x4003ffff  sprite RAM         SDRAM SPRHI_BASE, through the caches: only the power-on
-//                                             test uses it (write sweep)
+//   0x40010000-0x4003ffff  sprite RAM         SDRAM SPRHI_BASE, cached; only the power-on write sweep uses it
 //   0x80000000-0x8000ffff  palette            vh_video pal_*
 //   0xc0000000-0xdfffffff  internal RAM, 4 KB mirrored
-//   0xfff00000-0xffffffff  program ROM, 1 MB  SDRAM ROM_BASE, through the caches
-//   0xffe00000-0xffefffff  program ROM's first MB on a 2 MB program (prg2: yorijori_32bit_map), SDRAM
-//                          PRGLO_BASE, through the caches
+//   0xfff00000-0xffffffff  program ROM, 1 MB  SDRAM ROM_BASE, cached
+//   0xffe00000-0xffefffff  first MB of a 2 MB program (prg2: yorijori_32bit_map), SDRAM PRGLO_BASE, cached
 //   anything else reads 0, writes are dropped (0xe000xxxx also pulses xflip_we)
 // aoh (aoh_map, an E1-32XN): work RAM 4 MB, program ROM 4 MB from 0xffc00000 (SDRAM AOHPRG_BASE), internal
 // RAM 8 KB (iram_8k_map), SYSTEM at 0x8021xxxx and P1_P2 at 0x8022xxxx (aoh_sys, aoh_p12)
 // Limenko (lm, limenko.cpp program_map): work RAM 2 MB, program ROM as above (2 MB with prg2), internal RAM
 // 8 KB, and
-//   0x40000000-0x403fffff  data ROM, 4 MB      SDRAM DATA_BASE, through the caches; writes are dropped
+//   0x40000000-0x403fffff  data ROM, 4 MB      SDRAM DATA_BASE, cached; writes are dropped
 //   0x40000000-0x40003fff  with lm_xram instead: RAM on x_* (hrthouse's NVRAM, spotty's RAM at 0x40002000)
 //   0x80000000-0x8000ffff  fg and md VRAM      spr_*
 //   0x80010000-0x8001ffff  bg VRAM, sprite RAM, palette, RAM, video registers: pal_*
 //   0x8003e000-0x8003ffff  a write pulses lm_cmd (spriteram_buffer_w); reads 0
 //
-// Caches: I 16 KB, D 4 KB, direct-mapped, 16-byte lines filled by one double read. Instruction fetches
-// have their own port (if_*, 8 bytes) so fetch-ahead does not wait behind loads and stores. Stores to
-// work RAM and the upper sprite RAM are written through: they update whichever cache holds the line and
-// enter a four-entry write buffer (wq_*), each entry written as one burst. A miss waits for the buffer
-// only while it holds a store to the missed line; otherwise its fill goes to SDRAM before the buffer.
-// After every D-cache fill the next line is read into a 16-byte prefetch buffer when port 2 is idle; a D
-// miss on that line fills from it in two clocks, waiting for it if it is on its way (S_PFW). A store to the
-// buffered line, or to the line in flight (including in the clock it arrives), discards it. Port 2 serves
-// the write buffer before the prefetch, so the prefetch never holds data older than a store.
+// Caches: I 16 KB, D 4 KB, direct-mapped, 16-byte lines filled by one double read. Fetches have their own port
+// (if_*, 8 bytes) so fetch-ahead does not wait behind loads and stores. Stores to work RAM and the upper sprite
+// RAM write through: they update whichever cache holds the line and enter a four-entry write buffer (wq_*),
+// each entry written as one burst. A miss waits for the buffer only while it holds a store to the missed
+// line; otherwise its fill goes to SDRAM first.
+// D prefetch: after every D fill the next line is read into a 16-byte buffer when port 2 is idle; a D miss on
+// that line fills from it in two clocks, or waits for it in flight (S_PFW). A store to the buffered or
+// in-flight line (including in the clock it arrives) discards it. Port 2 serves the write buffer before the
+// prefetch, so the prefetch never holds data older than a store.
 //
-// CPU bus timing (e1_cpu: req held until ack): a write is acked in its request clock, combinationally: one
-// that takes effect in that clock (I/O, internal and video RAM), or a store the write buffer can take, whose
-// cache and buffer update follows in S_WLOOK (the CPU holds bus_addr, bus_be and bus_wdata for that clock:
-// it sets them at the end of a clock that issues a request). Reads of I/O and internal/video RAM ack from a
-// register one clock after the request; a cache hit (S_LOOK) and a data fill (S_FILL2) ack combinationally.
-// A read the CPU announced on la_* in the clock before its request, while the D-cache was free, was looked
-// up then: a hit acks in the request clock.
-// Instruction port: if_addr is looked up in every clock in which the data side, a fill or the sweep does
-// not hold the RAM it needs (i_free); if_ack comes in the clock after a lookup of the address still
-// requested, so a lookup of an address the CPU has since changed is dropped. An I-cache miss is filled by
-// the data side's miss logic when that has no request. Fetches outside work RAM, program ROM, the upper
-// sprite RAM and the internal RAM read 0 (no game executes from anywhere else).
-// A store updates the I-cache in S_WLOOK, the clock it is acked in; the CPU drops any fetched 8 bytes the
-// store hits, and every later lookup reads the new data.
+// CPU bus timing (e1_cpu: req held until ack). Writes ack combinationally in the request clock: I/O, internal
+// and video RAM take effect then; a store the write buffer can take updates cache and buffer in S_WLOOK (the
+// CPU holds bus_addr, bus_be and bus_wdata for that clock). Reads of I/O, internal and video RAM ack from a
+// register a clock after the request; a cache hit (S_LOOK) and a data fill (S_FILL2) ack combinationally. A
+// read announced on la_* the clock before, while the D-cache was free, was looked up then: a hit acks in the
+// request clock.
+// Instruction port: if_addr is looked up in every clock in which the data side, a fill or the sweep does not
+// hold the RAM it needs (i_free); if_ack comes a clock later only if the CPU still requests that address. An
+// I-cache miss is filled by the data side's miss logic when that has no request. Fetches outside work RAM,
+// program ROM, upper sprite RAM and internal RAM read 0 (no game executes elsewhere). A store updates the
+// I-cache in S_WLOOK, the clock it is acked in; the CPU drops any fetched 8 bytes the store hits.
 //
-// SDRAM port 2 (sdram.sv's toggle protocol, burst writes), in priority order: download writes (dl_*), line
-// fills, the write buffer, the prefetch. It is reset only by prst (the PLL's lock), never by the core
-// reset: MiSTer holds the core reset for the whole download (LESSONS_LEARNED, "Never hold the memory path
-// in the core reset").
-// SDRAM words hold the even byte in [7:0]; the CPU is big-endian, so data is byte-swapped at this seam.
+// SDRAM port 2 (sdram.sv toggle protocol, burst writes), in priority order: download writes (dl_*), line
+// fills, write buffer, prefetch. Reset only by prst (PLL lock), never by the core reset, which MiSTer holds
+// for the whole download (LESSONS_LEARNED, "Never hold the memory path in the core reset").
+// SDRAM words hold the even byte in [7:0]; the CPU is big-endian, so data is byte-swapped here.
 
 module vh_cpumem #(
 	parameter [26:0] ROM_BASE  = 27'h0000000,
@@ -150,7 +144,7 @@ module vh_cpumem #(
 	output            xflip_we         // a write to 0xe000xxxx (jmpbreak_flipscreen_w): bus_wdata, bus_be
 );
 
-// ---------------------------------------------------------------- decode
+// Decode
 // program ROM: the top 1 MB (0xfff00000), 2 MB with prg2 (from 0xffe00000), 4 MB on aoh (from 0xffc00000)
 function rom_at(input [31:0] a);
 	rom_at = a[31:22] == 10'h3ff && (aoh || a[21:20] == 2'b11 || prg2 && a[21:20] == 2'b10);
@@ -199,7 +193,7 @@ function [63:0] sw64(input [63:0] g);
 	sw64 = {g[7:0], g[15:8], g[23:16], g[31:24], g[39:32], g[47:40], g[55:48], g[63:56]};
 endfunction
 
-// ---------------------------------------------------------------- state
+// State
 localparam [3:0] S_INIT = 0, S_IDLE = 1, S_LOOK = 2, S_WLOOK = 3, S_MISS = 4, S_FILL = 5,
                  S_FILL2 = 6, S_ACK = 7, S_IOW = 8, S_PFW = 9;
 localparam [2:0] SRC_REG = 0, SRC_IRAM = 1, SRC_SPR = 2, SRC_PAL = 3, SRC_X = 4;
@@ -211,7 +205,7 @@ reg  [2:0]  rsrc;
 reg  [31:0] rdata_r;
 reg  [23:0] fa;
 reg         f_ic;               // the fill is for the I-cache
-reg  [63:0] lg0, lg1;           // the line, swapped
+reg  [63:0] lg0, lg1;           // the filled line, byte-swapped (sw64)
 reg         line_req, line_done;
 reg         dbg_filled = 1'b0;
 
@@ -221,7 +215,9 @@ reg  [23:4] pf_want_line, pf_fl_line, pf_line;
 reg  [63:0] pf0, pf1;
 
 // write buffer: four 8-byte blocks (byte 0 in [63:56], be[7] its enable), drained in order
-(* ramstyle = "logic" *) reg  [23:3] wq_ca [0:3];   // registers: read combinationally; as RAM, reading an entry written in the same clock would depend on bypass logic Quartus may not add
+// registers, read combinationally: as RAM, reading an entry written in the same clock would need bypass logic
+// Quartus may not add
+(* ramstyle = "logic" *) reg  [23:3] wq_ca [0:3];
 (* ramstyle = "logic" *) reg  [7:0]  wq_be [0:3];
 (* ramstyle = "logic" *) reg  [63:0] wq_d  [0:3];
 reg  [2:0]  wq_w = 3'd0, wq_r = 3'd0;
@@ -238,7 +234,7 @@ wire        la_take = st == S_IDLE && !bus_req && la_req && (la_wram || la_rom |
 reg         lk_v = 1'b0;
 reg  [23:0] lk_ca;
 
-// ---------------------------------------------------------------- caches
+// Caches
 wire        ic_hit, dc_hit;
 wire [63:0] ic_q, dc_q;
 wire        sweep = st == S_INIT;
@@ -258,9 +254,8 @@ vh_cache #(.AW(24), .LW(8)) u_dc (.clk(clk), .sweep(sweep), .sw_idx(swc[7:0]),
 	.fill_we(fill_we && !f_ic), .fill_tag(fill_half), .fa(fa), .fill_half(fill_half), .fill_d(fill_d),
 	.st_we(st == S_WLOOK && dc_hit), .st_be(st_be8), .st_d({bus_wdata, bus_wdata}));
 
-// ---------------------------------------------------------------- internal RAM
-// 8 bytes wide for the instruction port; the data side has it in its request clock. 4 KB mirrored, 8 KB on aoh and
-// Limenko.
+// Internal RAM: 8 bytes wide for the instruction port; the data side has it in its request clock.
+// 4 KB mirrored, 8 KB on aoh and Limenko.
 wire [63:0] iram_q;
 wire        ir_by_d = idle_go && !bus_io && r_iram;
 wire        ir8k = aoh || lm;
@@ -268,7 +263,7 @@ wire [12:3] ir_da = {ir8k && bus_addr[12], bus_addr[11:3]}, ir_ia = {ir8k && if_
 vh_cache_ram #(.AW(10), .DW(64), .NB(8)) u_iram (.clk(clk), .addr(ir_by_d ? ir_da : ir_ia),
 	.we(ir_by_d && bus_wr), .be(st_be8), .wd({bus_wdata, bus_wdata}), .q(iram_q));
 
-// ---------------------------------------------------------------- instruction port
+// Instruction port
 wire        i_free = i_sd ? !(sweep || (fill_we && f_ic) || ic_by_d) : i_iram ? !ir_by_d : 1'b1;
 reg         i_look = 1'b0;      // if_addr was looked up in the previous clock, as i_la
 reg  [31:3] i_la;
@@ -284,7 +279,7 @@ wire        i_take = st == S_IDLE && !bus_req && i_miss;    // the miss logic fi
 assign if_ack  = i_cur && (!i_sd_r || ic_hit);
 assign if_data = i_iram_r ? iram_q : i_sd_r ? ic_q : 64'd0;
 
-// ---------------------------------------------------------------- video RAMs, I/O
+// Video RAMs, I/O
 assign spr_we   = idle_go && bus_wr && !bus_io && r_spr;
 assign xflip_we = idle_go && bus_wr && !bus_io && bus_addr[31:16] == 16'he000;
 assign spr_be   = bus_be;
@@ -317,7 +312,7 @@ assign bus_rdata = (st == S_LOOK || lk_hit) ? (bus_addr[2] ? dc_q[31:0] : dc_q[6
                    rsrc == SRC_IRAM ? (bus_addr[2] ? iram_q[31:0] : iram_q[63:32]) :
                    rsrc == SRC_SPR ? spr_rd : rsrc == SRC_PAL ? pal_rd : rsrc == SRC_X ? x_rd : rdata_r;
 
-// ---------------------------------------------------------------- CPU side and port 2
+// CPU side and port 2
 reg  [2:0]  m_who;              // what port 2 is doing
 localparam [2:0] W_NONE = 0, W_DL = 1, W_WB = 2, W_LINE = 4, W_PF = 5;
 wire        m_free = m_who == W_NONE;

@@ -65,9 +65,7 @@ module vh_video (
 	output reg [12:0] dbg_maxbusy      // longest engine pass, in clk cycles of a 3584-cycle line
 );
 
-//------------------------------------------------------------------
-// timing
-//------------------------------------------------------------------
+// Timing
 reg [2:0] pcnt;
 reg [8:0] hcnt, vcnt;
 wire [8:0] vb_line = aoh ? 9'd240 : 9'd252;     // the first line of the vertical blank
@@ -103,9 +101,7 @@ end
 // flipped: MAME's visible area moves to 20..255; aoh's 180-degree turn of 16..239 puts it at 32
 wire [8:0] vstart = flip_l ? (aoh ? 9'd32 : 9'd20) : 9'd16;
 
-//------------------------------------------------------------------
-// sprite RAM (live), snapshot, palette
-//------------------------------------------------------------------
+// Sprite RAM (live), snapshot, palette
 wire [31:0] cp_d0, cp_d1;
 reg  [13:0] cp_addr;
 vh_ram_be #(.AW(14)) u_spr (
@@ -115,9 +111,9 @@ vh_ram_be #(.AW(14)) u_spr (
 );
 assign cp_d1 = cp_d0;
 
-// the last dword of band 15 is the last write of the CPU's list pass. aoh never writes it and rewrites only part of
-// the list, in lines 240..247 in MAME (docs/write_timing_mame.txt); its copy is taken at line 240, before that
-// pass, so a pass the CPU has not finished cannot tear it: a frame later than MAME draws it (docs/HACKS.md)
+// The last dword of band 15 is the last write of the CPU's list pass. aoh never writes it and rewrites part of the
+// list in lines 240..247 (docs/write_timing_mame.txt); its copy is taken at line 240, before that pass, so an
+// unfinished pass cannot tear it, at the cost of one frame against MAME (docs/HACKS.md).
 reg        list_ready;
 reg        cp_run;
 reg [12:0] cp_a;             // dwords issued, 0..7679 (bands 1..15 start at dword 512)
@@ -144,7 +140,7 @@ always @(posedge clk) begin
 				cp_run <= 1'b1; cp_a <= 13'd0; cp_r <= 13'd0; list_ready <= 1'b0;
 			end
 		end else begin
-			// address stream, one dword per clock; data arrives two clocks later
+			// one dword per clock; data arrives two clocks later
 			if (cp_a != 13'd7680) begin
 				cp_addr <= 14'd512 + cp_a[12:0];
 				cp_a <= cp_a + 13'd1;
@@ -178,12 +174,10 @@ vh_ram_be #(.AW(14)) u_pal (
 	.b_addr(pv_addr), .b_rd(pv_rd)
 );
 
-//------------------------------------------------------------------
-// line engine: renders target line T = vcnt + 1 during line vcnt
-//------------------------------------------------------------------
+// Line engine: renders line vcnt + 1 during line vcnt
 wire [8:0] tline = (vcnt == 9'd263) ? 9'd0 : vcnt + 9'd1;
 wire       t_active = (tline >= vstart) && (tline < vstart + y_h);
-// band 1..15 for the strip of the target line
+// band 1..15 holding the target line's 16-line strip
 wire [3:0] t_strip = tline[7:4];
 wire [3:0] t_band  = flip_l ? t_strip : (4'd16 - t_strip);
 
@@ -194,7 +188,7 @@ reg        sc_v, sc_v1;      // entry data arrives this clock (sc_v) / next cloc
 reg        eng_t0;           // buffer written by the engine, tline[0]
 reg [8:0]  eng_t;            // target line of the running pass
 
-// FIFO of sprites that hit the line
+// sprites that hit the line
 localparam FD = 16;
 (* ramstyle = "logic" *) reg [40:0] fifo [0:FD-1];
 reg [4:0]  f_wr, f_rd;
@@ -202,7 +196,7 @@ wire [4:0] f_cnt = f_wr - f_rd;
 wire       f_full  = (f_cnt >= FD - 3);
 wire       f_empty = (f_cnt == 5'd0);
 
-// decode of the entry that arrives (registered snapshot output)
+// decode of the entry on the registered snapshot output
 wire [15:0] w0 = sn_rd[63:48], w1 = sn_rd[47:32], w2 = sn_rd[31:16], w3 = sn_rd[15:0];
 wire        hide  = !aoh && w0[8];
 wire [10:0] y_top = flip_l ? {3'b0, w0[7:0]} : (11'd256 - {3'b0, w0[7:0]});
@@ -319,7 +313,6 @@ always @(posedge clk) begin
 				rf_rd <= rf_rd + 3'd1;
 			end
 
-			// draw
 			if (d_busy) begin
 				lb_a_buf <= eng_t0;
 				lb_a_addr <= d_col_s[8:0];
@@ -338,12 +331,8 @@ always @(posedge clk) begin
 	end
 end
 
-//------------------------------------------------------------------
-// scan-out. The pipeline for the pixel at hcnt starts at pcnt 0:
-//   0: line buffer address registered   2: line buffer data, palette address registered, entry cleared
-//   4: palette data                     5: output registers loaded (stable until the next pixel's 5)
-// Pixel x of line y comes from line buffer y[0].
-//------------------------------------------------------------------
+// Scan-out, by pcnt: 0 line buffer address; 2 line buffer data, palette address, entry cleared; 4 palette data;
+// 5 outputs loaded (held until the next pixel's 5). Line y reads line buffer y[0].
 wire        y_active = (vcnt >= vstart) && (vcnt < vstart + y_h);
 wire        x_active = (hcnt >= x0) && (hcnt < x0 + x_w);
 wire        hs_w = aoh ? (hcnt >= 9'd464) && (hcnt < 9'd500) : (hcnt >= 9'd376) && (hcnt < 9'd408);

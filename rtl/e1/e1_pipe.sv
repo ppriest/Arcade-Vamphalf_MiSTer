@@ -2,28 +2,21 @@
 // (src/devices/cpu/e132xs/e132xs.cpp, e132xsop.hxx, e1defs.h; BSD-3-Clause,
 // copyright-holders Pierpaolo Prazzoli and the MAME team).
 //
-// e1_cpu.sv's execute (X: ST_EXEC and the multi-clock states after it), with fetch and operand read as
-// stages that run ahead of it:
-//   F  assembles the next instruction, all its halfwords in one clock, into D, from two fetched 8-byte
-//      blocks (fc: the one holding fpc, pf: the one after) or from the instruction port in the clock its
-//      data arrives;
-//   R  reads D's operands in every clock: the register file (forwarding the write committed in that clock)
-//      and the globals (forwarding the queue head that commits at the end of it).
-// D goes into X ("go") when X is idle (ST_XW), or beside the clock in which X finishes an instruction of the
-// fast class (x_fast: one clock, no exception, at most one register written, PC, FP, the delay slot and SR's
-// H and T unchanged) or the last access of a load or store (x_mw_last: at most the load's two results written);
-// R takes those writes (fw_n, fwa_n) into the operands it reads beside it, so X reads only registers. F predicts BR taken and goes on from
-// its target; a BR that goes as predicted, or a DB not taken, lets D in beside it too. Otherwise X idles for a
-// clock, as e1_cpu's ST_RD does. A change of PC (redir) empties D and restarts F.
-// Register writes go through e1_cpu's queue. An instruction retires (the retire pulse, and the state the
-// benches compare) in order once its writes have committed, through a short FIFO.
+// e1_cpu.sv's execute stage (X: ST_EXEC and the multi-clock states after it) with two stages ahead of it:
+//   F  assembles the next instruction, all its halfwords in one clock, into D from two fetched 8-byte blocks
+//      (fc: the one holding fpc, pf: the next) or from the instruction port in the clock its data arrives.
+//   R  reads D's operands every clock: the register file (forwarding the write committed that clock) and the
+//      globals (forwarding the queue head that commits at its end).
+// D goes into X ("go") when X is idle (ST_XW), or beside the clock in which X finishes a fast-class instruction
+// (x_fast, see fast_f) or the last access of a load or store (x_mw_last); R forwards those writes (fw_n, fwa_n)
+// so X reads only registers. F predicts BR taken; a BR that goes as predicted, or a DB not taken, also lets D
+// in beside it. Otherwise X idles a clock, as in e1_cpu's ST_RD. A change of PC (redir) empties D, restarts F.
+// Register writes go through e1_cpu's queue. Instructions retire (retire pulse, the state the benches compare)
+// in order once their writes have committed, through a short FIFO.
 //
-// Behaviour follows the interpreter, including its quirks; each is marked "MAME:" where it is not what the
-// ISA manual says. The bus is always 32 bits wide and big-endian. An E1-16 board puts a width adapter
-// between this port and its 16-bit memory.
-//
-// Not implemented: power-down, floating point (the FP opcodes trap to their emulation
-// code as in MAME).
+// Follows the interpreter, quirks included; "MAME:" marks where it departs from the ISA manual.
+// The bus is always 32 bits wide, big-endian; an E1-16 board adds a width adapter to its 16-bit memory.
+// Not implemented: power-down, floating point (FP opcodes trap to their emulation code, as in MAME).
 
 module e1_pipe (
 	input             clk,
@@ -60,8 +53,8 @@ module e1_pipe (
 	output reg [31:0] retire_npc,  // architectural PC and SR after it (the next instruction may already
 	output reg [31:0] retire_sr,   // have been fetched and its PC set when the pulse comes)
 
-	// the load ST_EXEC is issuing in this clock: the address of its first access (combinational), for the
-	// memory to look up a clock before bus_req (vh_cpumem compares it with bus_addr)
+	// the load ST_EXEC issues this clock: its first address (combinational), so the memory can look it up a
+	// clock before bus_req (vh_cpumem compares it with bus_addr)
 	output            la_req,
 	output     [31:0] la_addr,
 
@@ -75,17 +68,17 @@ localparam [5:0] TRAP_RESET = 6'd62;
 
 // state numbers as e1_cpu's (the benches name them by number); its fetch and operand-read states are F and R
 localparam [4:0] ST_RESET  = 0,
-                 ST_XW     = 1,      // X idle, waiting for D
-                 ST_EXEC   = 4,
-                 ST_MEM    = 5,
-                 ST_MWAIT  = 6,
-                 ST_MPOST  = 7,
-                 ST_LOOP   = 8,
-                 ST_DIV    = 9,
-                 ST_DIVEND = 10,
-                 ST_FRM    = 11,
-                 ST_MUL    = 13,
-                 ST_MUL2   = 14;
+				ST_XW     = 1,      // X idle, waiting for D
+				ST_EXEC   = 4,
+				ST_MEM    = 5,
+				ST_MWAIT  = 6,
+				ST_MPOST  = 7,
+				ST_LOOP   = 8,
+				ST_DIV    = 9,
+				ST_DIVEND = 10,
+				ST_FRM    = 11,
+				ST_MUL    = 13,
+				ST_MUL2   = 14;
 
 reg [4:0]  state;
 
@@ -108,7 +101,7 @@ reg        d_valid;
 reg [15:0] d_op, d_e1, d_e2;
 reg [1:0]  d_ilen;
 reg        d_pred;          // a BR that F predicted taken: fpc went on from its target
-reg [31:0] d_ipc, d_npc;      // its address, the address after it
+reg [31:0] d_ipc, d_npc;    // its address, the address after it
 
 wire [5:0] w_didx  = {2'b0, d_op[7:4]} + sr[30:25];
 wire [5:0] w_didx1 = w_didx + 6'd1;
@@ -138,9 +131,9 @@ reg [4:0]  nstate;
 reg        frm_req, frm_fin, ret_pend, frm_body;
 reg [1:0]  frm_kind;
 reg [5:0]  frm_tn;
-// Registers, never RAM: one clock can push several entries (five for the FP trap). A ring: X pushes and the
-// queue commits in the same clocks, so it need never be empty. Its positions are not reset to 0 when it
-// empties, so where X pushes does not depend on what commits in the same clock.
+// register-write queue: a ring in registers, not RAM, since one clock can push several entries (five for the
+// FP trap). Positions are not reset when it empties, so where X pushes does not depend on what commits in the
+// same clock.
 (* ramstyle = "logic" *) reg        wq_g [0:7];
 (* ramstyle = "logic" *) reg        wq_raw [0:7];
 (* ramstyle = "logic" *) reg [5:0]  wq_i [0:7];
@@ -192,7 +185,7 @@ reg        w_l, w_g;        // X's instruction writes a local / a global in this
 reg [5:0]  w_i;             // that register (a local's file index, a global's number)
 reg        wa_l, wa_g;      // and the write before it (LDD's first register)
 reg [5:0]  wa_i;
-reg        ma_lS, ma_lS1, ma_lD, ma_lD1, ma_gS, ma_gS1, ma_gD, ma_gD1, ma_gM, ma_gMD;
+reg        ma_lS, ma_lS1, ma_lD, ma_lD1, ma_gS, ma_gS1, ma_gD, ma_gD1, ma_gM, ma_gMD;   // D's operand is wa_i
 reg        st_code;         // bus_addr's 8 bytes are a fetched block, D's, or the one being fetched
 reg        redir;           // X changed PC in this clock
 reg        st_hit;          // a store was acked in this clock
@@ -252,9 +245,8 @@ reg [5:0]  dv_di;
 integer    t_i;
 integer    t_k;
 
-//------------------------------------------------------------------
-// helpers
-//------------------------------------------------------------------
+// Helpers
+
 // register read as an instruction sees it: PC is the delayed-branch target inside a delay slot
 function [31:0] rgv(input [4:0] i);
 	case (i)
@@ -343,10 +335,9 @@ task timer_eval;
 	end
 endtask
 
-// register writes are queued and drained one entry per clock (commit_loc, commit_glob).
-// Each entry is written under a constant index: the variable-index form (wq_v[wq_cnt] = v;
-// wq_cnt = wq_cnt + 1, twice in one clock) simulates correctly but on the board loses the first
-// push, e.g. a CALL's return address (docs/LESSONS_LEARNED.md).
+// queue a register write; drained one entry per clock (commit_loc, commit_glob). Constant indices: a variable
+// index (two pushes in one clock) simulates correctly but on the board loses the first push, e.g. a CALL's
+// return address (docs/LESSONS_LEARNED.md).
 task wq_push(input wp_g, input wp_raw, input [5:0] wp_i, input [31:0] wp_v);
 	begin
 		if (wp_g && wp_i[4:0] == 5'd0) pcw_new = 1'b1;
@@ -653,9 +644,7 @@ function [15:0] hw_of(input [63:0] d, input [1:0] i);
 	endcase
 endfunction
 
-//------------------------------------------------------------------
-// interrupts: returns 1 and takes the interrupt if one is pending (check_interrupts)
-//------------------------------------------------------------------
+// check_interrupts: takes a pending interrupt and returns 1
 task check_interrupts(output taken);
 	reg [31:0] fcr;
 	reg [1:0]  tp;
@@ -681,23 +670,19 @@ task check_interrupts(output taken);
 	end
 endtask
 
-//------------------------------------------------------------------
 // the load being issued (la_req, la_addr): exec_ldst's and exec_regind's first address, from the same
 // operands; I/O and the stack forms (e1 subtype 3, extra_s[1] set) are left out
-//------------------------------------------------------------------
 wire [31:0] la_lD = lD_q;
 wire [31:0] la_gD = gD_q;
 wire [31:0] la_xs = e1[15] ? {e1[14] ? 4'hf : 4'h0, e1[11:0], e2} : {e1[14] ? 20'hfffff : 20'h0, e1[11:0]};
 wire        la_rind = op[15:12] == 4'hd;
 wire [31:0] la_base = (la_rind || op[9]) ? la_lD : (!op[10] && op[7:4] == 4'd1) ? 32'd0 : la_gD;
 wire [31:0] la_off = (la_rind || op[10]) ? 32'd0 :
-                     (e1[13:12] == 2'd2 || (e1[13:12] == 2'd3 && la_xs[1:0] == 2'd1)) ? (la_xs & 32'hfffffffe) : la_xs;
+					(e1[13:12] == 2'd2 || (e1[13:12] == 2'd3 && la_xs[1:0] == 2'd1)) ? (la_xs & 32'hfffffffe) : la_xs;
 assign la_addr = la_base + la_off;
 assign la_req = state == ST_EXEC && !op[11] && (la_rind || (op[15:12] == 4'h9 && !(e1[13:12] == 2'd3 && la_xs[1])));
 
-//------------------------------------------------------------------
 // R
-//------------------------------------------------------------------
 // a global as D reads it: PC is the address after D (the delayed-branch target in a delay slot); a global the
 // queue head writes at the end of this clock comes from the head
 function [31:0] rgd(input [4:0] i);
@@ -795,9 +780,8 @@ function int_any(input dummy);
 	end
 endfunction
 
-//------------------------------------------------------------------
-// main FSM
-//------------------------------------------------------------------
+// Main FSM
+
 // temporaries for the execute cycle
 reg [7:0]  opc;
 reg [3:0]  dc, sc;
@@ -887,7 +871,6 @@ always @(posedge clk) begin
 				end else tr_cnt = tr_cnt + 9'd1;
 			end
 
-		//--------------------------------------------------------------
 		// R, before X's code changes SR and the delay slot in this clock: D's operands, in every clock (into _q at
 		// the end of the clock, with X's write of this clock if D goes in beside it)
 		lS_t  = (l_we_n && l_wa_n == w_sidx)  ? l_wd_n : lS;
@@ -980,7 +963,6 @@ always @(posedge clk) begin
 		end
 
 		case (state)
-		//----------------------------------------------------------
 		ST_RESET: begin
 			for (t_i = 0; t_i < 32; t_i = t_i + 1) G[t_i] = 32'd0;
 			wq_cnt = 3'd0; wq_rd = 3'd0; ret_pend = 1'b0; push_seq = 4'd0; commit_seq = 4'd0; x_srw = 1'b0;
@@ -1033,9 +1015,9 @@ always @(posedge clk) begin
 			sreg = sl ? lS_r : gS_r;
 			dreg = dl ? lD_r : gD_r;
 			sregc = (!sl && sc == 4'd1) ? {31'b0, sr[0]} : sreg;
-			
-casez (opc)
-			//------------------------------------------------ chk
+
+			casez (opc)
+			// chk
 			8'h00, 8'h01, 8'h02, 8'h03: begin
 				if (!sl && sc == 4'd1) begin
 					if (dreg == 32'd0) req_exc(TRAP_RANGE);
@@ -1044,7 +1026,7 @@ casez (opc)
 					if (cond) req_exc(TRAP_RANGE);
 				end
 			end
-			//------------------------------------------------ movd
+			// movd
 			8'h04, 8'h05, 8'h06, 8'h07: begin
 				sregf = sl ? lS1_r : gS1_r;
 				if (!dl && dc == 4'd0) begin
@@ -1076,7 +1058,7 @@ casez (opc)
 					write_dst(!dl, dl ? didx1 : ({2'b0, dc} + 6'd1), sregf);
 				end
 			end
-			//------------------------------------------------ divu / divs
+			// divu / divs
 			8'h08, 8'h09, 8'h0a, 8'h0b, 8'h0c, 8'h0d, 8'h0e, 8'h0f: begin
 				// MAME: same-register and PC/SR sources do nothing
 				if (((sl == dl) && ((sl ? sidx : {2'b0, sc}) == (dl ? didx : {2'b0, dc}) ||
@@ -1099,7 +1081,7 @@ casez (opc)
 					end
 				end
 			end
-			//------------------------------------------------ xm
+			// xm
 			8'h10, 8'h11, 8'h12, 8'h13: begin
 				longf = e1[15];
 				extra_u = longf ? {4'b0, e1[11:0], e2} : {20'b0, e1[11:0]};
@@ -1113,7 +1095,7 @@ casez (opc)
 					end
 				end
 			end
-			//------------------------------------------------ mask
+			// mask
 			8'h14, 8'h15, 8'h16, 8'h17: begin
 				imm = e1[15] ? ({e1[13:0], e2} | (e1[14] ? 32'hc0000000 : 32'h0))
 				             : ({18'b0, e1[13:0]} | (e1[14] ? 32'hffffc000 : 32'h0));
@@ -1121,7 +1103,7 @@ casez (opc)
 				sr[1] = (res == 32'd0);
 				w_res(!dl, 1'b0, dl ? didx : {2'b0, dc});
 			end
-			//------------------------------------------------ sum
+			// sum
 			8'h18, 8'h19, 8'h1a, 8'h1b: begin
 				imm = e1[15] ? ({e1[13:0], e2} | (e1[14] ? 32'hc0000000 : 32'h0))
 				             : ({18'b0, e1[13:0]} | (e1[14] ? 32'hffffc000 : 32'h0));
@@ -1133,7 +1115,7 @@ casez (opc)
 				sr[2:1] = {res[31], res == 32'd0};
 				w_res(!dl, 1'b0, dl ? didx : {2'b0, dc});
 			end
-			//------------------------------------------------ sums
+			// sums
 			8'h1c, 8'h1d, 8'h1e, 8'h1f: begin
 				imm = e1[15] ? ({e1[13:0], e2} | (e1[14] ? 32'hc0000000 : 32'h0))
 				             : ({18'b0, e1[13:0]} | (e1[14] ? 32'hffffc000 : 32'h0));
@@ -1146,7 +1128,7 @@ casez (opc)
 				// MAME: tests src_code against SR even for a local source
 				if (sr[3] && (sl ? sidx : {2'b0, sc}) != 6'd1) req_exc(TRAP_RANGE);
 			end
-			//------------------------------------------------ cmp
+			// cmp
 			8'h20, 8'h21, 8'h22, 8'h23: begin
 				t33 = {1'b0, dreg} - {1'b0, sregc};
 				sr[3:0] = 4'b0000;
@@ -1155,7 +1137,7 @@ casez (opc)
 				else if (dreg == sregc) sr[1] = 1'b1;
 				if ($signed(dreg) < $signed(sregc)) sr[2] = 1'b1;
 			end
-			//------------------------------------------------ mov
+			// mov
 			8'h24, 8'h25, 8'h26, 8'h27: begin
 				tmpv = sr;
 				sr[5] = 1'b0;
@@ -1178,7 +1160,7 @@ casez (opc)
 					end else w_res(1'b0, 1'b0, didx);
 				end
 			end
-			//------------------------------------------------ add
+			// add
 			8'h28, 8'h29, 8'h2a, 8'h2b: begin
 				t33 = {1'b0, sregc} + {1'b0, dreg};
 				sr[3:0] = 4'b0000;
@@ -1189,7 +1171,7 @@ casez (opc)
 				w_res(!dl, 1'b0, dl ? didx : {2'b0, dc});
 				if (!dl && dc == 4'd0) sr[4] = 1'b0;
 			end
-			//------------------------------------------------ adds
+			// adds
 			8'h2c, 8'h2d, 8'h2e, 8'h2f: begin
 				t33 = {1'b0, sregc} + {1'b0, dreg};
 				sr[3:1] = 3'b000;
@@ -1199,11 +1181,11 @@ casez (opc)
 				w_res(!dl, 1'b0, dl ? didx : {2'b0, dc});
 				if (sr[3]) req_exc(TRAP_RANGE);
 			end
-			//------------------------------------------------ cmpb
+			// cmpb
 			8'h30, 8'h31, 8'h32, 8'h33: begin
 				sr[1] = ((dreg & sreg) == 32'd0);
 			end
-			//------------------------------------------------ andn, or, xor, and
+			// andn, or, xor, and
 			8'h34, 8'h35, 8'h36, 8'h37,
 			8'h38, 8'h39, 8'h3a, 8'h3b,
 			8'h3c, 8'h3d, 8'h3e, 8'h3f,
@@ -1217,7 +1199,7 @@ casez (opc)
 				sr[1] = (res == 32'd0);
 				w_res(!dl, 1'b0, dl ? didx : {2'b0, dc});
 			end
-			//------------------------------------------------ subc
+			// subc
 			8'h40, 8'h41, 8'h42, 8'h43: begin
 				tmp32 = (!sl && sc == 4'd1) ? 32'd0 : sreg;
 				tmp32b = tmp32 + {31'b0, sr[0]};
@@ -1231,13 +1213,13 @@ casez (opc)
 				sr[2] = res[31];
 				w_res(!dl, 1'b0, dl ? didx : {2'b0, dc});
 			end
-			//------------------------------------------------ not
+			// not
 			8'h44, 8'h45, 8'h46, 8'h47: begin
 				res = ~sreg;
 				sr[1] = (res == 32'd0);
 				w_res(!dl, 1'b0, dl ? didx : {2'b0, dc});
 			end
-			//------------------------------------------------ sub
+			// sub
 			8'h48, 8'h49, 8'h4a, 8'h4b: begin
 				t33 = {1'b0, dreg} - {1'b0, sregc};
 				sr[3:0] = 4'b0000;
@@ -1248,7 +1230,7 @@ casez (opc)
 				w_res(!dl, 1'b0, dl ? didx : {2'b0, dc});
 				if (!dl && dc == 4'd0) sr[4] = 1'b0;
 			end
-			//------------------------------------------------ subs
+			// subs
 			8'h4c, 8'h4d, 8'h4e, 8'h4f: begin
 				t33 = {1'b0, dreg} - {1'b0, sregc};
 				sr[3:1] = 3'b000;
@@ -1258,7 +1240,7 @@ casez (opc)
 				w_res(!dl, 1'b0, dl ? didx : {2'b0, dc});
 				if (sr[3]) req_exc(TRAP_RANGE);
 			end
-			//------------------------------------------------ addc
+			// addc
 			8'h50, 8'h51, 8'h52, 8'h53: begin
 				tmpv = sr;
 				sr[3:0] = 4'b0000;
@@ -1276,7 +1258,7 @@ casez (opc)
 				sr[2] = res[31];
 				w_res(!dl, 1'b0, dl ? didx : {2'b0, dc});
 			end
-			//------------------------------------------------ neg
+			// neg
 			8'h58, 8'h59, 8'h5a, 8'h5b: begin
 				t64 = 64'd0 - {32'b0, sregc};
 				sr[3:0] = 4'b0000;
@@ -1286,7 +1268,7 @@ casez (opc)
 				sr[2:1] = {res[31], res == 32'd0};
 				w_res(!dl, 1'b0, dl ? didx : {2'b0, dc});
 			end
-			//------------------------------------------------ negs
+			// negs
 			8'h5c, 8'h5d, 8'h5e, 8'h5f: begin
 				t64 = 64'd0 - {{32{sregc[31]}}, sregc};
 				sr[3:1] = 3'b000;
@@ -1296,7 +1278,7 @@ casez (opc)
 				w_res(!dl, 1'b0, dl ? didx : {2'b0, dc});
 				if (sr[3]) req_exc(TRAP_RANGE);
 			end
-			//------------------------------------------------ immediate ALU group 0x60-0x7f
+			// immediate ALU group 0x60-0x7f
 			8'h6?, 8'h7?: begin
 				// odd opcodes: sc selects a constant or the extension words; even opcodes: sc itself
 				if (opc[0]) begin
@@ -1395,7 +1377,7 @@ casez (opc)
 				end
 				endcase
 			end
-			//------------------------------------------------ shifts and rotates, local operands
+			// shifts and rotates, local operands
 			8'h80, 8'h81, 8'h84, 8'h85: begin // shrdi, sardi
 				n5 = opc[0] ? {1'b1, sc} : {1'b0, sc};
 				dw = {lD_r, lD1_r};
@@ -1476,7 +1458,7 @@ casez (opc)
 			8'h8c, 8'h8d, 8'hac, 8'had, 8'hae, 8'haf: begin
 				// reserved: no effect
 			end
-			//------------------------------------------------ shri, sari, shli
+			// shri, sari, shli
 			8'ha0, 8'ha1, 8'ha2, 8'ha3, 8'ha4, 8'ha5, 8'ha6, 8'ha7, 8'ha8, 8'ha9, 8'haa, 8'hab: begin
 				n5 = opc[0] ? {1'b1, sc} : {1'b0, sc};
 				hi = dreg;
@@ -1494,7 +1476,7 @@ casez (opc)
 				sr[2:1] = {res[31], res == 32'd0};
 				w_res(!dl, 1'b0, dl ? didx : {2'b0, dc});
 			end
-			//------------------------------------------------ loads and stores
+			// loads and stores
 			8'h90, 8'h91, 8'h92, 8'h93, 8'h94, 8'h95, 8'h96, 8'h97,
 			8'h98, 8'h99, 8'h9a, 8'h9b, 8'h9c, 8'h9d, 8'h9e, 8'h9f: begin
 				extra_s = e1[15] ? ({e1[14] ? 4'hf : 4'h0, e1[11:0], e2})
@@ -1504,7 +1486,7 @@ casez (opc)
 				p_n <= 2'd0; p_loop <= 2'd0;
 				exec_ldst();
 			end
-			//------------------------------------------------ mulsu
+			// mulsu
 			8'hb0, 8'hb1, 8'hb2, 8'hb3, 8'hb4, 8'hb5, 8'hb6, 8'hb7: begin
 				if ((!sl && sc < 4'd2) || (!dl && dc < 4'd2)) begin
 				end else begin
@@ -1513,7 +1495,7 @@ casez (opc)
 					nstate = ST_MUL; fin_req = 1'b0;
 				end
 			end
-			//------------------------------------------------ set
+			// set
 			8'hb8, 8'hb9, 8'hba, 8'hbb: begin
 				if (!dl && dc < 4'd2) begin
 				end else begin
@@ -1537,8 +1519,8 @@ casez (opc)
 						end
 					end else begin
 						if (sc == 4'd0) begin
-							// SETADR: the wrap carry goes into bit 9, as MAME's original comment says; MAME's
-							// code puts it in bit 0 (MAME_KLUDGES.md, CPU and I/O: mrkickera hangs with it)
+							// SETADR: the wrap carry goes into bit 9, as MAME's comment says; MAME's code puts it
+							// in bit 0, which hangs mrkickera (docs/MAME_KLUDGES.md, CPU and I/O)
 							res = ((G[18] & 32'hfffffe00) | {23'b0, fp, 2'b00}) +
 							      ((G[18][8] && !sr[31]) ? 32'h200 : 32'd0);
 							w_res(!dl, 1'b1, dl ? didx : {2'b0, dc});
@@ -1552,7 +1534,7 @@ casez (opc)
 					end
 				end
 			end
-			//------------------------------------------------ mul
+			// mul
 			8'hbc, 8'hbd, 8'hbe, 8'hbf: begin
 				if ((!sl && sc < 4'd2) || (!dl && dc < 4'd2)) begin
 				end else begin
@@ -1561,7 +1543,7 @@ casez (opc)
 					nstate = ST_MUL; fin_req = 1'b0;
 				end
 			end
-			//------------------------------------------------ floating point: software emulation trap
+			// floating point: software emulation trap
 			8'hc0, 8'hc1, 8'hc2, 8'hc3, 8'hc4, 8'hc5, 8'hc6, 8'hc7, 8'hc8, 8'hc9, 8'hca, 8'hcb, 8'hcc, 8'hcd: begin
 				sreg = lS_r; sregf = lS1_r;
 				sr[20:19] = 2'd1;
@@ -1580,7 +1562,7 @@ casez (opc)
 				pc = ea;
 				redir = 1'b1;
 			end
-			//------------------------------------------------ extend
+			// extend
 			8'hce: begin
 				sreg = lS_r; dreg = lD_r;
 				case (x_ext)
@@ -1611,14 +1593,14 @@ casez (opc)
 					default: ;
 				endcase
 			end
-			//------------------------------------------------ register-indirect loads and stores
+			// register-indirect loads and stores
 			8'hd0, 8'hd1, 8'hd2, 8'hd3, 8'hd4, 8'hd5, 8'hd6, 8'hd7,
 			8'hd8, 8'hd9, 8'hda, 8'hdb, 8'hdc, 8'hdd, 8'hde, 8'hdf: begin
 				p_w0_en <= 1'b0; p_w1_en <= 1'b0; p_b_en <= 1'b0; p_exc <= 1'b0;
 				p_n <= 2'd0; p_loop <= 2'd0;
 				exec_regind();
 			end
-			//------------------------------------------------ db / dbr
+			// db / dbr
 			8'he0, 8'he1, 8'he2, 8'he3, 8'he4, 8'he5, 8'he6, 8'he7, 8'he8, 8'he9, 8'hea, 8'heb, 8'hec: begin
 				case (opc[3:1])
 					3'd0: cond = sr[3];
@@ -1649,7 +1631,7 @@ casez (opc)
 					end else pc = delay_pc;
 				end
 			end
-			//------------------------------------------------ frame
+			// frame
 			8'hed: begin
 				r8 = {1'b0, fp} - {4'b0, sc};
 				set_fp(r8[6:0]);
@@ -1664,7 +1646,7 @@ casez (opc)
 					fin_req = 1'b0;
 				end
 			end
-			//------------------------------------------------ call
+			// call
 			8'hee, 8'hef: begin
 				if (e1[15]) begin
 					extra_s = {e1[13:0], e2} | (e1[14] ? 32'hc0000000 : 32'h0);
@@ -1684,7 +1666,7 @@ casez (opc)
 				redir = 1'b1;
 				intblock = 2'd2;
 			end
-			//------------------------------------------------ branches
+			// branches
 			8'hf0, 8'hf1, 8'hf2, 8'hf3, 8'hf4, 8'hf5, 8'hf6, 8'hf7, 8'hf8, 8'hf9, 8'hfa, 8'hfb, 8'hfc: begin
 				case (opc[3:1])
 					3'd0: cond = sr[3];
@@ -1704,7 +1686,7 @@ casez (opc)
 					if (!x_pred) redir = 1'b1;
 				end else if (x_pred) redir = 1'b1;   // F went on from the target
 			end
-			//------------------------------------------------ trap
+			// trap
 			8'hfd, 8'hfe, 8'hff: begin
 				res = {26'b0, op[7:2]};
 				tmpv = {28'b0, op[9:8], op[1:0]};
@@ -1725,7 +1707,6 @@ casez (opc)
 			endcase
 		end
 
-		//----------------------------------------------------------
 		ST_MEM: begin
 			// issue bus job p_k
 			bus_req <= 1'b1;
@@ -1748,12 +1729,12 @@ casez (opc)
 				end
 				if (p_loop != 2'd0) begin
 					if (p_loop == 2'd1) begin
-write_raw(1'b1, 6'd18, G[18] + 32'd4);
-lp_diff = lp_diff + 8'sd1;
-end else begin
-write_dst(1'b0, {G[18][7:2]}, bus_rdata);
-lp_diff = lp_diff + 8'sd1;
-end
+						write_raw(1'b1, 6'd18, G[18] + 32'd4);
+						lp_diff = lp_diff + 8'sd1;
+					end else begin
+						write_dst(1'b0, {G[18][7:2]}, bus_rdata);
+						lp_diff = lp_diff + 8'sd1;
+					end
 					nstate = ST_LOOP;
 				end else if (p_k + 2'd1 < p_n) begin
 					p_k <= p_k + 2'd1;
@@ -1786,33 +1767,32 @@ end
 		end else begin
 			if (lp_diff < 0) begin
 				if (p_loop == 2'd1) begin
-p_wr <= 1'b1; p_io <= 1'b0; p_kind <= 3'd0; p_k <= 2'd0;
-p_a0 <= G[18]; p_wd0 <= lA;
-end else begin
-write_raw(1'b1, 6'd18, G[18] - 32'd4);
-p_wr <= 1'b0; p_io <= 1'b0; p_kind <= 3'd0; p_k <= 2'd0;
-p_a0 <= G[18] - 32'd4;
-end
+						p_wr <= 1'b1; p_io <= 1'b0; p_kind <= 3'd0; p_k <= 2'd0;
+						p_a0 <= G[18]; p_wd0 <= lA;
+					end else begin
+						write_raw(1'b1, 6'd18, G[18] - 32'd4);
+						p_wr <= 1'b0; p_io <= 1'b0; p_kind <= 3'd0; p_k <= 2'd0;
+						p_a0 <= G[18] - 32'd4;
+					end
 				p_n <= 2'd1;
 				nstate = ST_MEM;
 			end else begin
 				if (p_loop == 2'd1 && lp_flag) req_exc(TRAP_RANGE);
-p_loop <= 2'd0;
-fin_req = 1'b1;
-nstate = ST_XW;
+					p_loop <= 2'd0;
+					fin_req = 1'b1;
+					nstate = ST_XW;
 			end
 		end
 
 		ST_MPOST: begin
 			if (p_w0_en) write_dst(p_w0_g, p_w0_i, p_r0);
-if (p_w1_en) write_dst(p_w1_g, p_w1_i, p_r1);
-if (p_b_en) write_raw(p_b_g, p_b_i, p_b_v);
-if (p_exc) req_exc(TRAP_RANGE);
-fin_req = 1'b1;
-nstate = ST_XW;
+			if (p_w1_en) write_dst(p_w1_g, p_w1_i, p_r1);
+			if (p_b_en) write_raw(p_b_g, p_b_i, p_b_v);
+			if (p_exc) req_exc(TRAP_RANGE);
+			fin_req = 1'b1;
+			nstate = ST_XW;
 		end
 
-		//----------------------------------------------------------
 		ST_DIV: begin
 			// restoring division, one dividend bit per clock
 			tmp32 = 32'd0;
@@ -1838,9 +1818,9 @@ nstate = ST_XW;
 			sr[3:1] = 3'b000;
 			sr[1] = (res == 32'd0); sr[2] = res[31];
 			write_dst(dv_dg, dv_di, dv_r[31:0]);
-write_dst(dv_dg, dv_di + 6'd1, res);
-fin_req = 1'b1;
-nstate = ST_XW;
+			write_dst(dv_dg, dv_di + 6'd1, res);
+			fin_req = 1'b1;
+			nstate = ST_XW;
 		end
 
 		ST_MUL: begin
@@ -1879,7 +1859,7 @@ nstate = ST_XW;
 							dw = {G[14], G[15]} - mp[63:0];
 							wq_push(1'b1, 1'b1, 6'd14, dw[63:32]); wq_push(1'b1, 1'b1, 6'd15, dw[31:0]);
 						end
-						// half-word DSP forms. MAME's get_lhs is the LOW half, get_rhs the HIGH half.
+						// half-word DSP forms: MAME's get_lhs is the low half, get_rhs the high half
 						4'd8: wq_push(1'b1, 1'b1, 6'd15, G[15] + p_ll + p_hh);              // 0x002a
 						4'd9: begin                                                          // 0x002e
 							dw = {G[14], G[15]} + {{32{p_ll[31]}}, p_ll} + {{32{p_hh[31]}}, p_hh};
@@ -1888,7 +1868,7 @@ nstate = ST_XW;
 						4'd10: begin                                                         // 0x0046
 							wq_push(1'b1, 1'b1, 6'd14, p_ll - p_hh); wq_push(1'b1, 1'b1, 6'd15, p_lh + p_hl);
 						end
-						default: begin // 16'h004e
+						default: begin // 0x004e
 							wq_push(1'b1, 1'b1, 6'd14, G[14] + p_ll - p_hh); wq_push(1'b1, 1'b1, 6'd15, G[15] + p_lh + p_hl);
 						end
 					endcase
@@ -1923,7 +1903,7 @@ nstate = ST_XW;
 		fwa_n = (p_n == 2'd2) ? p_r0 : fl_v;
 		fw_n  = (state == ST_MWAIT) ? (p_w1_en ? fl_v : fwa_n) : res;
 
-		// ---- end of cycle: global register commit, register-file write pipeline, completion
+		// end of cycle: global register commit, register-file write pipeline, completion
 		commit_glob;
 		l_we_r <= l_we_n; l_wa_r <= l_wa_n; l_wd_r <= l_wd_n;
 		r_new = tt_fin;
@@ -1985,7 +1965,6 @@ nstate = ST_XW;
 		gMD_q <= (go_ovl && m_gMD) ? fw_n : (go_ovl && ma_gMD) ? fwa_n : gMD_t;
 		state <= nstate;
 
-		//--------------------------------------------------------------
 		// F: refill D when it went into X (or is empty), from the block holding fpc and the one after it, each
 		// from either kept block or from the instruction port in this clock
 		ackv = if_req && if_ack;
@@ -2050,9 +2029,7 @@ nstate = ST_XW;
 	end
 end
 
-//------------------------------------------------------------------
 // load/store execute helpers (called from ST_EXEC)
-//------------------------------------------------------------------
 reg [31:0] ls_dreg, ls_sreg, ls_sregf, ls_base;
 reg        ls_ptr_ok;
 reg [5:0]  ls_sidx, ls_didx, ls_sidxf;
@@ -2062,7 +2039,7 @@ reg [31:0] ls_upd;
 reg        ls_range;
 
 task job_start(input wr, input io, input [2:0] kind, input [1:0] n,
-               input [31:0] a0, input [31:0] a1, input [31:0] w0, input [31:0] w1);
+				input [31:0] a0, input [31:0] a1, input [31:0] w0, input [31:0] w1);
 	begin
 		p_wr <= wr; p_io <= io; p_kind <= kind; p_n <= n; p_k <= 2'd0;
 		p_a0 <= a0; p_a1 <= a1; p_wd0 <= w0; p_wd1 <= w1;
@@ -2148,7 +2125,7 @@ task exec_ldst;
 					2'd2: begin
 						if (is_n) begin
 							// reserved
-							nstate = ST_XW; p_w0_en <= 1'b0;  
+							nstate = ST_XW; p_w0_en <= 1'b0;
 						end else begin // LDW.IOD
 							ls_ea = ls_dreg + (extra_s & 32'hfffffffc);
 							job_start(1'b0, 1'b1, 3'd0, 2'd1, ls_ea, 32'd0, 32'd0, 32'd0);
@@ -2210,7 +2187,7 @@ task exec_ldst;
 					end
 					2'd2: begin
 						if (is_n) begin
-							nstate = ST_XW;  
+							nstate = ST_XW;
 						end else begin // STW.IOD
 							ls_ea = ls_dreg + (extra_s & 32'hfffffffc);
 							job_start(1'b1, 1'b1, 3'd0, 2'd1, ls_ea, 32'd0, ls_sreg, 32'd0);
@@ -2218,10 +2195,10 @@ task exec_ldst;
 					end
 					default: begin
 						if (is_n) begin // STW.S
-							// MAME: when the pointer's own register-file slot is the target, the update adds to the stored value
-							// The update goes in the queue first, where it lands then not depending on the comparison
-							// with SP, and the store into the register file after it, left out when the slot is the
-							// update's own (MAME stores, then updates: the update's value is the one left).
+							// MAME: when the slot stored to is the pointer's own register, the update adds to the
+							// stored value. The update is queued first (its queue position then does not depend on
+							// the SP compare), then the register-file store, left out when the slot is the
+							// pointer's (MAME stores, then updates: the update's value is the one left).
 							write_raw(ls_dg, ls_didx, ((dl && ls_dreg >= G[18] && ls_dreg[7:2] == didx) ? ls_sreg : ls_dreg) + (extra_s & 32'hfffffffc));
 							if (ls_dreg < G[18]) begin
 								job_start(1'b1, 1'b0, 3'd0, 2'd1, ls_dreg, 32'd0, ls_sreg, 32'd0);

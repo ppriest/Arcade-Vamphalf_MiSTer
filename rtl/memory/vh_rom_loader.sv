@@ -1,7 +1,6 @@
 // Fast ROM load: the .mra's address="0x30000000" has the HPS put the ROM image in DDR3 (an index-0
 // download with no ioctl_wr); this copies it into SDRAM with the game in reset, one 8-byte granule per
-// SDRAM write (the download port's granule mode, sdram.sv's burst write). The granule after the one
-// being written is read from DDR3 meanwhile.
+// SDRAM write (download port granule mode, sdram.sv burst write), reading the next granule meanwhile.
 //
 // Parts of the image the core also keeps in block RAM (the QS1000's u7, the EEPROM's default) are
 // caught from the byte path's stream; for those the copy replays the granule's bytes, in address order,

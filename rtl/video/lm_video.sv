@@ -1,6 +1,5 @@
-// Limenko video (limenko.cpp, the SYS L2D_HYP chip): its RAMs and registers as the CPU sees them, the raster, the
-// vertical blank interrupt, the three tilemaps, and the sprites (lm_sprites drawing into lm_fb, a frame buffer in
-// DDR3). The graphics port (SDRAM port 0) serves the tile engine first, then the sprite draw.
+// Limenko video (limenko.cpp, the SYS L2D_HYP chip): RAMs and registers as the CPU sees them, the raster, the
+// vertical blank interrupt, three tilemaps, and the sprites (lm_sprites drawing into lm_fb, a DDR3 frame buffer).
 //
 // CPU windows (lm_main v0_* / v1_*: 32-bit words, registered reads, data one clock after the address):
 //   v0 0x80000000-0x80007fff  fg VRAM 32 KB      0x80008000-0x8000ffff  md VRAM 32 KB
@@ -19,18 +18,15 @@
 // 512 x 264 raster, 59.19 Hz: visible x 64..447, lines 0..239; the vertical blank, and the interrupt, from line 240
 // (docs/HACKS.md).
 //
-// Tilemaps (get_*_tile_info, screen_update): 128 x 64 tiles of 8 x 8, 8bpp, an entry's bits 18:0 the tile (modulo
-// the graphics' tile count), bits 31:28 the colour, palette entry colour * 256 + pen; bg opaque, md and fg skip
-// pen 0; drawn bg, md, fg. Scroll and enables are latched at the interrupt, MAME's screen update; VRAM and the
-// palette are read live (docs/HACKS.md). Each visible line is drawn up to three lines ahead of the one shown, into
-// four line slots per layer (a line slowed by the CPU's SDRAM traffic borrows from the next):
-// per enabled layer, 49 tiles from column scroll x / 8, the tile's row of 8 bytes read from SDRAM (gfx_*: one
-// 8-byte granule per request, sdram.sv port 0's toggle protocol, the data on gfx_dout in the clock gfx_ack matches
-// gfx_req), the next tile's VRAM read and fetch overlapping the current tile's 8 pixel writes. Scan-out picks fg,
-// else md, else bg. spotty's graphics are 4bpp, two pixels a byte with the first in bits 3:0 (init_spotty's
-// expansion): a row is 4 bytes, half a granule.
-// Scan-out over the tiles: a sprite pixel of priority 2, or of priority 1 where fg is transparent (copy_sprites,
-// the screen priority fg sets), when register 0 bit 3 is set.
+// Tilemaps (get_*_tile_info, screen_update): 128 x 64 tiles of 8 x 8, 8bpp; entry bits 18:0 the tile (modulo the
+// graphics' tile count), 31:28 the colour; palette entry colour * 256 + pen; bg opaque, md and fg skip pen 0; drawn
+// bg, md, fg. Scroll and enables are latched at the interrupt, MAME's screen update; VRAM and the palette are read
+// live (docs/HACKS.md). Each visible line is drawn up to three lines ahead of the one shown, into four line slots
+// per layer, so a line slowed by the CPU's SDRAM traffic borrows from the next. Per enabled layer, 49 tiles from
+// column scroll x / 8; each tile's 8-byte row is one SDRAM granule (gfx_*: sdram.sv port 0's toggle protocol, data
+// on gfx_dout in the clock gfx_ack matches gfx_req); the next tile's VRAM read and fetch overlap the current tile's
+// 8 pixel writes. spotty's graphics are 4bpp, the first pixel in bits 3:0 (init_spotty's expansion): a row is
+// 4 bytes, half a granule.
 //
 // flip (the OSD's; the chip has no flip register) turns the 384 x 240 picture by 180 degrees, latched at the
 // interrupt: shown line v is drawn from line 239 - v of the tilemaps and the sprite frame buffer, and both line
@@ -97,9 +93,7 @@ module lm_video #(
 	output reg [15:0] dbg_fb_late       // sprite lines not read from DDR3 by the next line start
 );
 
-//------------------------------------------------------------------
-// timing
-//------------------------------------------------------------------
+// Timing
 reg [2:0] pcnt;
 reg [8:0] hcnt, vcnt;
 wire p_last = pcnt == 3'd6;
@@ -125,9 +119,7 @@ end
 wire x_active = hcnt >= 9'd64 && hcnt < 9'd448;
 wire y_active = vcnt < 9'd240;
 
-//------------------------------------------------------------------
 // RAMs and registers
-//------------------------------------------------------------------
 wire w_md  = v0_addr[13];
 wire w_bg  = !v1_addr[13];
 wire w_spr = v1_addr[13:11] == 3'b100;
@@ -202,10 +194,8 @@ always @* begin
 	endcase
 end
 
-//------------------------------------------------------------------
-// the graphics port: the tile engine first; the sprite draw only while the tile engine is idle (between lines, up
-// to three ahead), so a sprite row in flight never holds up a tile line. The data is held for the one served.
-//------------------------------------------------------------------
+// Graphics port (SDRAM port 0): the sprite draw only while the tile engine is idle (between lines, up to three
+// ahead), so a sprite row in flight never holds up a tile line. g_data is held for the one served.
 reg  [26:1] t_addr;
 wire        t_idle;                 // the tile engine has no line to draw
 reg         t_req = 1'b0, t_ack = 1'b0, s_ack = 1'b0;
@@ -230,9 +220,7 @@ always @(posedge clk) begin
 	end
 end
 
-//------------------------------------------------------------------
-// sprites
-//------------------------------------------------------------------
+// Sprites
 wire        fb_qwe, fb_qclr, fb_qbuf, fb_room, fb_empty, fb_front, fb_shown;
 wire [14:0] fb_qaddr;
 wire [63:0] fb_qdata;
@@ -263,17 +251,15 @@ always @(posedge clk)
 	if (rst) dbg_fb_late <= 16'd0;
 	else if (fb_late) dbg_fb_late <= dbg_fb_late + 16'd1;
 
-//------------------------------------------------------------------
-// tile engine
-//------------------------------------------------------------------
-// the next line, if visible: the sprite line read
+// Tile engine
+// the next line; if visible, its sprite line is read
 wire [8:0] t_line = vcnt == 9'd263 ? 9'd0 : vcnt + 9'd1;
 wire       t_go   = line_start && t_line < 9'd240;
 // the tile lines: r_next is drawn next, while it is at most three ahead of the line shown (lines 0-3 in the blank)
 reg  [8:0] r_next;
 wire       r_ok = r_next < 9'd240 && (vcnt >= 9'd240 ? r_next < 9'd4 : r_next <= vcnt + 9'd3);
 
-// line buffers, one per layer: {buffer = line bit 0, x}, {colour, pen}
+// line buffers, one per layer: address {slot = line bits 1:0, x}, data {colour, pen}
 reg         lb_we;
 reg  [1:0]  lb_layer;
 reg  [10:0] lb_wa;
@@ -435,11 +421,9 @@ always @(posedge clk) begin
 	end
 end
 
-//------------------------------------------------------------------
-// scan-out: line buffers, layer choice, palette, by pixel phase
-//------------------------------------------------------------------
+// Scan-out: line buffers, layer choice, palette, by pcnt
 reg        s_act, s_fgop;
-// a sprite pixel shows: priority 2, or 1 where fg is transparent
+// a sprite pixel shows when register 0 bit 3 is set: priority 2, or 1 where fg is transparent (copy_sprites)
 wire       s_spr = en_l[3] && fb_shown && (sp_q[13:12] == 2'd2 || sp_q[13:12] == 2'd1 && !(en_l[0] && lb_fg[7:0] != 8'd0));
 reg [11:0] s_idx;
 reg        s_half;
