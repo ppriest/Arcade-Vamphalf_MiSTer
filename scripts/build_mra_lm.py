@@ -294,8 +294,7 @@ def build(setname, sm, write=True):
     mod0 = gid | ((0 if prg2 else 1) << 4)          # [2:0] game, [4] a 1 MB program (0xfff00000)
     game = BUTTONS[SETS[setname][0] or setname]
     boost = VOL_BOOST.get(SETS[setname][0] or setname, 0)
-    btn_names = ",".join(game[:4] + ["Start", "Coin", "Pause", "Service Coin", "Service Mode"] + game[4:])
-    btn_def = ",".join(["A", "B", "X", "Y"][:min(4, len(game))] + ["Start", "Select", "L", "R"])
+    btn_names, btn_def, btn_count = bm.buttons_attrs(game)
     title = info["title"]
     xml = [
         "<misterromdescription>",
@@ -309,7 +308,7 @@ def build(setname, sm, write=True):
         f"    <manufacturer>{escape(info['manufacturer'])}</manufacturer>",
         "    <category>Arcade</category>",
         "    <rotation>horizontal</rotation>",
-        f'    <buttons names="{btn_names}" default="{btn_def}" count="{len(game)}"/>',
+        f'    <buttons names="{escape(btn_names)}" default="{btn_def}" count="{btn_count}"/>',
         "",
         "    <!-- mod byte (rtl/lm_main.sv): [2:0] game (0 dynabomb, 1 sb2003, 2 legendoh, 3 hrthouse,",
         "         4 spotty), [4] a 1 MB program at 0xfff00000 -->",

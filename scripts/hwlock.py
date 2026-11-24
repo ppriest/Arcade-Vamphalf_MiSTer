@@ -39,7 +39,10 @@ REPO = Path(__file__).resolve().parent.parent
 # and one Quartus install, and the bugcheck does not care which repo started
 # which half. Do not make these paths per-repo and do not move them under
 # build/; the point is that every copy of this file names the same files.
-_BASE = Path(os.environ.get("LOCALAPPDATA") or Path.home())
+# ~/.mister, not %LOCALAPPDATA%: the Claude desktop app is a packaged (MSIX) app, and
+# Windows gives every process it starts a private copy of AppData\Local, so a marker
+# written from a Claude session is invisible to a build started anywhere else.
+_BASE = Path(os.environ.get("MISTER_STATE_DIR") or Path.home() / ".mister")
 MARKER = _BASE / "mister_jtag_running"
 # One reservation per waiting session, so several may queue without racing on
 # a single file: mister_jtag_wanted.<pid>

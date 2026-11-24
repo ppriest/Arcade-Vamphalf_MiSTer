@@ -77,19 +77,49 @@ CATEGORY = {"misncrft": "Shooter", "wivernwg": "Shooter", "vamphalf": "Platform"
 # button unused. MAME's "common" port names none. Wivern Wings: history.xml ("[A] Basic Shot,
 # [B] Defense, [C] Special Bomb", 3 buttons). Mission Craft: history.xml gives 4 buttons and no
 # names; generic until the game's own screens or manual say (validate_mra --allow-generic-buttons).
-BUTTONS = {"misncrft": ["Button 1", "Button 2", "Button 3", "Button 4"],
-           "wivernwg": ["Shot", "Defense", "Bomb", "-"],
-           "vamphalf": ["Button 1", "Button 2", "Button 3", "Button 4"],
+BUTTONS = {"misncrft": ["Shot", "Bomb", "Super Shot", "-"],
+           "wivernwg": ["Shot", "Barrier", "Bomb", "-"],
+           "vamphalf": ["Attack", "Jump", "Special", "-"],
+
            # the photo sensors' strengths: MAME's 1st, 3rd, 5th and 7th (HACKS.md)
            "boonggab": ["Light Hit", "Medium Hit", "Hard Hit", "Max Hit"],
-           # MAME's PORT_NAMEs; buttons 5-11 sit after Service Mode on the J1 line (Vamphalf.sv xbtn)
            "solitaire": ["Column 1", "Column 2", "Column 3", "Column 4", "Column 5", "Column 6", "Column 7",
                          "Turn Up Card", "Select Turned Up Card", "Register", "Gift"],
-           # MAME's finalgdr port: three buttons, Start where button 4 is
-           "finalgdr": ["Button 1", "Button 2", "Button 3", "-"]}
-for _p in ("coolmini", "dquizgo2", "toyland", "mrkicker", "dtfamily", "jmpbreak", "poosho", "newxpang", "mrdig", "suplup",
-           "worldadv", "yorijori", "aoh"):
-    BUTTONS[_p] = ["Button 1", "Button 2", "Button 3", "Button 4"]
+           "finalgdr": ["Button 1", "Button 2", "Button 3", "Button 4"],
+           "newxpang": ["Select & Set", "Power", "Life", "-"],
+           "coolmini": ["Primary/Red", "Center/Blue", "Utility/Green", "-"],
+           "toyland":  ["Attack", "Jump", "-", "-"],
+           "dtfamily": ["Shot", "Bomb", "-", "-"],
+           "poosho":   ["Launch", "Jump", "-", "-"],
+           "suplup":   ["Shoot", "Discard", "-", "-"],
+           "worldadv": ["Select/Grab", "Cancel/Menu", "-", "-"],
+           "dquizgo2": ["Action", "-", "-", "-"],
+           "mrkicker": ["Kick", "Jump", "-", "-"],
+           "jmpbreak": ["Launch", "Jump", "-", "-"],
+           "mrdig":    ["Drill", "-", "-", "-"],
+           "yorijori": ["Cook/Attack", "Jump/Dash", "-", "-"],
+           "aoh":      ["Attack", "Jump", "Inventory", "Magic"]}
+# the extra buttons given L and R (buttons_attrs)
+BUTTONS_LR = {"solitaire": ["Turn Up Card", "Select Turned Up Card"]}
+
+
+def buttons_attrs(game, lr=None):
+    """<buttons> names, default and count. Main (joymapping.cpp) skips "-" names without using a default
+    entry, and an empty entry leaves a button unmapped. Only A B X Y L R Start Select exist, so a game with
+    buttons past the fourth gives L and R to two of them (lr, else the first two) instead of Pause and
+    Service Coin; the rest are mapped by hand."""
+    names = game[:4] + ["Start", "Coin", "Pause", "Service Coin", "Service Mode"] + game[4:]
+    named = [n for n in game[:4] if n != "-"]
+    extra = game[4:]
+    if extra:
+        lr = lr or extra[:2]
+        tail = ["", "", ""] + [("L", "R")[lr.index(n)] if n in lr else "" for n in extra]
+    else:
+        tail = ["L", "R"]
+    defs = ["A", "B", "X", "Y"][:len(named)] + ["Start", "Select"] + tail
+    while defs and not defs[-1]:
+        defs.pop()
+    return ",".join(names), ",".join(defs), len(named) + len(extra)
 
 
 def sdram_map():
@@ -366,9 +396,7 @@ def build(setname, sm, write=True):
     mod1 = 0 if aoh else (1 if gfx16 else 0) | (2 if prg2 else 0) | (4 if gfx_hi else 0)   # aoh: from the family
     zipattr = "|".join(names)
     game = BUTTONS[SETS[setname][0] or setname]
-    named = [n for n in game if n != "-"]
-    btn_names = ",".join(game[:4] + ["Start", "Coin", "Pause", "Service Coin", "Service Mode"] + game[4:])
-    btn_def = ",".join(["A", "B", "X", "Y"][:len(named)] + ["Start", "Select", "L", "R"])
+    btn_names, btn_def, btn_count = buttons_attrs(game, BUTTONS_LR.get(SETS[setname][0] or setname))
     title = info["title"]
     xml = [
         "<misterromdescription>",
@@ -382,7 +410,7 @@ def build(setname, sm, write=True):
         f"    <manufacturer>{escape(info['manufacturer'])}</manufacturer>",
         f"    <category>{CATEGORY.get(SETS[setname][0] or setname, 'Arcade')}</category>",
         f"    <rotation>{rot}</rotation>",
-        f'    <buttons names="{btn_names}" default="{btn_def}" count="{len(named)}"/>',
+        f'    <buttons names="{escape(btn_names)}" default="{btn_def}" count="{btn_count}"/>',
         "",
         "    <!-- mod bytes (Vamphalf.sv): [0] E1-32 board, [2:1] rotation, [7:3] I/O map family;",
         "         second byte [0] 16-bit sprite codes (gfx above 8 MB), [1] a 2 MB program, [2] 17-bit codes,",

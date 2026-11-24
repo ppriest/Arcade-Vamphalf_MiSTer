@@ -176,15 +176,18 @@ with a `mister.env` (see `scripts/deploy.py`).
 ## Controls
 
 Pad: Button 1-4, Start, Coin, Pause, Service Coin, Service Mode (the `.mra` names Wivern Wings' Shot,
-Defense and Bomb, and Boong-Ga Boong-Ga's four hit strengths). Pause suspends the main CPU. MAME gives the boards no DIP switches; Service Mode is the
+Defense and Bomb, New Cross Pang's Select & Set, Power and Life, and Boong-Ga Boong-Ga's four hit strengths;
+Toy Land, Diet Family, Poosho Poosho and World Adventure have two buttons). Pause suspends the main CPU. MAME gives the boards no DIP switches; Service Mode is the
 test switch, momentary as in MAME (held, not toggled), and has no default pad button.
 
 Keyboard, MAME's defaults: arrows / R F D G, buttons LCtrl LAlt Space LShift / A S Q W, Start 1 / 2,
 Coin 5 / 6; F2 service switch, 9 service coin, P pause.
 
 Solitaire has eleven buttons, with MAME's names: Column 1-7, Turn Up Card, Select Turned Up Card, Register
-and Gift. In the pad's mapping list, Column 5 onwards come after Service Mode. Keys as MAME: Z X C V B N M for
-the columns, A S D F for the other four.
+and Gift. In the pad's mapping list, Column 5 onwards come after Service Mode. The default pad layout has
+Column 1-4 on A B X Y, Start, Coin on Select, Turn Up Card on L and Select Turned Up Card on R; Column 5-7,
+Register, Gift, Pause, Service Coin and Service Mode have no default and are mapped by hand. Keys as MAME:
+Z X C V B N M for the columns, A S D F for the other four.
 
 ## Status
 
@@ -256,6 +259,10 @@ Pad: Button 1-4, Start, Coin, Pause, Service Coin, Service Mode, then Button 5-7
 buttons: Dynamite Bomber's Bomb, Throw and Jump; Super Bubble 2003's Jump and Bubble; Legend of Heroes' Attack
 and Jump (buttons 3 and 4 not identified); To Heart House's Hold 1-4, Take / Odd and Bet / Double Up (Start is
 Start / Even); Spotty's Hold 1-4, Bet, Stop and Change.
+
+Default pad layout: the named buttons on A B X Y, Start on Start, Coin on Select, Pause on L and Service Coin on
+R. To Heart House puts Take / Odd and Bet / Double Up on L and R instead; Spotty puts Bet and Stop there, and
+its Change, like Pause and Service Coin on both games, has no default and is mapped by hand.
 
 Keyboard: the Vamphalf core's MAME defaults for the joysticks, buttons 1-4, Start, Coin, service and pause.
 Buttons 5-7 are on the pad only, and the holds are buttons 1-4, not MAME's poker keys.

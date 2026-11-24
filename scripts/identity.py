@@ -16,7 +16,7 @@ not this repository's, a warning goes to stderr: the reading is someone else's.
 
 The deploy log is machine-wide, like the JTAG marker, because any repository's
 probe may be reading any repository's bitstream:
-    %LOCALAPPDATA%/mister_deployed.tsv   rbf-name <TAB> project <TAB> commit <TAB> time
+    ~/.mister/mister_deployed.tsv   rbf-name <TAB> project <TAB> commit <TAB> time
 """
 import os
 import re
@@ -29,7 +29,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from coretools import core_root, load_env, project   # noqa: E402
 
 DELIM = "|"
-LOG = Path(os.environ.get("LOCALAPPDATA") or Path.home()) / "mister_deployed.tsv"
+# ~/.mister, not %LOCALAPPDATA%: the Claude desktop app is a packaged (MSIX) app, and
+# Windows gives every process it starts a private copy of AppData\Local, so a marker
+# written from a Claude session is invisible to a build started anywhere else.
+LOG = Path(os.environ.get("MISTER_STATE_DIR") or Path.home() / ".mister") / "mister_deployed.tsv"
 
 
 def built_commit(root=None):
